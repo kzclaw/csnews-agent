@@ -1,11 +1,10 @@
 /**
  * CSNEWS Agent · 主 Worker
  * Cloudflare Workers + Workers AI + Supabase
- * 
+ *
  * 安全设计：
  * - 所有请求需带 Bearer Token（BEARER_TOKEN env var）
  * - CORS 仅允许已授权来源
- * - 敏感操作需要明确权限
  */
 interface Env {
   AI: Ai;
@@ -53,8 +52,8 @@ function corsHeaders(origin?: string | null) {
 const CATEGORY_KW: Record<string, string[]> = {
   '科技': ['AI', '人工智能', 'ChatGPT', '大模型', '芯片', '算法', '机器人', '智能', '技术', '科技', '代码', '编程', '软件', '特斯拉', '字节', '华为', '鸿蒙', 'OpenAI', '模型'],
   '财经': ['股市', '基金', '货币', '经济', '金融', '银行', '投资', '市场', '美元', '黄金', '汇率', 'A股', '沪指', '加息', '通胀', '人民币', '加密货币'],
-  '国际': ['美国', '英国', '欧盟', '俄罗斯', '乌克兰', '日本', '韩国', '联合国', '外交', '制裁', 'G20', '首相', '岸田', '普京', '习近平', '中美', '外长', '欧盟'],
-  '社会': ['疫情', '健康', '医疗', '医保', '教育', '交通', '环境', '灾害', '事故', '疫情', '核酸', '中考', '确诊', '小区', '防控'],
+  '国际': ['美国', '英国', '欧盟', '俄罗斯', '乌克兰', '日本', '韩国', '联合国', '外交', '制裁', 'G20', '首相', '岸田', '普京', '习近平', '中美', '外长'],
+  '社会': ['疫情', '健康', '医疗', '医保', '教育', '交通', '环境', '灾害', '事故', '核酸', '中考', '确诊', '小区', '防控'],
   '娱乐': ['电影', '音乐', '明星', '综艺', '赛事', '奥运', '世界杯', '演唱会', '门票', '周杰伦', '刘德华', 'QQ音乐'],
   '综合': [],
 };
@@ -84,32 +83,33 @@ export function scoreRule(title: string): { score: number; reason: string } {
 }
 
 // ============================================================
-// Workers AI 分类 + 评分（中文友好模型）
+// Workers AI 响应解析（兼容所有格式）
 // ============================================================
-async function aiClassifyAndScore(title: string, env: Env): Promise<{ score: number; category: string; reason: string }> {
-  try {
-    const resp = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-      messages: [
-        { role: 'system', content: '你是一个专业的中文新闻分析师。请分析新闻标题并以JSON格式返回：{"score": 0-10分数, "category": "科技/财经/国际/社会/娱乐/综合", "reason": "简短原因"}' },
-        { role: 'user', content: `新闻标题：${title}` }
-      ],
-      max_tokens: 100,
-      temperature: 0.1,
-    });
-    const text = resp.toString().trim();
-    const match = text.match(/\{[^}]+\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      return {
-        score: typeof parsed.score === 'number' ? parsed.score : 5.0,
-        category: parsed.category || '综合',
-        reason: parsed.reason || '',
-      };
-    }
-  } catch (e: any) {
-    console.error('AI error:', e.message);
+function extractText(resp: any): string {
+  if (typeof resp === 'string') return resp.trim();
+  if (resp && typeof resp === 'object') {
+    const msg = resp.choices?.[0]?.message;
+    return ((msg?.content || '') + (msg?.reasoning || '')).trim() || '';
   }
-  return { score: 5.0, category: '综合', reason: 'AI调用失败，降级规则引擎' };
+  return '';
+}
+
+// ============================================================
+// Workers AI 裂变报告生成（唯一 AI 用途）
+// ============================================================
+async function aiFissionReport(title: string, env: Env): Promise<string> {
+  try {
+    const resp = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+      messages: [
+        { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
+      ],
+      max_tokens: 200,
+      temperature: 0.3,
+    }) as any;
+    return extractText(resp) || '(无AI输出)';
+  } catch (e: any) {
+    return `(AI错误: ${e.message})`;
+  }
 }
 
 // ============================================================
@@ -137,12 +137,10 @@ export default {
     const origin = request.headers.get('Origin');
     const cors = corsHeaders(origin);
 
-    // OPTIONS 预检
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: cors });
     }
 
-    // 认证
     const authError = authRequest(request, env);
     if (authError) return authError;
 
@@ -156,21 +154,28 @@ export default {
       });
     }
 
-    // -------- Workers AI 模型测试 --------
+    // -------- 模型测试 --------
     if (action === 'model-test') {
-      try {
-        const r = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
-          messages: [{ role: 'user', content: '回复"OK"' }],
-          max_tokens: 10,
-        });
-        return new Response(JSON.stringify({ ok: true, model: 'kimi-k2.5', response: r.toString() }), {
-          headers: { 'Content-Type': 'application/json', ...cors }
-        });
-      } catch (e: any) {
-        return new Response(JSON.stringify({ ok: false, error: e.message }), {
-          headers: { 'Content-Type': 'application/json', ...cors }
-        });
-      }
+      const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+        messages: [{ role: 'user', content: '说一段话介绍自己' }],
+        max_tokens: 100,
+      }) as any;
+      return new Response(JSON.stringify({
+        ok: true,
+        model: 'glm-4.7-flash',
+        response: extractText(r).substring(0, 200),
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
+
+    // -------- 裂变报告测试 --------
+    if (action === 'ai-test') {
+      const title = url.searchParams.get('title') || 'OpenAI发布GPT-5，AI行业迎来新一轮革命';
+      const report = await aiFissionReport(title, env);
+      return new Response(JSON.stringify({ title, report }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
     }
 
     // -------- 单条新闻评分 + 分类 --------
@@ -182,17 +187,22 @@ export default {
         });
       }
 
+      const rule = scoreRule(title);
+      const category = classifyRule(title);
       const useAI = url.searchParams.get('ai') !== 'false';
-      let result: { score: number; category: string; reason: string };
+      let aiReport = '';
 
       if (useAI) {
-        result = await aiClassifyAndScore(title, env);
-      } else {
-        const rule = scoreRule(title);
-        result = { score: rule.score, category: classifyRule(title), reason: rule.reason };
+        aiReport = await aiFissionReport(title, env);
       }
 
-      return new Response(JSON.stringify(result), {
+      return new Response(JSON.stringify({
+        title,
+        score: rule.score,
+        category,
+        reason: rule.reason,
+        ai_report: aiReport,
+      }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
     }
@@ -213,22 +223,17 @@ export default {
 
       const results = await Promise.all(items.map(async (item) => {
         const rule = scoreRule(item.title);
-        let aiResult: { score: number; category: string; reason: string } | null = null;
-
+        const category = classifyRule(item.title);
+        let aiReport = '';
         if (useAI) {
-          aiResult = await aiClassifyAndScore(item.title, env);
+          aiReport = await aiFissionReport(item.title, env);
         }
-
         return {
           title: item.title,
-          rule_score: rule.score,
-          rule_category: classifyRule(item.title),
-          rule_reason: rule.reason,
-          ai_score: aiResult?.score,
-          ai_category: aiResult?.category,
-          ai_reason: aiResult?.reason,
-          final_score: aiResult?.score ?? rule.score,
-          final_category: aiResult?.category ?? classifyRule(item.title),
+          score: rule.score,
+          category,
+          reason: rule.reason,
+          ai_report: aiReport,
         };
       }));
 
@@ -237,7 +242,7 @@ export default {
       });
     }
 
-    // -------- 裂变搜索 --------
+    // -------- 裂变查询生成 --------
     if (action === 'fission') {
       const seed = url.searchParams.get('seed') || url.searchParams.get('title');
       if (!seed) {
@@ -247,18 +252,16 @@ export default {
       }
 
       try {
-        const resp = await env.AI.run('@cf/moonshotai/kimi-k2.5', {
+        const resp = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
           messages: [
-            { role: 'system', content: '你是一个专业的新闻裂变搜索助手。请根据种子新闻，生成5个深度裂变搜索查询，用于深度挖掘相关内幕。返回JSON格式：{"queries": ["query1", "query2", ...]}' },
-            { role: 'user', content: `种子新闻：${seed}\n请生成5个深度裂变搜索查询，覆盖不同角度。` }
+            { role: 'user', content: `生成5个深度裂变搜索查询词（每个不超过15字），用|分隔：\n新闻：${seed}` }
           ],
           max_tokens: 200,
           temperature: 0.3,
-        });
+        }) as any;
 
-        const text = resp.toString().trim();
-        const match = text.match(/\{[^}]+\}/);
-        const queries = match ? JSON.parse(match[0]).queries || [] : [];
+        const text = extractText(resp);
+        const queries = text.split('|').map(q => q.trim()).filter(q => q.length > 0 && q.length <= 20);
 
         return new Response(JSON.stringify({ seed, queries, count: queries.length }), {
           headers: { 'Content-Type': 'application/json', ...cors }
@@ -270,7 +273,7 @@ export default {
       }
     }
 
-    return new Response(JSON.stringify({ error: 'unknown action', available: ['ping', 'model-test', 'score', 'batch-score', 'fission'] }), {
+    return new Response(JSON.stringify({ error: 'unknown action' }), {
       status: 400, headers: { 'Content-Type': 'application/json', ...cors }
     });
   },
