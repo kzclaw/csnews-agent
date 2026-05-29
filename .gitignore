@@ -1,12 +1,16 @@
 # Dependencies
 node_modules/
 
-# Wrangler
-.wrangler/
-wrangler.toml
-!wrangler.toml
+# Wrangler (local cache per worker)
+csnews-agent/.wrangler/
+csnews-h1-test/.wrangler/
 
-# Environment secrets (never commit)
+# Wrangler config (contains no secrets, but regenerated per environment)
+# NOTE: wrangler.toml uses binding names only, no credentials
+csnews-agent/wrangler.toml
+csnews-h1-test/wrangler.toml
+
+# Environment secrets
 .env
 .env.local
 .env.*.local
@@ -25,6 +29,5 @@ Thumbs.db
 *.swp
 *.swo
 
-# Test files
-*.test.ts
-*.spec.ts
+# Test / dev workers (not production)
+csnews-h1-test/
