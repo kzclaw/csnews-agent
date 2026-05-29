@@ -1,6 +1,6 @@
 /**
  * CSNEWS Agent · 主 Worker
- * Cloudflare Workers + Workers AI + Supabase
+ * Cloudflare Workers + Workers AI + Supabase + R2
  *
  * 安全设计：
  * - 所有请求需带 Bearer Token（BEARER_TOKEN env var）
@@ -8,6 +8,7 @@
  */
 interface Env {
   AI: Ai;
+  csnews_raw: R2Bucket;
   BEARER_TOKEN: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
@@ -85,7 +86,6 @@ export function scoreRule(title: string): { score: number; reason: string } {
 // ============================================================
 // Workers AI 响应解析
 // env.AI.run() 返回格式：{ response: string, usage: {...} }
-// 直接取 r.response，不要用 OpenAI 的 choices 格式
 // ============================================================
 function extractText(resp: any): string {
   if (typeof resp === 'string') return resp.trim();
@@ -97,7 +97,7 @@ function extractText(resp: any): string {
 }
 
 // ============================================================
-// Workers AI 裂变报告生成（唯一 AI 用途）
+// Workers AI 裂变报告生成
 // ============================================================
 async function aiFissionReport(title: string, env: Env): Promise<string> {
   try {
@@ -112,23 +112,6 @@ async function aiFissionReport(title: string, env: Env): Promise<string> {
   } catch (e: any) {
     return `(AI错误: ${e.message})`;
   }
-}
-
-// ============================================================
-// Supabase 操作
-// ============================================================
-async function supabaseInsert(table: string, data: Record<string, any>, env: Env) {
-  const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': env.SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      'Prefer': 'return=representation',
-    },
-    body: JSON.stringify(data),
-  });
-  return res.json();
 }
 
 // ============================================================
@@ -162,20 +145,10 @@ export default {
         messages: [{ role: 'user', content: '说一段话介绍自己' }],
         max_tokens: 100,
       }) as any;
-      // Workers AI 内部 env.AI.run() 返回格式：{ response: string }（不是 OpenAI 格式）
-      // Workers AI 返回 { response: string }，不用 OpenAI choices 格式
-      let text = '';
-      if (typeof r === 'string') {
-        text = r.trim();
-      } else {
-        text = (r.response || '').trim();
-      }
       return new Response(JSON.stringify({
         ok: true,
         model: 'llama-3-8b-instruct',
-        text: text.substring(0, 200),
-        top_keys: r ? Object.keys(r) : [],
-        r_response: typeof r === 'string' ? r.substring(0, 100) : '(object)',
+        response: extractText(r).substring(0, 200),
       }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
@@ -283,6 +256,52 @@ export default {
           status: 500, headers: { 'Content-Type': 'application/json', ...cors }
         });
       }
+    }
+
+    // -------- 保存新闻到 R2 --------
+    if (action === 'save') {
+      const title = url.searchParams.get('title') || '';
+      const category = url.searchParams.get('category') || '综合';
+      const score = parseFloat(url.searchParams.get('score') || '5');
+      const source = url.searchParams.get('source') || 'zaker';
+
+      if (!title) {
+        return new Response(JSON.stringify({ error: 'missing title' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+
+      try {
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const item = { id, title, category, score, source, created_at: new Date().toISOString() };
+        const key = `news/${source}/${id}.json`;
+        await env.csnews_raw.put(key, JSON.stringify(item), {
+          httpMetadata: { contentType: 'application/json' },
+        });
+        return new Response(JSON.stringify({ ok: true, key, item }), {
+          headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+    }
+
+    // -------- 列出 R2 中的新闻 --------
+    if (action === 'list') {
+      const prefix = url.searchParams.get('prefix') || 'news/zaker/';
+      const list = await env.csnews_raw.list({ prefix });
+      const items = await Promise.all(
+        list.objects.slice(0, 20).map(async (obj) => {
+          const body = await env.csnews_raw.get(obj.key);
+          const text = await body?.text();
+          try { return JSON.parse(text || '{}'); } catch { return { key: obj.key }; }
+        })
+      );
+      return new Response(JSON.stringify({ count: items.length, items }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
     }
 
     return new Response(JSON.stringify({ error: 'unknown action' }), {

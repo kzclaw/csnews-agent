@@ -5,5 +5,6 @@ compatibility_date = "2026-05-29"
 [ai]
 binding = "AI"
 
-[vars]
-BEARER_TOKEN = "REDACTED-WORKER-BEARER-TOKEN"
+[[r2_buckets]]
+bucket_name = "csnews-raw"
+binding = "csnews_raw"
