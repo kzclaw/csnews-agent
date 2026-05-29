@@ -252,24 +252,31 @@ export async function classify(title: string, env: Env): Promise<string> {
 // 评分规则
 // ============================================================
 // R threshold for Workers AI routing (KR0: Neurons saving)
-const AI_ROUTE_R_THRESHOLD = 8.0;
+// NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
+const AI_ROUTE_R_THRESHOLD = 7.0;
 
 // ============================================================
 // 评分规则
 // ============================================================
 export function scoreRule(title: string): { score: number; reason: string; isHigh: boolean } {
   const hotWords = ['突发', '震惊', '重磅', '紧急', '首次', '史上', '最新', '突破', '革命', '创历史'];
+  const superHot = ['紧急', '突发', '重磅'];
+  const hasSuperHot = superHot.some(w => title.includes(w));
   const hasHot = hotWords.some(w => title.includes(w));
   const hasNum = /\d+/.test(title);
   const hasExclaim = title.includes('!') || title.includes('?');
   const len = title.length;
   let score = 5.0;
-  if (hasHot) score += 1.5;
+  if (hasSuperHot) score += 2.0;
+  else if (hasHot) score += 1.2;
   if (hasNum) score += 0.5;
   if (len > 20 && len < 35) score += 0.3;
   if (hasExclaim) score += 0.3;
+  const hotCount = hotWords.filter(w => title.includes(w)).length;
+  if (hotCount >= 3) score += 0.5;
+  else if (hotCount >= 2) score += 0.3;
   score = Math.min(10, Math.round(score * 10) / 10);
-  return { score, reason: `热词:${hasHot} 数字:${hasNum} 长度:${len}`, isHigh: score >= AI_ROUTE_R_THRESHOLD };
+  return { score, reason: `热词:${hasHot} 超热:${hasSuperHot} 数字:${hasNum} 长:${len} 多热:${hotCount}`, isHigh: score >= AI_ROUTE_R_THRESHOLD };
 }
 
 // ============================================================
