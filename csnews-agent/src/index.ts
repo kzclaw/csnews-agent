@@ -304,6 +304,52 @@ export default {
       });
     }
 
+    // -------- ZAKER 热点新闻获取 + 处理 --------
+    if (action === 'zaker-hot') {
+      try {
+        const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
+        const json = await r.json() as any;
+        const list: any[] = json?.data?.list || [];
+        const results = [];
+
+        for (const item of list) {
+          const title = item.title || '';
+          if (!title) continue;
+
+
+          const rule = scoreRule(title);
+          const category = classifyRule(title);
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const newsItem = {
+            id,
+            title,
+            summary: (item.summary || '').substring(0, 200),
+            author: item.author || 'zaker',
+            url: item.url || '',
+            publish_time: item.publish_time || new Date().toISOString(),
+            category,
+            score: rule.score,
+            source: 'zaker',
+            created_at: new Date().toISOString(),
+          };
+
+          const key = `news/zaker/${id}.json`;
+          await env.csnews_raw.put(key, JSON.stringify(newsItem), {
+            httpMetadata: { contentType: 'application/json' },
+          });
+          results.push({ title, category, score: rule.score, reason: rule.reason, key });
+        }
+
+        return new Response(JSON.stringify({ count: results.length, items: results }), {
+          headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: 'unknown action' }), {
       status: 400, headers: { 'Content-Type': 'application/json', ...cors }
     });
