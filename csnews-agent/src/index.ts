@@ -2,8 +2,8 @@
  * CSNEWS Agent · 主 Worker
  * Cloudflare Workers + Workers AI + Supabase + R2
  *
- * 安全设计：
- * - 所有请求需带 Bearer Token（BEARER_TOKEN env var）
+ * 安全设计:
+ * - 所有请求需带 Bearer Token(BEARER_TOKEN env var)
  * - CORS 仅允许已授权来源
  */
 interface Env {
@@ -41,7 +41,7 @@ async function safeJson(res: Response): Promise<any> {
 
 // ====== News Self Growth 核心逻辑 ======
 
-// 清理过期话题簇（跟进7天/重要14天/爆炸28天）
+// 清理过期话题簇(跟进7天/重要14天/爆炸28天)
 async function cleanupStaleTopics(env: Env) {
   const { data } = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
     method: 'POST',
@@ -49,7 +49,7 @@ async function cleanupStaleTopics(env: Env) {
   return data?.[0] || { deleted_topic_count: 0, deleted_news_count: 0 };
 }
 
-// 向量查重：查相似新闻
+// 向量查重:查相似新闻
 async function findSimilarNews(env: Env, embedding: number[], threshold = 0.88, matchCount = 5) {
   const res = await supabaseFetch(env, '/rest/v1/rpc/find_similar_news', {
     method: 'POST',
@@ -86,7 +86,7 @@ async function insertNewsHotspot(env: Env, news: {
   embedding?: number[]; r2_key?: string; topic_id?: string;
   level?: string; score?: number; is_stored_r2?: boolean;
 }): Promise<string | null> {
-  // 生成确定性 UUID（基于 title + timestamp），避免响应体被 Cloudflare 截断
+  // 生成确定性 UUID(基于 title + timestamp),避免响应体被 Cloudflare 截断
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const newsWithId = { id, ...news };
   await supabaseFetch(env, '/rest/v1/news_hotspots', {
@@ -107,7 +107,7 @@ async function joinTopicMember(env: Env, newsId: string, topicId: string, role =
   return !!(raw && raw.trim() && (raw !== '[]'));
 }
 
-// R2 存储（去重存储层）
+// R2 存储(去重存储层)
 async function saveToR2(env: Env, prefix: string, data: object): Promise<string> {
   const key = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.json`;
   await env.csnews_raw.put(key, JSON.stringify(data), {
@@ -116,7 +116,7 @@ async function saveToR2(env: Env, prefix: string, data: object): Promise<string>
   return key;
 }
 
-// 简单字符串哈希（用于 topic_key 生成）
+// 简单字符串哈希(用于 topic_key 生成)
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) {
@@ -225,7 +225,7 @@ const CATEGORY_KW: Record<string, string[]> = {
   ],
 };
 
-// 关键词兜底分类（无命名品牌，纯抽象信号词）
+// 关键词兜底分类(无命名品牌,纯抽象信号词)
 export function classifyRule(title: string): string {
   for (const [cat, kws] of Object.entries(CATEGORY_KW)) {
     if (kws.some(k => title.includes(k))) return cat;
@@ -233,41 +233,48 @@ export function classifyRule(title: string): string {
   return '综合';
 }
 
-// Workers AI 分类（主分类，优先于关键词兜底）
-// 注意：kimi-k2.5 在免费 Worker 内响应太慢（15s+），暂时改用关键词兜底
-// 启用条件：升级 Paid 版后 Worker 侧加 timeout 再开启 AI 分类
+// Workers AI 分类(主分类,优先于关键词兜底)
+// 注意:kimi-k2.5 在免费 Worker 内响应太慢(15s+),暂时改用关键词兜底
+// 启用条件:升级 Paid 版后 Worker 侧加 timeout 再开启 AI 分类
 export async function classifyByAI(title: string, env: Env): Promise<string> {
-  return classifyRule(title); // 暂时禁用 AI，降级为纯关键词
+  return classifyRule(title); // 暂时禁用 AI,降级为纯关键词
 }
 
-// 双保险分类：AI 优先，关键词兜底，综合保底
-// 注意：AI 分类（classifyByAI）因 Workers AI 响应慢，已暂时禁用
-// 启用条件：升级 Paid 版后 Worker 侧加 timeout 再开启
+// 双保险分类:AI 优先,关键词兜底,综合保底
+// 注意:AI 分类(classifyByAI)因 Workers AI 响应慢,已暂时禁用
+// 启用条件:升级 Paid 版后 Worker 侧加 timeout 再开启
 export async function classify(title: string, env: Env): Promise<string> {
-  // AI 分类（kimi-k2.5）暂时禁用，待 Paid 版加 timeout 后启用
+  // AI 分类(kimi-k2.5)暂时禁用,待 Paid 版加 timeout 后启用
   return classifyRule(title);
 }
 
 // ============================================================
 // 评分规则
 // ============================================================
-export function scoreRule(title: string): { score: number; reason: string } {
+// R threshold for Workers AI routing (KR0: Neurons saving)
+const AI_ROUTE_R_THRESHOLD = 8.0;
+
+// ============================================================
+// 评分规则
+// ============================================================
+export function scoreRule(title: string): { score: number; reason: string; isHigh: boolean } {
   const hotWords = ['突发', '震惊', '重磅', '紧急', '首次', '史上', '最新', '突破', '革命', '创历史'];
   const hasHot = hotWords.some(w => title.includes(w));
   const hasNum = /\d+/.test(title);
-  const hasExclaim = title.includes('！') || title.includes('?');
+  const hasExclaim = title.includes('!') || title.includes('?');
   const len = title.length;
   let score = 5.0;
   if (hasHot) score += 1.5;
   if (hasNum) score += 0.5;
   if (len > 20 && len < 35) score += 0.3;
   if (hasExclaim) score += 0.3;
-  return { score: Math.min(10, Math.round(score * 10) / 10), reason: `热词:${hasHot} 数字:${hasNum} 长度:${len}` };
+  score = Math.min(10, Math.round(score * 10) / 10);
+  return { score, reason: `热词:${hasHot} 数字:${hasNum} 长度:${len}`, isHigh: score >= AI_ROUTE_R_THRESHOLD };
 }
 
 // ============================================================
 // Workers AI 响应解析
-// env.AI.run() 返回格式：{ response: string, usage: {...} }
+// env.AI.run() 返回格式:{ response: string, usage: {...} }
 // ============================================================
 function extractText(resp: any): string {
   if (typeof resp === 'string') return resp.trim();
@@ -281,7 +288,10 @@ function extractText(resp: any): string {
 // ============================================================
 // Workers AI 裂变报告生成
 // ============================================================
-async function aiFissionReport(title: string, env: Env): Promise<string> {
+// Workers AI 裂变报告生成
+// KR0: only call AI when R >= AI_ROUTE_R_THRESHOLD (default 8.0)
+async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
+  if (rScore < AI_ROUTE_R_THRESHOLD) return '(AI跳过-R<8.0)';
   try {
     const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
@@ -318,7 +328,7 @@ export default {
 
     if (action === 'diag') {
       const results = [];
-      
+
       // 1. Insert topic
       const t0 = Date.now();
       const tr = await fetch(`${env.SUPABASE_URL}/rest/v1/topics`, {
@@ -335,7 +345,7 @@ export default {
       let t0id = null;
       try { const d = JSON.parse(t0t); t0id = d?.[0]?.id || d?.id; } catch {}
       results.push({ step: 'topic_insert', status: tr.status, id: t0id, body: t0t.slice(0,100) });
-      
+
       // 2. Insert news
       const t1 = Date.now();
       const nr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_hotspots`, {
@@ -352,7 +362,7 @@ export default {
       let t1id = null;
       try { const d = JSON.parse(t1t); t1id = d?.[0]?.id || d?.id; } catch {}
       results.push({ step: 'news_insert', status: nr.status, id: t1id, body: t1t.slice(0,100) });
-      
+
       // 3. Join (if both IDs exist)
       if (t0id && t1id) {
         const t2 = Date.now();
@@ -371,7 +381,7 @@ export default {
       } else {
         results.push({ step: 'join', status: -1, reason: 'missing IDs', tid: t0id, nid: t1id });
       }
-      
+
       return new Response(JSON.stringify({ ts: Date.now(), results }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
@@ -408,8 +418,8 @@ export default {
 
     // -------- 裂变报告测试 --------
     if (action === 'ai-test') {
-      const title = url.searchParams.get('title') || 'OpenAI发布GPT-5，AI行业迎来新一轮革命';
-      const report = await aiFissionReport(title, env);
+      const title = url.searchParams.get('title') || 'OpenAI发布GPT-5,AI行业迎来新一轮革命';
+      const report = await maybeFissionReport(title, env, 9.0); // test always uses high score
       return new Response(JSON.stringify({ title, report }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
@@ -430,7 +440,7 @@ export default {
       let aiReport = '';
 
       if (useAI) {
-        aiReport = await aiFissionReport(title, env);
+        aiReport = await maybeFissionReport(title, env, rule.score);
       }
 
       return new Response(JSON.stringify({
@@ -444,7 +454,7 @@ export default {
       });
     }
 
-    // -------- 独立分类测试（调试用）--------
+    // -------- 独立分类测试(调试用)--------
     if (action === 'classify') {
       const title = url.searchParams.get('title');
       if (!title) {
@@ -478,7 +488,7 @@ export default {
         const category = await classify(item.title, env);
         let aiReport = '';
         if (useAI) {
-          aiReport = await aiFissionReport(item.title, env);
+          aiReport = await maybeFissionReport(item.title, env, rule.score);
         }
         return {
           title: item.title,
@@ -494,7 +504,7 @@ export default {
       });
     }
 
-    // -------- 裂变查询生成 --------
+    // -------- 裂变查询生成（KR0: 高分新闻才生成，低分跳过）--------
     if (action === 'fission') {
       const seed = url.searchParams.get('seed') || url.searchParams.get('title');
       if (!seed) {
@@ -502,19 +512,27 @@ export default {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors }
         });
       }
-
+      const r = scoreRule(seed);
+      if (r.score < AI_ROUTE_R_THRESHOLD) {
+        return new Response(JSON.stringify({
+          seed,
+          queries: [],
+          count: 0,
+          skipped: true,
+          reason: `R=${r.score} < ${AI_ROUTE_R_THRESHOLD}，AI跳过`
+        }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      }
       try {
         const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
           messages: [
-            { role: 'user', content: `生成5个深度裂变搜索查询词（每个不超过15字），用|分隔：\n新闻：${seed}` }
+            { role: 'user', content: `生成5个深度裂变搜索查询词(每个不超过15字),用|分隔:
+新闻:${seed}` }
           ],
           max_tokens: 200,
           temperature: 0.3,
         }) as any;
-
         const text = extractText(resp);
         const queries = text.split('|').map(q => q.trim()).filter(q => q.length > 0 && q.length <= 20);
-
         return new Response(JSON.stringify({ seed, queries, count: queries.length }), {
           headers: { 'Content-Type': 'application/json', ...cors }
         });
@@ -525,7 +543,7 @@ export default {
       }
     }
 
-    // -------- 保存新闻到 R2（手动单条保存）--------
+    // -------- 保存新闻到 R2(手动单条保存)--------
     if (action === 'save') {
       const title = url.searchParams.get('title') || '';
       const category = url.searchParams.get('category') || '综合';
@@ -571,7 +589,7 @@ export default {
       });
     }
 
-    // -------- Workers AI 向量嵌入（@cf/baai/bge-m3）--------
+    // -------- Workers AI 向量嵌入(@cf/baai/bge-m3)--------
     if (action === 'embed') {
       const text = url.searchParams.get('text') || url.searchParams.get('title') || '';
       if (!text) {
@@ -585,7 +603,7 @@ export default {
           text: [text],
         }) as any;
 
-        // bge-m3 返回格式：{ shape: [n, dim], data: [...], response: string }
+        // bge-m3 返回格式:{ shape: [n, dim], data: [...], response: string }
         const raw = resp as any;
         // 尝试多种路径取 embedding
         let embedding: number[] = [];
@@ -638,7 +656,7 @@ export default {
           const rule = scoreRule(title);
           const category = await classify(title, env);
 
-          // 跳过向量化和R2，只测Supabase写入
+          // 跳过向量化和R2,只测Supabase写入
           await insertNewsHotspot(env, {
             title,
             url: item.url || '',
@@ -666,12 +684,12 @@ export default {
 
 
 
-    // -------- News Self Growth 主流程（ZAKER → 查重 → 积分 → R2）--------
+    // -------- News Self Growth 主流程(ZAKER → 查重 → 积分 → R2)--------
     if (action === 'process') {
-      // Step 0: 清理过期话题簇（1 subrequest）
+      // Step 0: 清理过期话题簇(1 subrequest)
       const cleaned = await cleanupStaleTopics(env) as any;
 
-      // Step 1: 拉 ZAKER 热点（1 subrequest）
+      // Step 1: 拉 ZAKER 热点(1 subrequest)
       const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
       const json = await r.json() as any;
       const list: any[] = json?.data?.list || [];
@@ -683,9 +701,9 @@ export default {
       // 10 items max:
       // - Full flow (embedding+查重+积分+存R2+写Supabase+关联) = 6 subreqs/item
       // - 6 items × 6 + 2 (cleanup+zaker) = 38 subreqs ✓ < 50
-      // - 后4条只写Supabase（跳过向量查重）节省 Neurons
+      // - 后4条只写Supabase(跳过向量查重)节省 Neurons
       const FULL_COUNT = 6;
-      
+
       for (let i = 0; i < list.slice(0, 10).length; i++) {
         const item = list[i];
         const title = item.title || '';
@@ -702,7 +720,7 @@ export default {
         let fission = false;
         let isNewTopic = false;
 
-        // 仅前 FULL_COUNT 条做 embedding + 向量查重（Workers AI CPU 限制）
+        // 仅前 FULL_COUNT 条做 embedding + 向量查重(Workers AI CPU 限制)
         if (i < FULL_COUNT) {
           let embedding: number[] = [];
           try {
@@ -754,7 +772,7 @@ export default {
           }
         }
 
-        // Step 4: 写 Supabase（实时打分层）— 1 subrequest
+        // Step 4: 写 Supabase(实时打分层)- 1 subrequest
         const newsId = await insertNewsHotspot(env, {
           title,
           url: item.url || '',
@@ -769,7 +787,7 @@ export default {
           is_stored_r2: isStoredR2,
         });
 
-        // Step 5: 关联新闻-话题（news_topic_members）— 1 subrequest
+        // Step 5: 关联新闻-话题(news_topic_members)- 1 subrequest
         if (newsId && topicId) {
           await joinTopicMember(env, newsId, topicId, isNewTopic ? 'seed' : 'follow');
         }
