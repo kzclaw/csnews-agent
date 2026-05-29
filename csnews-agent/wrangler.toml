@@ -1,0 +1,9 @@
+name = "csnews-agent"
+main = "src/index.ts"
+compatibility_date = "2026-05-29"
+
+[ai]
+binding = "AI"
+
+[vars]
+BEARER_TOKEN = "REDACTED-WORKER-BEARER-TOKEN"
