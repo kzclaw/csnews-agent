@@ -1,8 +1,11 @@
 # Dependencies
 node_modules/
 
-# Wrangler (local cache — never commit)
+# Wrangler (local cache per worker)
 */.wrangler/
+
+# Wrangler config (binding names only, no credentials)
+*/wrangler.toml
 
 # Environment secrets
 .env
@@ -23,10 +26,8 @@ Thumbs.db
 *.swp
 *.swo
 
-# Test / dev workers (not production)
+# Test / dev workers
 csnews-h1-test/
 
-# Supabase CLI temp files (contains project metadata)
-supabase/.temp/*/.wrangler/
-csnews-h1-test/
-*/wrangler.toml
+# Supabase CLI temp files (local project metadata)
+supabase/.temp/
