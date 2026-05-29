@@ -153,19 +153,90 @@ function corsHeaders(origin?: string | null) {
 // 规则引擎分类
 // ============================================================
 const CATEGORY_KW: Record<string, string[]> = {
-  '科技': ['AI', '人工智能', 'ChatGPT', '大模型', '芯片', '算法', '机器人', '智能', '技术', '科技', '代码', '编程', '软件', '特斯拉', '字节', '华为', '鸿蒙', 'OpenAI', '模型'],
-  '财经': ['股市', '基金', '货币', '经济', '金融', '银行', '投资', '市场', '美元', '黄金', '汇率', 'A股', '沪指', '加息', '通胀', '人民币', '加密货币'],
-  '国际': ['美国', '英国', '欧盟', '俄罗斯', '乌克兰', '日本', '韩国', '联合国', '外交', '制裁', 'G20', '首相', '岸田', '普京', '习近平', '中美', '外长'],
-  '社会': ['疫情', '健康', '医疗', '医保', '教育', '交通', '环境', '灾害', '事故', '核酸', '中考', '确诊', '小区', '防控'],
-  '娱乐': ['电影', '音乐', '明星', '综艺', '赛事', '奥运', '世界杯', '演唱会', '门票', '周杰伦', '刘德华', 'QQ音乐'],
-  '综合': [],
+  '科技': [
+    '技术发布', '算法突破', '开源', '漏洞修复', '系统升级', '产品迭代', '发布会',
+    '数字化', '智能化', '云计算', '数据中心', '机器人', '工业自动化', '自动驾驶',
+    '网络安全', '数据泄露', '跨境市场', '融资上市', '裁员',
+    'OpenAI', 'Anthropic', 'Google DeepMind', 'Meta AI', 'xAI', 'Midjourney',
+    '豆包', 'Kimi', '通义', '文心', '智谱', '百川', 'MiniMax', '月之暗面',
+    '字节', '腾讯', '阿里', '百度', '京东', '美团', '拼多多', '小米', '荣耀', 'oppo', 'vivo',
+    '英特尔', '英伟达', 'AMD', '高通', '苹果', '三星',
+    'AI', '大模型', '人工智能', 'ChatGPT', '芯片', '软件', '硬件',
+  ],
+  '财经': [
+    '股市', '指数', '大盘', '涨停', '跌停', '牛市', '熊市', '加印', '降息',
+    '利率', '汇率', 'GDP', 'CPI', '信贷', '贷款', '基金', '理财', '保险',
+    '财政收入', '赤字', '债务', '关税', '进出口', '贸易顺差', '逆差',
+    '货币', '银行', '券商', '投资', '市场', '经济', '金融', '财政',
+    '印花税', '北向资金', '量化', 'ETF', '沪指', '深指', 'A股', '亿', '专项', '定向',
+  ],
+  '国际': [
+    '峰会', '外交', '外长', '大使', '制裁', '禁运', '停火', '谈判', '军事演习',
+    '军队', '难民', '人道主义', '议会', '气候协议', '贸易协定', '领事', '签证',
+    '联合国', '欧盟', '北约', '东盟', '上合', 'G7', 'G20',
+    '岛内', '两岸', '台海', '外长会', '使领馆',
+  ],
+  '社会': [
+    '事故', '伤亡', '灾害', '防控', '隔离', '核酸', '复课', '开学', '医疗',
+    '医保', '药品纳入', '就业', '失业', '最低工资', '延迟退休', '社区', '物业',
+    '环境治理', '食品安全', '曝光', '下架', '投诉', '维权', '健康', '交通',
+    '教育', '入学', '中考', '高考', '防控政策', '疫情',
+    '非亲生', '诱拐', '宰杀', '宠物', '社区',
+  ],
+  '娱乐': [
+    '首映', '定档', '官宣', '塌房', '绯闻', '演唱会', '票房', '收视', '综艺',
+    '剧集', '网红', '直播', '带货', '颁奖', '红毯', '音乐', '电影',
+    '去世', '逝世', '讣告', '主屋', '带货',
+  ],
+  '体育': [
+    '比分', '胜负', '绝杀', '冠军', '夺冠', '捧杯', '联赛', '杯赛', '淘汰赛',
+    '红牌', '黄牌', '点球', '转会', '签约', '退役', '奥运', '退赛', '伤病',
+    '世界杯', '欧冠', 'CBA', 'NBA', '中超',
+  ],
+  '房产': [
+    '开盘', '加推', '日光', '去化率', '降价', '打折', '烂尾', '交付', '延期',
+    '松绑', '限购', '落户', '房产税', '土拍', '地王', '流拍', '公积金', '城镇化',
+    '房价', '房贷', '抄底', '新盘',
+  ],
+  '汽车': [
+    '降价', '促销', '碰撞测试', '安全评级', '召回', '故障', '新车上市', '预售',
+    '销量榜单', '交付量', '新能源', '购置税补贴', '经销商', '4S店', '试驾',
+    '车型', 'MPV', 'SUV', '轿车', '购置税',
+  ],
+  '消费': [
+    '涨价', '降价', '促销', '秒杀', '抢购', '新品首发', '门店开关', '食品安全',
+    '快递', '物流', '宠物经济', '海淘', '代购', '电商', '购物节',
+    '茅台', '餐饮', '咖啡', '奶茶', '零食', '法拉利', '豪车',
+  ],
+  '法律': [
+    '判刑', '立案', '警方通报', '检方公诉', '判决', '处罚', '罚款', '赔偿',
+    '调解', '取保候审', '治安', '扫黄', '禁毒', '网络犯罪', '偷逃税', '税务稽查',
+    '佛教协会', '公诉', '检方', '通报', '治安',
+    '被判', '有期徒刑', '审结', '一审',
+  ],
 };
 
+// 关键词兜底分类（无命名品牌，纯抽象信号词）
 export function classifyRule(title: string): string {
   for (const [cat, kws] of Object.entries(CATEGORY_KW)) {
     if (kws.some(k => title.includes(k))) return cat;
   }
   return '综合';
+}
+
+// Workers AI 分类（主分类，优先于关键词兜底）
+// 注意：kimi-k2.5 在免费 Worker 内响应太慢（15s+），暂时改用关键词兜底
+// 启用条件：升级 Paid 版后 Worker 侧加 timeout 再开启 AI 分类
+export async function classifyByAI(title: string, env: Env): Promise<string> {
+  return classifyRule(title); // 暂时禁用 AI，降级为纯关键词
+}
+
+// 双保险分类：AI 优先，关键词兜底，综合保底
+// 注意：AI 分类（classifyByAI）因 Workers AI 响应慢，已暂时禁用
+// 启用条件：升级 Paid 版后 Worker 侧加 timeout 再开启
+export async function classify(title: string, env: Env): Promise<string> {
+  // AI 分类（kimi-k2.5）暂时禁用，待 Paid 版加 timeout 后启用
+  return classifyRule(title);
 }
 
 // ============================================================
@@ -275,7 +346,7 @@ export default {
       }
 
       const rule = scoreRule(title);
-      const category = classifyRule(title);
+      const category = await classify(title, env);
       const useAI = url.searchParams.get('ai') !== 'false';
       let aiReport = '';
 
@@ -290,6 +361,21 @@ export default {
         reason: rule.reason,
         ai_report: aiReport,
       }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
+
+    // -------- 独立分类测试（调试用）--------
+    if (action === 'classify') {
+      const title = url.searchParams.get('title');
+      if (!title) {
+        return new Response(JSON.stringify({ error: 'missing title param' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+      const aiCat = await classifyByAI(title, env);
+      const kwCat = classifyRule(title);
+      return new Response(JSON.stringify({ title, aiCat, kwCat }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
     }
@@ -310,7 +396,7 @@ export default {
 
       const results = await Promise.all(items.map(async (item) => {
         const rule = scoreRule(item.title);
-        const category = classifyRule(item.title);
+        const category = await classify(item.title, env);
         let aiReport = '';
         if (useAI) {
           aiReport = await aiFissionReport(item.title, env);
@@ -471,7 +557,7 @@ export default {
           if (!title) continue;
 
           const rule = scoreRule(title);
-          const category = classifyRule(title);
+          const category = await classify(title, env);
 
           // 跳过向量化和R2，只测Supabase写入
           await insertNewsHotspot(env, {
@@ -518,7 +604,7 @@ export default {
 
         // 规则引擎评分+分类
         const rule = scoreRule(title);
-        const category = classifyRule(title);
+        const category = await classify(title, env);
 
         // 向量化（用于查重）— Workers AI 调用，算 1 subrequest
         let embedding: number[] = [];
