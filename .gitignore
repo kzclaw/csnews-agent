@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/
+wrangler.toml
+!wrangler.toml
+
+# Environment secrets (never commit)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test files
+*.test.ts
+*.spec.ts
