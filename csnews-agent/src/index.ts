@@ -83,13 +83,15 @@ export function scoreRule(title: string): { score: number; reason: string } {
 }
 
 // ============================================================
-// Workers AI 响应解析（兼容所有格式）
+// Workers AI 响应解析
+// env.AI.run() 返回格式：{ response: string, usage: {...} }
+// 直接取 r.response，不要用 OpenAI 的 choices 格式
 // ============================================================
 function extractText(resp: any): string {
   if (typeof resp === 'string') return resp.trim();
   if (resp && typeof resp === 'object') {
-    const msg = resp.choices?.[0]?.message;
-    return ((msg?.content || '') + (msg?.reasoning || '')).trim() || '';
+    const text = (resp.response || '').trim();
+    if (text) return text;
   }
   return '';
 }
@@ -99,7 +101,7 @@ function extractText(resp: any): string {
 // ============================================================
 async function aiFissionReport(title: string, env: Env): Promise<string> {
   try {
-    const resp = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+    const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
       ],
@@ -156,14 +158,24 @@ export default {
 
     // -------- 模型测试 --------
     if (action === 'model-test') {
-      const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+      const r = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
         messages: [{ role: 'user', content: '说一段话介绍自己' }],
         max_tokens: 100,
       }) as any;
+      // Workers AI 内部 env.AI.run() 返回格式：{ response: string }（不是 OpenAI 格式）
+      // Workers AI 返回 { response: string }，不用 OpenAI choices 格式
+      let text = '';
+      if (typeof r === 'string') {
+        text = r.trim();
+      } else {
+        text = (r.response || '').trim();
+      }
       return new Response(JSON.stringify({
         ok: true,
-        model: 'glm-4.7-flash',
-        response: extractText(r).substring(0, 200),
+        model: 'llama-3-8b-instruct',
+        text: text.substring(0, 200),
+        top_keys: r ? Object.keys(r) : [],
+        r_response: typeof r === 'string' ? r.substring(0, 100) : '(object)',
       }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
@@ -252,7 +264,7 @@ export default {
       }
 
       try {
-        const resp = await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+        const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
           messages: [
             { role: 'user', content: `生成5个深度裂变搜索查询词（每个不超过15字），用|分隔：\n新闻：${seed}` }
           ],
