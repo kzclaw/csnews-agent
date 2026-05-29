@@ -6,5 +6,4 @@ compatibility_date = "2026-05-29"
 binding = "AI"
 
 [[r2_buckets]]
-bucket_name = "csnews-raw"
 binding = "csnews_raw"
