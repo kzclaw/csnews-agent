@@ -258,7 +258,7 @@ export default {
       }
     }
 
-    // -------- 保存新闻到 R2 --------
+    // -------- 保存新闻到 R2（手动单条保存）--------
     if (action === 'save') {
       const title = url.searchParams.get('title') || '';
       const category = url.searchParams.get('category') || '综合';
@@ -302,6 +302,58 @@ export default {
       return new Response(JSON.stringify({ count: items.length, items }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
+    }
+
+    // -------- Workers AI 向量嵌入（@cf/baai/bge-m3）--------
+    if (action === 'embed') {
+      const text = url.searchParams.get('text') || url.searchParams.get('title') || '';
+      if (!text) {
+        return new Response(JSON.stringify({ error: 'missing text param' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+
+      try {
+        const resp = await env.AI.run('@cf/baai/bge-m3', {
+          text: [text],
+        }) as any;
+
+        // bge-m3 返回格式：{ shape: [n, dim], data: [...], response: string }
+        const raw = resp as any;
+        // 尝试多种路径取 embedding
+        let embedding: number[] = [];
+        if (Array.isArray(raw?.data) && raw.data.length > 0) {
+          const item = raw.data[0];
+          if (Array.isArray(item?.embedding)) embedding = item.embedding;
+          else if (Array.isArray(item)) embedding = item;
+        }
+
+        if (!embedding || embedding.length === 0) {
+          return new Response(JSON.stringify({ error: 'embedding empty', shape: raw?.shape, keys: raw ? Object.keys(raw) : [] }), {
+            status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+          });
+        }
+
+        // 存 R2
+        const key = `embeddings/${Date.now()}.json`;
+        await env.csnews_raw.put(key, JSON.stringify({ text, embedding, dim: embedding.length, model: 'bge-m3' }), {
+          httpMetadata: { contentType: 'application/json' },
+        });
+
+        return new Response(JSON.stringify({
+          text,
+          dim: embedding.length,
+          model: '@cf/baai/bge-m3',
+          sample: embedding.slice(0, 5),
+          key,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
     }
 
     // -------- ZAKER 热点新闻获取 + 处理 --------
