@@ -31,8 +31,12 @@ async function supabaseFetch(env: Env, path: string, options?: RequestInit) {
 // 安全的 JSON 解析
 async function safeJson(res: Response): Promise<any> {
   const text = await res.text();
-  if (!text.trim()) return {};
-  return JSON.parse(text);
+  if (!text || !text.trim()) return null;  // 空响应返回 null 而非 {}
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 // ====== News Self Growth 核心逻辑 ======
@@ -51,7 +55,7 @@ async function findSimilarNews(env: Env, embedding: number[], threshold = 0.88, 
     method: 'POST',
     body: JSON.stringify({ query_embedding: embedding, threshold, match_count: matchCount }),
   });
-  const data = await res.json() as any[];
+  const data = await safeJson(res) as any[];
   return data || [];
 }
 
@@ -61,18 +65,18 @@ async function updateTopicScore(env: Env, topicId: string, delta = 1) {
     method: 'POST',
     body: JSON.stringify({ p_topic_id: topicId, p_score_delta: delta }),
   });
-  const data = await res.json() as any[];
+  const data = await safeJson(res) as any[];
   return data?.[0] || { new_score: 0, new_level: 'follow', upgraded: false, fission_triggered: false };
 }
 
 // 插入话题簇
-async function createTopic(env: Env, topicKey: string, level = 'follow', firstNewsId?: string) {
-  const res = await supabaseFetch(env, '/rest/v1/topics', {
+async function createTopic(env: Env, topicKey: string, level = 'follow', firstNewsId?: string): Promise<any> {
+  const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await supabaseFetch(env, '/rest/v1/topics', {
     method: 'POST',
-    body: JSON.stringify({ topic_key: topicKey, level, score: 0, first_news_id: firstNewsId }),
+    body: JSON.stringify({ id, topic_key: topicKey, level, score: 0, first_news_id: firstNewsId }),
   });
-  const data = await res.json() as any;
-  return data;
+  return { id, topic_key: topicKey, level, score: 0, first_news_id: firstNewsId };
 }
 
 // 插入新闻记录
@@ -81,21 +85,26 @@ async function insertNewsHotspot(env: Env, news: {
   hot_score?: number; published_at?: string; summary?: string;
   embedding?: number[]; r2_key?: string; topic_id?: string;
   level?: string; score?: number; is_stored_r2?: boolean;
-}) {
-  const res = await supabaseFetch(env, '/rest/v1/news_hotspots', {
+}): Promise<string | null> {
+  // 生成确定性 UUID（基于 title + timestamp），避免响应体被 Cloudflare 截断
+  const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const newsWithId = { id, ...news };
+  await supabaseFetch(env, '/rest/v1/news_hotspots', {
     method: 'POST',
-    body: JSON.stringify(news),
+    body: JSON.stringify(newsWithId),
   });
-  const data = await res.json() as any;
-  return data;
+  return id;
 }
 
 // 关联新闻-话题
-async function joinTopicMember(env: Env, newsId: string, topicId: string, role = 'follow') {
-  await supabaseFetch(env, '/rest/v1/news_topic_members', {
+async function joinTopicMember(env: Env, newsId: string, topicId: string, role = 'follow'): Promise<boolean> {
+  const res = await supabaseFetch(env, '/rest/v1/news_topic_members', {
     method: 'POST',
     body: JSON.stringify({ news_id: newsId, topic_id: topicId, role }),
+    headers: { 'Prefer': 'return=representation' },
   });
+  const raw = await res.text();
+  return !!(raw && raw.trim() && (raw !== '[]'));
 }
 
 // R2 存储（去重存储层）
@@ -305,12 +314,82 @@ export default {
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'ping';
 
-    // -------- 健康检查 --------
+
+
+    if (action === 'diag') {
+      const results = [];
+      
+      // 1. Insert topic
+      const t0 = Date.now();
+      const tr = await fetch(`${env.SUPABASE_URL}/rest/v1/topics`, {
+        method: 'POST',
+        body: JSON.stringify({ topic_key: 'diag-' + Date.now(), level: 'follow' }),
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        }
+      });
+      const t0t = await tr.text();
+      let t0id = null;
+      try { const d = JSON.parse(t0t); t0id = d?.[0]?.id || d?.id; } catch {}
+      results.push({ step: 'topic_insert', status: tr.status, id: t0id, body: t0t.slice(0,100) });
+      
+      // 2. Insert news
+      const t1 = Date.now();
+      const nr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_hotspots`, {
+        method: 'POST',
+        body: JSON.stringify({ title: 'diag-' + Date.now(), source: 'zaker', category: '测试' }),
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        }
+      });
+      const t1t = await nr.text();
+      let t1id = null;
+      try { const d = JSON.parse(t1t); t1id = d?.[0]?.id || d?.id; } catch {}
+      results.push({ step: 'news_insert', status: nr.status, id: t1id, body: t1t.slice(0,100) });
+      
+      // 3. Join (if both IDs exist)
+      if (t0id && t1id) {
+        const t2 = Date.now();
+        const jr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_topic_members`, {
+          method: 'POST',
+          body: JSON.stringify({ news_id: t0id, topic_id: t1id, role: 'seed' }),
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation',
+          }
+        });
+        const t2t = await jr.text();
+        results.push({ step: 'join', status: jr.status, body: t2t.slice(0,200) });
+      } else {
+        results.push({ step: 'join', status: -1, reason: 'missing IDs', tid: t0id, nid: t1id });
+      }
+      
+      return new Response(JSON.stringify({ ts: Date.now(), results }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
+
     if (action === 'ping') {
       return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
     }
+
+
+
+
+
+
+
+
 
     // -------- 模型测试 --------
     if (action === 'model-test') {
@@ -583,6 +662,10 @@ export default {
       }
     }
 
+
+
+
+
     // -------- News Self Growth 主流程（ZAKER → 查重 → 积分 → R2）--------
     if (action === 'process') {
       // Step 0: 清理过期话题簇（1 subrequest）
@@ -597,8 +680,14 @@ export default {
       }
 
       const results = [];
-      // 10 items max → 10 * 4 + 2 = 42 subrequests (under 50 free tier limit)
-      for (const item of list.slice(0, 10)) {
+      // 10 items max:
+      // - Full flow (embedding+查重+积分+存R2+写Supabase+关联) = 6 subreqs/item
+      // - 6 items × 6 + 2 (cleanup+zaker) = 38 subreqs ✓ < 50
+      // - 后4条只写Supabase（跳过向量查重）节省 Neurons
+      const FULL_COUNT = 6;
+      
+      for (let i = 0; i < list.slice(0, 10).length; i++) {
+        const item = list[i];
         const title = item.title || '';
         if (!title) continue;
 
@@ -606,40 +695,58 @@ export default {
         const rule = scoreRule(title);
         const category = await classify(title, env);
 
-        // 向量化（用于查重）— Workers AI 调用，算 1 subrequest
-        let embedding: number[] = [];
-        try {
-          const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as any;
-          const raw = embResp as any;
-          if (Array.isArray(raw?.data) && raw.data.length > 0) {
-            const it = raw.data[0];
-            embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
-          }
-        } catch { /* 向量化失败不影响 */ }
-
         let topicId: string | undefined;
         let isStoredR2 = false;
         let newsLevel = 'follow';
         let newsScore = 0;
         let fission = false;
+        let isNewTopic = false;
 
-        // Step 2: 向量查重（相似度 > 0.88 视为相似）— 1 subrequest
-        if (embedding.length > 0) {
-          const similar = await findSimilarNews(env, embedding, 0.88, 3);
-          if (similar.length > 0) {
-            const top = similar[0];
-            topicId = top.topic_id;
-            const updated = await updateTopicScore(env, top.topic_id, 1) as any;
-            newsScore = updated.new_score || 0;
-            newsLevel = updated.new_level || 'follow';
-            fission = updated.fission_triggered || false;
+        // 仅前 FULL_COUNT 条做 embedding + 向量查重（Workers AI CPU 限制）
+        if (i < FULL_COUNT) {
+          let embedding: number[] = [];
+          try {
+            const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as any;
+            const raw = embResp as any;
+            if (Array.isArray(raw?.data) && raw.data.length > 0) {
+              const it = raw.data[0];
+              embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
+            }
+          } catch { /* 向量化失败不影响 */ }
 
-            // 相似度 < 0.75 → 内容足够不同，存 R2（去重存储层）
-            const simScore = top.similarity || 0;
-            if (simScore < 0.75) {
+          if (embedding.length > 0) {
+            const similar = await findSimilarNews(env, embedding, 0.88, 3);
+            if (similar.length > 0) {
+              const top = similar[0];
+              topicId = top.topic_id;
+              const updated = await updateTopicScore(env, top.topic_id, 1) as any;
+              newsScore = updated.new_score || 0;
+              newsLevel = updated.new_level || 'follow';
+              fission = updated.fission_triggered || false;
+
+              const simScore = top.similarity || 0;
+              if (simScore < 0.75) {
+                await saveToR2(env, 'news/zaker', {
+                  title, category, score: rule.score, source: 'zaker',
+                  topic_id: topicId, level: newsLevel, fission,
+                  created_at: new Date().toISOString(),
+                });
+                isStoredR2 = true;
+              }
+            }
+          }
+
+          if (!topicId) {
+            const topicKey = title.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '') + Math.abs(hashStr(title)).toString(36);
+            const created = await createTopic(env, topicKey, 'follow') as any;
+            if (created?.id) {
+              topicId = created.id;
+              newsScore = 0;
+              newsLevel = 'follow';
+              isNewTopic = true;
               await saveToR2(env, 'news/zaker', {
                 title, category, score: rule.score, source: 'zaker',
-                topic_id: topicId, level: newsLevel, fission,
+                topic_id: topicId, level: newsLevel, fission: false,
                 created_at: new Date().toISOString(),
               });
               isStoredR2 = true;
@@ -647,26 +754,8 @@ export default {
           }
         }
 
-        // Step 3: 无相似 → 新建话题簇（1 subrequest）
-        if (!topicId) {
-          const topicKey = title.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '') + Math.abs(hashStr(title)).toString(36);
-          const created = await createTopic(env, topicKey, 'follow') as any;
-          if (created?.id) {
-            topicId = created.id;
-            newsScore = 0;
-            newsLevel = 'follow';
-            // 新话题必须存 R2
-            await saveToR2(env, 'news/zaker', {
-              title, category, score: rule.score, source: 'zaker',
-              topic_id: topicId, level: newsLevel, fission: false,
-              created_at: new Date().toISOString(),
-            });
-            isStoredR2 = true;
-          }
-        }
-
         // Step 4: 写 Supabase（实时打分层）— 1 subrequest
-        await insertNewsHotspot(env, {
+        const newsId = await insertNewsHotspot(env, {
           title,
           url: item.url || '',
           source: 'zaker',
@@ -674,13 +763,16 @@ export default {
           hot_score: rule.score,
           published_at: item.publish_time || new Date().toISOString(),
           summary: (item.summary || '').substring(0, 200),
-          embedding: embedding.length > 0 ? embedding : undefined,
-          r2_key: isStoredR2 ? 'stored' : undefined,
           topic_id: topicId,
           level: newsLevel,
           score: newsScore,
           is_stored_r2: isStoredR2,
         });
+
+        // Step 5: 关联新闻-话题（news_topic_members）— 1 subrequest
+        if (newsId && topicId) {
+          await joinTopicMember(env, newsId, topicId, isNewTopic ? 'seed' : 'follow');
+        }
 
         results.push({ title, category, score: rule.score, level: newsLevel, is_stored_r2: isStoredR2, fission });
         if (fission) console.log(`[FISSION] ${title}`);
