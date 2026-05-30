@@ -30,4 +30,4 @@ Thumbs.db
 csnews-h1-test/
 
 # Supabase CLI temp files (local project metadata)
-supabase/.temp/
+supabase/.temp/run-csnews.sh
