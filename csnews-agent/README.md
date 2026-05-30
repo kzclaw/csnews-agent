@@ -126,9 +126,7 @@ csnews-agent/
 └── .gitignore
 ```
 
-> 完整 OKR 文档：
-> `tasks/csnews-agent-okr.md`
-> Obsidian：`第二大脑/📂 项目/CSNEWS AGENT/`
+> 完整 OKR：[tasks/csnews-agent-okr.md](./tasks/csnews-agent-okr.md)
 
 ---
 

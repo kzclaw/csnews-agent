@@ -53,8 +53,8 @@ csnews-agent/
 ## 相关文档
 
 - **Worker 部署文档**：`csnews-agent/README.md`
-- **完整 OKR**：`~/.kzopenclaw/kz/workspace/tasks/csnews-agent-okr.md`
-- **Obsidian**：`第二大脑/📂 项目/CSNEWS AGENT/`
+- **完整 OKR**：[tasks/csnews-agent-okr.md](./tasks/csnews-agent-okr.md)
+
 
 ---
 
