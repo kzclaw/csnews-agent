@@ -32,3 +32,7 @@ csnews-h1-test/
 # Supabase CLI temp files (local project metadata)
 supabase/.temp/run-csnews.sh
 supabase/.temp/
+
+# Wrangler local cache
+.wrangler/
+csnews-agent/.wrangler/

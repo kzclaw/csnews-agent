@@ -373,9 +373,10 @@ export default {
       // 3. Join (if both IDs exist)
       if (t0id && t1id) {
         const t2 = Date.now();
+        // Join: news_topic_members.news_id = news.id, topic_id = topic.id
         const jr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_topic_members`, {
           method: 'POST',
-          body: JSON.stringify({ news_id: t0id, topic_id: t1id, role: 'seed' }),
+          body: JSON.stringify({ news_id: t1id, topic_id: t0id, role: 'seed' }),
           headers: {
             'apikey': env.SUPABASE_SERVICE_KEY,
             'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
