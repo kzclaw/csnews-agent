@@ -104,7 +104,8 @@ cd csnews-agent/csnews-agent
 # 2. 配置密钥（必须）
 npx wrangler secret put BEARER_TOKEN
 npx wrangler secret put SUPABASE_SERVICE_KEY
-
+# SUPABASE_URL: 项目ID（不是完整URL，Worker会拼接为 https://xxx.supabase.co）
+npx wrangler secret put SUPABASE_URL
 # 3. 创建 R2 Bucket（Cloudflare Dashboard）
 # 登录 dash.cloudflare.com
 # Workers & Pages → R2 Object Storage → 创建 Bucket "csnews-raw"
