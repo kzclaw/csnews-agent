@@ -73,7 +73,6 @@ npx wrangler deploy
 ## 安全说明
 
 所有密钥通过 `wrangler secret put` 管理，不在任何代码文件中明文存储。
-详见 [rules/security.md](../../rules/rules.security.md)。
 
 ---
 
