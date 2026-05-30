@@ -14,9 +14,11 @@ interface Env {
   SUPABASE_SERVICE_KEY: string;
 }
 
+const SUPABASE_HOST = `https://${env.SUPABASE_URL}.supabase.co`;
+
 // Supabase fetch wrapper
 async function supabaseFetch(env: Env, path: string, options?: RequestInit) {
-  const res = await fetch(`${env.SUPABASE_URL}${path}`, {
+  const res = await fetch(`${SUPABASE_HOST}${path}`, {
     ...options,
     headers: {
       'apikey': env.SUPABASE_SERVICE_KEY,
@@ -338,7 +340,7 @@ export default {
 
       // 1. Insert topic
       const t0 = Date.now();
-      const tr = await fetch(`${env.SUPABASE_URL}/rest/v1/topics`, {
+      const tr = await fetch(`${SUPABASE_HOST}/rest/v1/topics`, {
         method: 'POST',
         body: JSON.stringify({ topic_key: 'diag-' + Date.now(), level: 'follow' }),
         headers: {
@@ -355,7 +357,7 @@ export default {
 
       // 2. Insert news
       const t1 = Date.now();
-      const nr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_hotspots`, {
+      const nr = await fetch(`${SUPABASE_HOST}/rest/v1/news_hotspots`, {
         method: 'POST',
         body: JSON.stringify({ title: 'diag-' + Date.now(), source: 'zaker', category: '测试' }),
         headers: {
@@ -374,7 +376,7 @@ export default {
       if (t0id && t1id) {
         const t2 = Date.now();
         // Join: news_topic_members.news_id = news.id, topic_id = topic.id
-        const jr = await fetch(`${env.SUPABASE_URL}/rest/v1/news_topic_members`, {
+        const jr = await fetch(`${SUPABASE_HOST}/rest/v1/news_topic_members`, {
           method: 'POST',
           body: JSON.stringify({ news_id: t1id, topic_id: t0id, role: 'seed' }),
           headers: {

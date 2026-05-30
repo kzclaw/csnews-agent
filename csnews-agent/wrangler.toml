@@ -1,0 +1,10 @@
+name = "csnews-agent"
+main = "src/index.ts"
+compatibility_date = "2026-05-29"
+
+[ai]
+binding = "AI"
+
+[[r2_buckets]]
+binding = "csnews_raw"
+[vars]
