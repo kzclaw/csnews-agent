@@ -73,6 +73,20 @@ async function updateTopicScore(env: Env, topicId: string, delta = 1) {
   return data?.[0] || { new_score: 0, new_level: 'follow', upgraded: false, fission_triggered: false };
 }
 
+// 记录 TIE-lite 趋势快照并按规则触发 warning，不调用 LLM
+async function recordTrendSnapshot(env: Env, topicId: string) {
+  try {
+    const res = await supabaseFetch(env, '/rest/v1/rpc/record_trend_snapshot', {
+      method: 'POST',
+      body: JSON.stringify({ p_topic_id: topicId }),
+    });
+    const data = await safeJson(res) as any[];
+    return Array.isArray(data) ? data[0] || null : null;
+  } catch {
+    return null;
+  }
+}
+
 // 插入话题簇
 async function createTopic(env: Env, topicKey: string, level = 'follow', firstNewsId?: string): Promise<any> {
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -258,6 +272,8 @@ export async function classify(title: string, env: Env): Promise<string> {
 // R threshold for Workers AI routing (KR0: Neurons saving)
 // NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
 const AI_ROUTE_R_THRESHOLD = 7.0;
+const TOPIC_MATCH_THRESHOLD = 0.72;
+const R2_DUP_THRESHOLD = 0.88;
 
 // ============================================================
 // 评分规则
@@ -300,9 +316,9 @@ function extractText(resp: any): string {
 // Workers AI 裂变报告生成
 // ============================================================
 // Workers AI 裂变报告生成
-// KR0: only call AI when R >= AI_ROUTE_R_THRESHOLD (default 8.0)
+// KR0: only call AI when R >= AI_ROUTE_R_THRESHOLD
 async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
-  if (rScore < AI_ROUTE_R_THRESHOLD) return '(AI跳过-R<8.0)';
+  if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
   try {
     const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
@@ -711,8 +727,8 @@ export default {
 
       const results = [];
       // 10 items max:
-      // - Full flow (embedding+查重+积分+存R2+写Supabase+关联) = 6 subreqs/item
-      // - 6 items × 6 + 2 (cleanup+zaker) = 38 subreqs ✓ < 50
+      // - Full flow adds one TIE-lite snapshot RPC after topic join.
+      // - 6 full items + 2 global requests remain under the free Worker subrequest limit.
       // - 后4条只写Supabase(跳过向量查重)节省 Neurons
       const FULL_COUNT = 6;
 
@@ -731,10 +747,14 @@ export default {
         let newsScore = 0;
         let fission = false;
         let isNewTopic = false;
+        let embedding: number[] = [];
+        let matchedSimilarity: number | null = null;
+        let r2Key: string | undefined;
+        let storedReason = i < FULL_COUNT ? 'embedding_empty' : 'lightweight_no_embedding';
+        let trendSnapshot: any = null;
 
         // 仅前 FULL_COUNT 条做 embedding + 向量查重(Workers AI CPU 限制)
         if (i < FULL_COUNT) {
-          let embedding: number[] = [];
           try {
             const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as any;
             const raw = embResp as any;
@@ -745,8 +765,8 @@ export default {
           } catch { /* 向量化失败不影响 */ }
 
           if (embedding.length > 0) {
-            const similar = await findSimilarNews(env, embedding, 0.88, 3);
-            if (similar.length > 0) {
+            const similar = await findSimilarNews(env, embedding, TOPIC_MATCH_THRESHOLD, 3);
+            if (similar.length > 0 && similar[0].topic_id) {
               const top = similar[0];
               topicId = top.topic_id;
               const updated = await updateTopicScore(env, top.topic_id, 1) as any;
@@ -755,13 +775,17 @@ export default {
               fission = updated.fission_triggered || false;
 
               const simScore = top.similarity || 0;
-              if (simScore < 0.75) {
-                await saveToR2(env, 'news/zaker', {
+              matchedSimilarity = simScore;
+              if (simScore < R2_DUP_THRESHOLD) {
+                r2Key = await saveToR2(env, 'news/zaker', {
                   title, category, score: rule.score, source: 'zaker',
-                  topic_id: topicId, level: newsLevel, fission,
+                  topic_id: topicId, level: newsLevel, fission, similarity: simScore,
                   created_at: new Date().toISOString(),
                 });
                 isStoredR2 = true;
+                storedReason = 'same_topic_new_angle';
+              } else {
+                storedReason = 'same_topic_duplicate';
               }
             }
           }
@@ -774,12 +798,13 @@ export default {
               newsScore = 0;
               newsLevel = 'follow';
               isNewTopic = true;
-              await saveToR2(env, 'news/zaker', {
+              r2Key = await saveToR2(env, 'news/zaker', {
                 title, category, score: rule.score, source: 'zaker',
                 topic_id: topicId, level: newsLevel, fission: false,
                 created_at: new Date().toISOString(),
               });
               isStoredR2 = true;
+              storedReason = embedding.length > 0 ? 'new_topic' : 'new_topic_without_embedding';
             }
           }
         }
@@ -793,6 +818,8 @@ export default {
           hot_score: rule.score,
           published_at: item.publish_time || new Date().toISOString(),
           summary: (item.summary || '').substring(0, 200),
+          embedding: embedding.length > 0 ? embedding : undefined,
+          r2_key: r2Key,
           topic_id: topicId,
           level: newsLevel,
           score: newsScore,
@@ -802,9 +829,28 @@ export default {
         // Step 5: 关联新闻-话题(news_topic_members)- 1 subrequest
         if (newsId && topicId) {
           await joinTopicMember(env, newsId, topicId, isNewTopic ? 'seed' : 'follow');
+          trendSnapshot = await recordTrendSnapshot(env, topicId);
         }
 
-        results.push({ title, category, score: rule.score, level: newsLevel, is_stored_r2: isStoredR2, fission });
+        results.push({
+          title,
+          category,
+          score: rule.score,
+          topic_id: topicId,
+          similarity: matchedSimilarity,
+          level: newsLevel,
+          is_stored_r2: isStoredR2,
+          stored_reason: storedReason,
+          trend: trendSnapshot ? {
+            snapshot_id: trendSnapshot.snapshot_id,
+            warning_id: trendSnapshot.warning_id,
+            velocity: trendSnapshot.velocity,
+            acceleration: trendSnapshot.acceleration,
+            stage: trendSnapshot.stage,
+            warning_created: trendSnapshot.warning_created,
+          } : null,
+          fission,
+        });
         if (fission) console.log(`[FISSION] ${title}`);
       }
 

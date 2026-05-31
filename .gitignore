@@ -32,6 +32,9 @@ csnews-h1-test/
 supabase/.temp/run-csnews.sh
 supabase/.temp/
 
+# Local planning docs may contain private tokens and machine paths
+tasks/
+
 # Wrangler local cache
 .wrangler/
 csnews-agent/.wrangler/
