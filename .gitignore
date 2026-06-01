@@ -38,3 +38,8 @@ tasks/
 # Wrangler local cache
 .wrangler/
 csnews-agent/.wrangler/
+
+# Local Spec Kit scaffolding and agent instructions
+.agents/
+.specify/
+AGENTS.md
