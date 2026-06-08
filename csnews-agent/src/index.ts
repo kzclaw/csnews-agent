@@ -6,42 +6,8 @@
  * - 所有请求需带 Bearer Token(BEARER_TOKEN env var)
  * - CORS 仅允许已授权来源
  */
-interface Env {
-  AI: Ai;
-  csnews_raw: R2Bucket;
-  BEARER_TOKEN: string;
-  SUPABASE_URL: string;
-  SUPABASE_SERVICE_KEY: string;
-}
-
-function getSupabaseHost(env: Env) {
-  return `https://${env.SUPABASE_URL}.supabase.co`;
-}
-
-// Supabase fetch wrapper
-async function supabaseFetch(env: Env, path: string, options?: RequestInit) {
-  const res = await fetch(`${getSupabaseHost(env)}${path}`, {
-    ...options,
-    headers: {
-      'apikey': env.SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  return res;
-}
-
-// 安全的 JSON 解析
-async function safeJson(res: Response): Promise<any> {
-  const text = await res.text();
-  if (!text || !text.trim()) return null;  // 空响应返回 null 而非 {}
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
+import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
+import { handlePull } from './pull';
 
 // ====== News Self Growth 核心逻辑 ======
 
@@ -356,6 +322,26 @@ export default {
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'ping';
+
+    // -------- 消费面通用 pull 端点(KR0 · v0.31) --------
+    // 1 个端点 + 参数组合,覆盖所有"读"场景
+    // type 白名单:news / topics / warnings / fission-pending
+    // 通用参数:limit / order / order_by / since / until / level / category /
+    //          topic_id / status / stage / fission_triggered / select / format
+    if (action === 'pull') {
+      try {
+        const result = await handlePull(env, url);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      } catch (e: any) {
+        const status = e.status || 500;
+        return new Response(JSON.stringify({ error: e.message || 'pull failed' }), {
+          status,
+          headers: { 'Content-Type': 'application/json', ...cors }
+        });
+      }
+    }
 
 
 
