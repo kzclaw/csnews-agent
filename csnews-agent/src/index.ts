@@ -9,7 +9,8 @@
 import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { handlePull } from './pull';
 
-// ====== News Self Growth 核心逻辑 ======
+import { authRequest, corsHeaders } from './auth';
+
 
 // 清理过期话题簇(跟进7天/重要14天/爆炸28天)
 async function cleanupStaleTopics(env: Env) {
@@ -126,27 +127,8 @@ interface NewsItem {
 }
 
 // ============================================================
-// 安全中间件
+// 安全中间件（authRequest + corsHeaders 已抽到 src/auth.ts · T000）
 // ============================================================
-function authRequest(request: Request, env: Env): Response | null {
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.replace('Bearer ', '');
-  if (token !== env.BEARER_TOKEN) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  return null;
-}
-
-function corsHeaders(origin?: string | null) {
-  return {
-    'Access-Control-Allow-Origin': origin || '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  };
-}
 
 // ============================================================
 // 规则引擎分类
