@@ -13,6 +13,8 @@ import { authRequest, corsHeaders } from './auth';
 import { classifyRule, classifyByAI, classify } from './classify';
 
 // 清理过期话题簇(跟进7天/重要14天/爆炸28天)
+import { hashStr, scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD } from './score';
+
 async function cleanupStaleTopics(env: Env) {
   const { data } = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
     method: 'POST',
@@ -106,16 +108,6 @@ async function saveToR2(env: Env, prefix: string, data: object): Promise<string>
   });
   return key;
 }
-
-// 简单字符串哈希(用于 topic_key 生成)
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return h;
-}
-
 interface NewsItem {
   title: string;
   url?: string;
@@ -131,40 +123,7 @@ interface NewsItem {
 // ============================================================
 
 // ============================================================
-//规则引擎分类已抽到 src/classify.ts ·T000（CATEGORY_KW + classifyRule + classifyByAI + classify）
-// ============================================================
-// 评分规则
-// ============================================================
-// R threshold for Workers AI routing (KR0: Neurons saving)
-// NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
-const AI_ROUTE_R_THRESHOLD = 7.0;
-const TOPIC_MATCH_THRESHOLD = 0.72;
-const R2_DUP_THRESHOLD = 0.88;
-
-// ============================================================
-// 评分规则
-// ============================================================
-export function scoreRule(title: string): { score: number; reason: string; isHigh: boolean } {
-  const hotWords = ['突发', '震惊', '重磅', '紧急', '首次', '史上', '最新', '突破', '革命', '创历史'];
-  const superHot = ['紧急', '突发', '重磅'];
-  const hasSuperHot = superHot.some(w => title.includes(w));
-  const hasHot = hotWords.some(w => title.includes(w));
-  const hasNum = /\d+/.test(title);
-  const hasExclaim = title.includes('!') || title.includes('?');
-  const len = title.length;
-  let score = 5.0;
-  if (hasSuperHot) score += 2.0;
-  else if (hasHot) score += 1.2;
-  if (hasNum) score += 0.5;
-  if (len > 20 && len < 35) score += 0.3;
-  if (hasExclaim) score += 0.3;
-  const hotCount = hotWords.filter(w => title.includes(w)).length;
-  if (hotCount >= 3) score += 0.5;
-  else if (hotCount >= 2) score += 0.3;
-  score = Math.min(10, Math.round(score * 10) / 10);
-  return { score, reason: `热词:${hasHot} 超热:${hasSuperHot} 数字:${hasNum} 长:${len} 多热:${hotCount}`, isHigh: score >= AI_ROUTE_R_THRESHOLD };
-}
-
+//评分规则已抽到 src/score.ts ·T000（hashStr +3路由常量 + scoreRule）
 // ============================================================
 // Workers AI 响应解析
 // env.AI.run() 返回格式:{ response: string, usage: {...} }
