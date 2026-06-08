@@ -116,8 +116,8 @@ crons = [ "0 * * * *" ]  # 每小时整点（UTC）跑 process
 
 ```bash
 wrangler dev --test-scheduled
-# 另起 terminal 模拟 cron
-curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
+# 另起 terminal 模拟 cron (按 wrangler dev 暴露的 scheduled 路由访问)
+curl "<wrangler-dev-url>/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
 ```
 
 ---

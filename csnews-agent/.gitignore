@@ -1,9 +1,11 @@
 # Dependencies
 node_modules/
 
-# Local tools (contain personal API URLs and tokens)
-tools/*.html
-!tools/.gitkeep
+# Local tools (viewers that need personal config to run)
+# tools/*.html
+# !tools/.gitkeep
+# 注: pull-viewer.html 已经被验证为通用占位符模板, 不烤任何真实 URL/token, 可以入库
+# 如未来加新工具含本地信息, 重新启用上面两行忽略规则
 
 # OS
 .DS_Store

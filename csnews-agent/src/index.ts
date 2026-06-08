@@ -883,7 +883,7 @@ export default {
   //   3. 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
   //   4. Mac cron 也可以删了
   // 调试: wrangler dev --test-scheduled
-  //       curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
+  //       访问 wrangler dev 暴露的 scheduled handler 触发路由(详见 CF 文档)
   async scheduled(controller, env, ctx) {
     const start = Date.now();
     const ts = new Date().toISOString();

@@ -1,0 +1,1473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<title>CSNEWS Pull Viewer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0b;
+    --bg-1: #131316;
+    --bg-2: #1a1a1d;
+    --bg-hover: #232328;
+    --border: #2a2a2f;
+    --border-strong: #3a3a40;
+    --text: #e4e4e7;
+    --text-2: #a1a1aa;
+    --text-3: #71717a;
+    --accent: #f59e0b;
+    --accent-2: #fbbf24;
+    --accent-bg: rgba(245, 158, 11, 0.1);
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 12px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow: 0 4px 16px rgba(0,0,0,0.5);
+    --font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    --transition: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  [data-theme="light"] {
+    color-scheme: light;
+    --bg: #fafafa;
+    --bg-1: #ffffff;
+    --bg-2: #f4f4f5;
+    --bg-hover: #e4e4e7;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --text: #18181b;
+    --text-2: #52525b;
+    --text-3: #a1a1aa;
+    --accent-bg: rgba(245, 158, 11, 0.12);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+    --shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+
+  /* 布局 */
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 52px 1fr;
+    grid-template-areas: "header header" "sidebar main";
+    height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-1);
+    gap: 12px;
+    -webkit-app-region: drag;
+  }
+  .header > * { -webkit-app-region: no-drag; }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+  }
+  .logo-mark {
+    width: 18px;
+    height: 18px;
+    background: linear-gradient(135deg, var(--accent), #d97706);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-weight: 700;
+    font-size: 11px;
+  }
+  .logo-text { color: var(--text); }
+  .logo-sep { color: var(--text-3); margin: 0 2px; }
+  .logo-sub { color: var(--text-3); font-weight: 400; }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 8px;
+    background: var(--bg-2);
+    border-radius: 100px;
+    font-size: 11px;
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-3);
+  }
+  .status.online .status-dot { background: var(--success); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+  .status.offline .status-dot { background: var(--danger); }
+  .status.config .status-dot { background: var(--warning); }
+
+  .header-spacer { flex: 1; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 11px;
+    background: transparent;
+    color: var(--text-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: all var(--transition);
+    height: 28px;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--bg-hover); color: var(--text); border-color: var(--border-strong); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: var(--accent); color: #1a1500; border-color: var(--accent); font-weight: 500; }
+  .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+  .btn.danger { color: #f87171; border-color: rgba(239,68,68,0.3); }
+  .btn.danger:hover { background: rgba(239,68,68,0.1); }
+  .btn.ghost { border-color: transparent; }
+  .btn.ghost:hover { background: var(--bg-hover); }
+  .btn-icon { padding: 0; width: 28px; }
+  .btn svg { width: 14px; height: 14px; }
+
+  /* Sidebar */
+  .sidebar {
+    grid-area: sidebar;
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 12px 0 24px;
+  }
+  .sidebar-section { margin-bottom: 20px; }
+  .sidebar-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+  }
+  .sidebar-list { list-style: none; }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    color: var(--text-2);
+    font-size: 12.5px;
+    border-left: 2px solid transparent;
+    transition: all var(--transition);
+    user-select: none;
+  }
+  .sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+  .sidebar-item.active { background: var(--bg-2); color: var(--text); border-left-color: var(--accent); }
+  .sidebar-item .icon { width: 14px; height: 14px; color: var(--text-3); flex-shrink: 0; }
+  .sidebar-item.active .icon { color: var(--accent); }
+  .sidebar-item .shortcut {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-3);
+    background: var(--bg-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .sidebar-empty {
+    padding: 8px 14px;
+    font-size: 11.5px;
+    color: var(--text-3);
+    font-style: italic;
+  }
+  .sidebar-footer {
+    padding: 16px 14px 0;
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+
+  /* Main */
+  .main {
+    grid-area: main;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .query-builder {
+    padding: 14px 20px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .query-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .param {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    height: 30px;
+    transition: border-color var(--transition);
+  }
+  .param:focus-within { border-color: var(--accent); }
+  .param-label {
+    padding: 0 8px;
+    font-size: 10.5px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+    border-right: 1px solid var(--border);
+    height: 100%;
+    display: flex;
+    align-items: center;
+  }
+  .param input, .param select {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    padding: 0 10px;
+    height: 100%;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    outline: none;
+    min-width: 50px;
+  }
+  .param select { cursor: pointer; padding-right: 24px; appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23a1a1aa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 8px center;
+  }
+  .param input::placeholder { color: var(--text-3); }
+  .query-actions { display: flex; gap: 6px; margin-left: auto; }
+
+  /* Response area */
+  .response { flex: 1; padding: 16px 20px 32px; }
+  .response-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-3);
+    font-family: var(--font-mono);
+  }
+  .response-meta strong { color: var(--text); font-weight: 500; }
+  .response-meta .sep { color: var(--border-strong); }
+  .response-meta .url { color: var(--text-2); word-break: break-all; }
+  .response-actions { margin-left: auto; display: flex; gap: 4px; }
+
+  /* News card */
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    transition: all var(--transition);
+    overflow: hidden;
+  }
+  .card:hover { border-color: var(--border-strong); }
+  .card-body { padding: 14px 18px; cursor: pointer; }
+  .card-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.45;
+    margin-bottom: 6px;
+  }
+  .card-title-link { color: var(--text); text-decoration: none; }
+  .card-title-link:hover { color: var(--accent-2); }
+  .card-summary {
+    color: var(--text-2);
+    font-size: 12.5px;
+    line-height: 1.6;
+    margin: 6px 0 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .meta-item { display: inline-flex; align-items: center; gap: 4px; }
+  .meta-item .dot { width: 3px; height: 3px; background: var(--text-3); border-radius: 50%; }
+  .meta-source { color: var(--text-2); font-weight: 500; }
+  .meta-time { font-family: var(--font-mono); }
+
+  /* Topic card */
+  .topic-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 18px;
+  }
+  .topic-score {
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+    min-width: 44px;
+    text-align: center;
+    padding: 6px 0;
+    border-radius: var(--radius-sm);
+    background: var(--bg-2);
+  }
+  .topic-score.explosive { color: #f87171; background: rgba(239, 68, 68, 0.1); }
+  .topic-score.important { color: var(--accent-2); background: rgba(245, 158, 11, 0.1); }
+  .topic-score.hot { color: var(--accent-2); background: rgba(245, 158, 11, 0.1); }
+  .topic-score.warm { color: #60a5fa; background: rgba(59, 130, 246, 0.1); }
+  .topic-body { flex: 1; min-width: 0; }
+  .topic-key {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .topic-stats {
+    font-size: 11.5px;
+    color: var(--text-3);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .topic-stats span { display: inline-flex; align-items: center; gap: 4px; }
+  .topic-actions { display: flex; gap: 4px; }
+
+  /* Warning card */
+  .warning-card { border-left: 3px solid var(--warning); }
+  .warning-card.danger { border-left-color: var(--danger); }
+
+  /* Fission card */
+  .fission-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+  }
+  .fission-marker {
+    width: 36px;
+    height: 36px;
+    background: var(--accent-bg);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-2);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 100px;
+    font-size: 10.5px;
+    font-weight: 500;
+    font-family: var(--font-mono);
+    text-transform: lowercase;
+    letter-spacing: 0.01em;
+  }
+  .badge-explosive { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .badge-important { background: rgba(245, 158, 11, 0.15); color: var(--accent-2); }
+  .badge-hot { background: rgba(245, 158, 11, 0.15); color: var(--accent-2); }
+  .badge-warm { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+  .badge-follow { background: rgba(113, 113, 122, 0.15); color: var(--text-2); }
+  .badge-pending { background: rgba(245, 158, 11, 0.15); color: var(--accent-2); }
+  .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+  .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+  /* States */
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+  }
+  .state-icon {
+    width: 40px;
+    height: 40px;
+    color: var(--text-3);
+    margin-bottom: 14px;
+    opacity: 0.5;
+  }
+  .state-title {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-2);
+    margin-bottom: 4px;
+  }
+  .state-desc {
+    font-size: 12.5px;
+    color: var(--text-3);
+    max-width: 360px;
+    line-height: 1.6;
+  }
+
+  .error-banner {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 16px;
+  }
+  .error-banner-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #f87171;
+    font-size: 12.5px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .error-banner-body {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Skeleton */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .skeleton-card { height: 100px; margin-bottom: 8px; border-radius: var(--radius); }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    animation: fadein 150ms;
+  }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: var(--shadow);
+    margin: 16px;
+  }
+  .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .modal-desc {
+    font-size: 12.5px;
+    color: var(--text-2);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .field { margin-bottom: 14px; }
+  .field-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+    margin-bottom: 6px;
+  }
+  .field-input {
+    width: 100%;
+    height: 34px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0 12px;
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: var(--font-mono);
+    outline: none;
+    transition: border-color var(--transition);
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-hint { margin-top: 6px; font-size: 11px; color: var(--text-3); line-height: 1.5; }
+  .field-hint code { font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px; font-size: 10.5px; }
+  .field-row { display: flex; gap: 8px; align-items: flex-end; }
+  .field-row .field { flex: 1; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 9px 14px;
+    font-size: 12.5px;
+    color: var(--text);
+    box-shadow: var(--shadow);
+    z-index: 200;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error { border-left: 3px solid var(--danger); }
+  .toast.info { border-left: 3px solid var(--info); }
+
+  /* Detail drawer */
+  .detail {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: 480px;
+    background: var(--bg-1);
+    border-left: 1px solid var(--border);
+    z-index: 90;
+    display: none;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+  }
+  .detail.show { display: flex; animation: slidein 200ms cubic-bezier(0.4, 0, 0.2, 1); }
+  @keyframes slidein { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-title { font-size: 12.5px; font-weight: 600; }
+  .detail-body { flex: 1; overflow-y: auto; padding: 18px; }
+  .detail-field { margin-bottom: 12px; }
+  .detail-field-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+    margin-bottom: 4px;
+  }
+  .detail-field-value {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text);
+    word-break: break-all;
+    background: var(--bg-2);
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    line-height: 1.5;
+  }
+  .detail-field-value.wrap { white-space: pre-wrap; font-family: var(--font-sans); font-size: 12.5px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+    .sidebar { display: none; }
+    .detail { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">C</div>
+      <span class="logo-text">CSNEWS</span>
+      <span class="logo-sep">·</span>
+      <span class="logo-sub">Pull Viewer</span>
+    </div>
+    <div class="status config" id="status">
+      <span class="status-dot"></span>
+      <span id="status-text">未配置</span>
+    </div>
+    <div class="header-spacer"></div>
+    <button class="btn ghost btn-icon" id="theme-toggle" title="切换主题">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M0.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M0 12h2m16 0h2M0.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
+    </button>
+    <button class="btn" id="settings-btn">设置</button>
+  </header>
+
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">快捷场景</div>
+      <ul class="sidebar-list" id="scenarios"></ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">
+        <span>收藏</span>
+        <span id="favorites-count" style="color: var(--text-3)">0</span>
+      </div>
+      <ul class="sidebar-list" id="favorites"></ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">
+        <span>历史</span>
+        <button class="btn ghost" id="clear-history" style="height: 18px; font-size: 10px; padding: 0 4px;">清空</button>
+      </div>
+      <ul class="sidebar-list" id="history"></ul>
+    </div>
+    <div class="sidebar-footer">
+      本地工具 · 数据仅在你的浏览器<br>
+      Token 存于 <code style="font-family: var(--font-mono);">localStorage</code>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="query-builder">
+      <div class="query-row" id="query-row">
+        <!-- params injected by JS -->
+      </div>
+    </div>
+    <div class="response" id="response">
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <div class="state-title">选个场景开始</div>
+        <div class="state-desc">从左侧快捷场景选一个，或自己调参数后按 <code>⌘ Enter</code> 运行</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Detail drawer -->
+<div class="detail" id="detail">
+  <div class="detail-header">
+    <div class="detail-title" id="detail-title">详情</div>
+    <button class="btn ghost btn-icon" id="detail-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================
+ * CSNEWS Pull Viewer
+ * 本地工具 — 不内置任何 URL / Token
+ * =========================================================== */
+
+const STORAGE = {
+  base: 'csnews_pv',
+  get(k, d) { try { const v = localStorage.getItem(this.base + ':' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(this.base + ':' + k, JSON.stringify(v)); } catch {} },
+  remove(k) { localStorage.removeItem(this.base + ':' + k); }
+};
+
+// --- 配置 ---
+function getConfig() {
+  return STORAGE.get('config', { baseUrl: '', token: '' });
+}
+function isConfigured() {
+  const c = getConfig();
+  return !!(c.baseUrl && c.token);
+}
+
+// --- 状态 ---
+const state = {
+  type: 'news',
+  params: {},
+  lastResult: null,
+  lastUrl: null,
+  lastError: null,
+  loading: false,
+  history: STORAGE.get('history', []),
+  favorites: STORAGE.get('favorites', []),
+};
+
+// --- Schema 定义 (v0.31 拉端点支持) ---
+// 注意: level 等枚举值必须和 Worker src/pull.ts 的 VALID_LEVELS / 数据库 enum 保持一致
+// 当前数据库 level 枚举: ['follow', 'important', 'explosive']
+const VALID_LEVELS = ['follow', 'important', 'explosive'];
+
+const TYPE_SCHEMAS = {
+  news: {
+    label: '新闻',
+    defaults: { format: 'summary', limit: 10, order: 'desc', order_by: 'created_at' },
+    params: [
+      { key: 'format', label: 'format', type: 'select', options: ['summary', 'full', 'ids'], default: 'summary' },
+      { key: 'limit', label: 'limit', type: 'number', min: 1, max: 100, default: 10 },
+      { key: 'order', label: 'order', type: 'select', options: ['desc', 'asc'], default: 'desc' },
+      { key: 'order_by', label: 'order_by', type: 'select', options: ['created_at', 'hot_score', 'score'], default: 'created_at' },
+      { key: 'level', label: 'level', type: 'select', options: ['', ...VALID_LEVELS], optional: true },
+      { key: 'category', label: 'category', type: 'text', placeholder: '如：科技', optional: true },
+      { key: 'since', label: 'since', type: 'text', placeholder: '24h / ISO 8601', optional: true },
+    ]
+  },
+  topics: {
+    label: '话题',
+    defaults: { format: 'summary', limit: 10, order: 'desc', order_by: 'score' },
+    params: [
+      { key: 'format', label: 'format', type: 'select', options: ['summary', 'full', 'ids'], default: 'summary' },
+      { key: 'limit', label: 'limit', type: 'number', min: 1, max: 100, default: 10 },
+      { key: 'order', label: 'order', type: 'select', options: ['desc', 'asc'], default: 'desc' },
+      { key: 'order_by', label: 'order_by', type: 'select', options: ['score', 'last_active_at'], default: 'score' },
+      { key: 'level', label: 'level', type: 'select', options: ['', ...VALID_LEVELS], optional: true },
+    ]
+  },
+  warnings: {
+    label: '警告',
+    defaults: { format: 'summary', limit: 10, order: 'desc', order_by: 'severity' },
+    params: [
+      { key: 'format', label: 'format', type: 'select', options: ['summary', 'full', 'ids'], default: 'summary' },
+      { key: 'limit', label: 'limit', type: 'number', min: 1, max: 100, default: 10 },
+      { key: 'since', label: 'since', type: 'text', placeholder: '24h / ISO 8601', optional: true },
+    ]
+  },
+  'fission-pending': {
+    label: '裂变待办',
+    defaults: { format: 'summary', limit: 20, order: 'desc', order_by: 'score' },
+    params: [
+      { key: 'format', label: 'format', type: 'select', options: ['summary', 'full', 'ids'], default: 'summary' },
+      { key: 'limit', label: 'limit', type: 'number', min: 1, max: 100, default: 20 },
+      { key: 'order_by', label: 'order_by', type: 'select', options: ['score', 'last_active_at'], default: 'score' },
+    ]
+  }
+};
+
+// --- 快捷场景 ---
+const SCENARIOS = [
+  { name: '最新 10 条新闻', icon: '📰', query: { type: 'news', format: 'summary', limit: 10, order: 'desc', order_by: 'created_at' } },
+  { name: '爆炸级话题', icon: '🔥', query: { type: 'topics', level: 'explosive', limit: 10, order_by: 'score' } },
+  { name: '活跃警告', icon: '⚠️', query: { type: 'warnings', limit: 10, order_by: 'severity' } },
+  { name: '裂变待办 (KR0b)', icon: '✳️', query: { type: 'fission-pending', limit: 20, order_by: 'score' } },
+  { name: 'ID 列表（省流量）', icon: '🆔', query: { type: 'news', format: 'ids', limit: 20, order_by: 'created_at' } },
+  { name: '最近 24h', icon: '⏱', query: { type: 'news', limit: 20, since: '24h', order_by: 'created_at' } },
+];
+
+const SCENARIO_ICONS = {
+  news: '📰', topics: '🔥', warnings: '⚠️', 'fission-pending': '✳️'
+};
+
+/* ===================== 渲染 ===================== */
+
+function render() {
+  renderQueryBuilder();
+  renderScenarios();
+  renderFavorites();
+  renderHistory();
+  updateStatus();
+}
+
+function updateStatus() {
+  const status = document.getElementById('status');
+  const text = document.getElementById('status-text');
+  status.className = 'status';
+  if (!isConfigured()) {
+    status.classList.add('config');
+    text.textContent = '未配置';
+  } else if (state.loading) {
+    status.classList.add('online');
+    text.textContent = '请求中…';
+  } else if (state.lastError) {
+    status.classList.add('offline');
+    text.textContent = '错误';
+  } else if (state.lastResult) {
+    status.classList.add('online');
+    text.textContent = '就绪';
+  } else {
+    status.classList.add('config');
+    text.textContent = '已配置';
+  }
+}
+
+function renderQueryBuilder() {
+  const row = document.getElementById('query-row');
+  const schema = TYPE_SCHEMAS[state.type];
+  const current = { ...schema.defaults, ...state.params };
+
+  row.innerHTML = '';
+
+  // Type chip
+  const typeParam = document.createElement('div');
+  typeParam.className = 'param';
+  typeParam.innerHTML = `
+    <span class="param-label">type</span>
+    <select id="param-type">
+      ${Object.entries(TYPE_SCHEMAS).map(([k, v]) => `<option value="${k}" ${k === state.type ? 'selected' : ''}>${k}</option>`).join('')}
+    </select>
+  `;
+  row.appendChild(typeParam);
+  typeParam.querySelector('select').addEventListener('change', e => {
+    state.type = e.target.value;
+    state.params = { ...TYPE_SCHEMAS[state.type].defaults };
+    render();
+  });
+
+  // 其余参数
+  for (const p of schema.params) {
+    if (p.key === 'format' && state.type === 'news' && current.limit === undefined) continue; // skip, will render below
+    const value = current[p.key] !== undefined ? current[p.key] : (p.default !== undefined ? p.default : '');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'param';
+
+    let input;
+    if (p.type === 'select') {
+      input = document.createElement('select');
+      input.innerHTML = p.options.map(o => `<option value="${o}" ${String(value) === String(o) ? 'selected' : ''}>${o || '—'}</option>`).join('');
+    } else if (p.type === 'number') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.value = value;
+      if (p.min !== undefined) input.min = p.min;
+      if (p.max !== undefined) input.max = p.max;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.value = value || '';
+      if (p.placeholder) input.placeholder = p.placeholder;
+    }
+    input.addEventListener('input', e => {
+      const v = e.target.value;
+      if (p.type === 'number') {
+        state.params[p.key] = v === '' ? undefined : Number(v);
+      } else {
+        state.params[p.key] = v === '' ? undefined : v;
+      }
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); }
+    });
+
+    wrap.innerHTML = `<span class="param-label">${p.label}</span>`;
+    wrap.appendChild(input);
+    row.appendChild(wrap);
+  }
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'query-actions';
+  actions.innerHTML = `
+    <button class="btn" id="copy-curl" title="复制为 cURL">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M0 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      cURL
+    </button>
+    <button class="btn" id="fav-btn" title="收藏当前查询">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+    </button>
+    <button class="btn primary" id="run-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M0 3l14 9-14 9V3z"/></svg>
+      Run
+    </button>
+  `;
+  row.appendChild(actions);
+
+  document.getElementById('run-btn').addEventListener('click', run);
+  document.getElementById('copy-curl').addEventListener('click', copyAsCurl);
+  document.getElementById('fav-btn').addEventListener('click', addFavorite);
+}
+
+function renderScenarios() {
+  const list = document.getElementById('scenarios');
+  list.innerHTML = SCENARIOS.map((s, i) => `
+    <li class="sidebar-item" data-idx="${i}">
+      <span class="icon">${s.icon}</span>
+      <span>${s.name}</span>
+    </li>
+  `).join('');
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const s = SCENARIOS[+el.dataset.idx];
+      state.type = s.query.type;
+      state.params = { ...s.query };
+      delete state.params.type;
+      render();
+      run();
+    });
+  });
+}
+
+function renderFavorites() {
+  const list = document.getElementById('favorites');
+  document.getElementById('favorites-count').textContent = state.favorites.length;
+  if (state.favorites.length === 0) {
+    list.innerHTML = '<li class="sidebar-empty">还没收藏过查询</li>';
+    return;
+  }
+  list.innerHTML = state.favorites.map((f, i) => `
+    <li class="sidebar-item" data-idx="${i}">
+      <span class="icon">${SCENARIO_ICONS[f.type] || '★'}</span>
+      <span>${escapeHtml(f.name)}</span>
+    </li>
+  `).join('');
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const f = state.favorites[+el.dataset.idx];
+      state.type = f.type;
+      state.params = { ...f.query };
+      render();
+      run();
+    });
+    el.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      state.favorites.splice(+el.dataset.idx, 1);
+      STORAGE.set('favorites', state.favorites);
+      render();
+      toast('已删除收藏', 'info');
+    });
+  });
+}
+
+function renderHistory() {
+  const list = document.getElementById('history');
+  if (state.history.length === 0) {
+    list.innerHTML = '<li class="sidebar-empty">还没有历史</li>';
+    return;
+  }
+  list.innerHTML = state.history.slice(0, 15).map((h, i) => `
+    <li class="sidebar-item" data-idx="${i}">
+      <span class="icon">${SCENARIO_ICONS[h.type] || '↻'}</span>
+      <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(h.label)}</span>
+    </li>
+  `).join('');
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const h = state.history[+el.dataset.idx];
+      state.type = h.type;
+      state.params = { ...h.query };
+      render();
+      run();
+    });
+  });
+}
+
+document.getElementById('clear-history').addEventListener('click', () => {
+  state.history = [];
+  STORAGE.set('history', state.history);
+  render();
+  toast('已清空历史', 'info');
+});
+
+/* ===================== 运行 ===================== */
+
+function buildUrl() {
+  const cfg = getConfig();
+  const base = cfg.baseUrl.replace(/\/+$/, '');
+  const params = new URLSearchParams();
+  params.set('action', 'pull');
+  params.set('type', state.type);
+  const schema = TYPE_SCHEMAS[state.type];
+  const all = { ...schema.defaults, ...state.params };
+  for (const p of schema.params) {
+    if (all[p.key] !== undefined && all[p.key] !== '') {
+      params.set(p.key, all[p.key]);
+    }
+  }
+  return `${base}?${params.toString()}`;
+}
+
+function buildCurl() {
+  const cfg = getConfig();
+  const url = buildUrl();
+  // token 安全：默认打码，仅最后 6 位
+  const tok = cfg.token;
+  const masked = tok.length > 6 ? tok.slice(0, 4) + '…' + tok.slice(-6) : '***';
+  return `curl -s "${url}" \\\n  -H "Authorization: Bearer ${masked}"`;
+}
+
+async function run() {
+  if (!isConfigured()) {
+    openSettings();
+    return;
+  }
+  state.loading = true;
+  state.lastError = null;
+  renderResponseLoading();
+  updateStatus();
+
+  const url = buildUrl();
+  state.lastUrl = url;
+  const cfg = getConfig();
+  const start = performance.now();
+
+  try {
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+    const elapsed = Math.round(performance.now() - start);
+    const data = await res.json();
+    if (!res.ok) {
+      state.lastError = { status: res.status, body: data };
+      renderResponseError();
+    } else {
+      state.lastResult = { data, elapsed, status: res.status };
+      renderResponseSuccess();
+      pushHistory();
+    }
+  } catch (e) {
+    state.lastError = { status: 0, body: { error: e.message || String(e) } };
+    renderResponseError();
+  } finally {
+    state.loading = false;
+    updateStatus();
+  }
+}
+
+function pushHistory() {
+  const label = `${state.type}${state.params.limit ? ' · ' + state.params.limit : ''}${state.params.level ? ' · ' + state.params.level : ''}`;
+  state.history = [{ type: state.type, query: { ...state.params }, label, at: Date.now() }, ...state.history.filter(h => !(h.type === state.type && JSON.stringify(h.query) === JSON.stringify(state.params)))].slice(0, 30);
+  STORAGE.set('history', state.history);
+  renderHistory();
+}
+
+function copyAsCurl() {
+  const curl = buildCurl();
+  navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制（含脱敏 token）', 'success'));
+}
+
+function addFavorite() {
+  const name = prompt('收藏名称：', `${state.type}${state.params.limit ? ' ×' + state.params.limit : ''}${state.params.level ? ' (' + state.params.level + ')' : ''}`);
+  if (!name) return;
+  state.favorites = [{ name, type: state.type, query: { ...state.params } }, ...state.favorites];
+  STORAGE.set('favorites', state.favorites);
+  renderFavorites();
+  toast('已收藏', 'success');
+}
+
+/* ===================== 响应渲染 ===================== */
+
+function renderResponseLoading() {
+  const r = document.getElementById('response');
+  r.innerHTML = '<div class="skeleton skeleton-card"></div>'.repeat(5);
+}
+
+function renderResponseError() {
+  const r = document.getElementById('response');
+  const e = state.lastError;
+  const bodyText = typeof e.body === 'string' ? e.body : JSON.stringify(e.body, null, 2);
+  r.innerHTML = `
+    <div class="error-banner">
+      <div class="error-banner-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        HTTP ${e.status} — 请求失败
+      </div>
+      <div class="error-banner-body">${escapeHtml(bodyText)}</div>
+    </div>
+    <div class="response-meta">
+      <span>URL</span>
+      <span class="url">${escapeHtml(state.lastUrl || '')}</span>
+    </div>
+  `;
+}
+
+function renderResponseSuccess() {
+  const r = document.getElementById('response');
+  const { data, elapsed } = state.lastResult;
+  const type = data.type;
+  const items = data.items || [];
+
+  // 收集 level 分布(仅当 items 有 level 字段)
+  let levelDist = null;
+  if (items.length > 0 && items[0].level !== undefined) {
+    const counts = {};
+    for (const it of items) {
+      const lv = it.level || '(empty)';
+      counts[lv] = (counts[lv] || 0) + 1;
+    }
+    // 按 VALID_LEVELS 顺序排
+    const order = [...VALID_LEVELS.filter(l => counts[l]), ...Object.keys(counts).filter(k => !VALID_LEVELS.includes(k) && k !== '(empty)'), ...(counts['(empty)'] ? ['(empty)'] : [])];
+    levelDist = { counts, order };
+  }
+
+  const meta = `
+    <div class="response-meta">
+      <span>type <strong>${type}</strong></span>
+      <span class="sep">·</span>
+      <span>count <strong>${data.count ?? items.length}</strong></span>
+      <span class="sep">·</span>
+      <span>total <strong>${data.total ?? items.length}</strong></span>
+      <span class="sep">·</span>
+      <span>${elapsed}ms</span>
+      <div class="response-actions">
+        <button class="btn ghost" id="copy-json" title="复制 JSON">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        </button>
+        <button class="btn ghost" id="download-json" title="下载 JSON">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        </button>
+      </div>
+    </div>
+    ${levelDist ? `
+    <div class="response-meta" style="border-bottom: none; padding-bottom: 0; margin-bottom: 14px;">
+      <span style="color: var(--text-3);">level 分布</span>
+      <span class="sep">·</span>
+      ${levelDist.order.map(lv => `<span class="badge badge-${lv === '(empty)' ? 'follow' : lv}">${lv} ${levelDist.counts[lv]}</span>`).join('')}
+    </div>
+    ` : ''}
+  `;
+
+  if (items.length === 0) {
+    r.innerHTML = meta + `
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 3v18M19 17v4M0 17v4M19 3v14M12 7v14M12 7V3"/></svg>
+        <div class="state-title">没拉到数据</div>
+        <div class="state-desc">这个查询返回了 0 条 — 可能是当前没符合条件的条目，或者 filter 太严了</div>
+      </div>
+    `;
+    bindResponseActions(data);
+    return;
+  }
+
+  let body = '';
+  if (type === 'news') body = items.map(newsCard).join('');
+  else if (type === 'topics') body = items.map(topicCard).join('');
+  else if (type === 'warnings') body = items.map(warningCard).join('');
+  else if (type === 'fission-pending') body = items.map(fissionCard).join('');
+  else body = items.map(rawCard).join('');
+
+  r.innerHTML = meta + body;
+  bindResponseActions(data);
+  bindCardClicks(items);
+}
+
+function bindResponseActions(data) {
+  const copy = document.getElementById('copy-json');
+  if (copy) copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => toast('JSON 已复制', 'success'));
+  });
+  const dl = document.getElementById('download-json');
+  if (dl) dl.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `csnews-${state.type}-${Date.now()}.json`;
+    a.click();
+  });
+}
+
+function bindCardClicks(items) {
+  document.querySelectorAll('.card[data-idx]').forEach(el => {
+    el.addEventListener('click', e => {
+      // 链接点击不打开详情
+      if (e.target.tagName === 'A' || e.target.closest('a')) return;
+      const idx = +el.dataset.idx;
+      openDetail(items[idx], idx);
+    });
+  });
+}
+
+/* ===================== 卡片模板 ===================== */
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = (now - d) / 1000; // 正=过去, 负=未来
+    if (diff < 0) {
+      // 未来时间(聚合源标了"X 小时后发布")
+      const abs = -diff;
+      if (abs < 60) return Math.floor(abs) + 's 后';
+      if (abs < 3600) return Math.floor(abs / 60) + 'm 后';
+      if (abs < 86400) return Math.floor(abs / 3600) + 'h 后';
+      if (abs < 604800) return Math.floor(abs / 86400) + 'd 后';
+      return d.toLocaleDateString('zh-CN') + ' ' + d.toTimeString().slice(0, 5);
+    }
+    if (diff < 60) return Math.floor(diff) + 's 前';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm 前';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h 前';
+    if (diff < 604800) return Math.floor(diff / 86400) + 'd 前';
+    return d.toLocaleDateString('zh-CN') + ' ' + d.toTimeString().slice(0, 5);
+  } catch { return iso; }
+}
+
+function newsCard(n, idx) {
+  const level = n.level || 'follow';
+  const titleHtml = n.url
+    ? `<a href="${escapeHtml(n.url)}" target="_blank" rel="noopener noreferrer" class="card-title-link">${escapeHtml(n.title || '(无标题)')}</a>`
+    : escapeHtml(n.title || '(无标题)');
+  // 时间展示: 优先 published_at(原始发布时间,可能为未来), 没有则用 created_at(入库时间,永远是过去)
+  // 当 published_at 是未来时,额外显示 created_at 让用户知道"我们什么时候抓的"
+  const pubAt = n.published_at ? new Date(n.published_at) : null;
+  const now = new Date();
+  const isFuture = pubAt && pubAt > now;
+  const timeHtml = pubAt
+    ? `<span class="meta-item meta-time" style="margin-left:auto;"><span class="dot"></span>${formatTime(n.published_at)}</span>`
+    : (n.created_at ? `<span class="meta-item meta-time" style="margin-left:auto;"><span class="dot"></span>入库 ${formatTime(n.created_at)}</span>` : '');
+  const createdHtml = isFuture && n.created_at
+    ? `<span class="meta-item meta-time" style="color: var(--text-3); opacity: 0.6;" title="本系统入库时间">· 入库 ${formatTime(n.created_at)}</span>`
+    : '';
+  return `
+    <div class="card" data-idx="${idx}">
+      <div class="card-body">
+        <div class="card-title">${titleHtml}</div>
+        ${n.summary ? `<div class="card-summary">${escapeHtml(n.summary)}</div>` : ''}
+        <div class="card-meta">
+          ${n.source ? `<span class="meta-item meta-source">${escapeHtml(n.source)}</span>` : ''}
+          ${n.category ? `<span class="meta-item"><span class="dot"></span>${escapeHtml(n.category)}</span>` : ''}
+          ${n.hot_score != null ? `<span class="meta-item"><span class="dot"></span>hot ${n.hot_score}</span>` : ''}
+          <span class="badge badge-${level}">${level}</span>
+          ${timeHtml}
+          ${createdHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function topicCard(t, idx) {
+  const level = t.level || 'follow';
+  return `
+    <div class="card" data-idx="${idx}">
+      <div class="topic-card">
+        <div class="topic-score ${level}">${t.score ?? 0}</div>
+        <div class="topic-body">
+          <div class="topic-key">${escapeHtml(t.topic_key || t.id)}</div>
+          <div class="topic-stats">
+            <span class="badge badge-${level}">${level}</span>
+            ${t.first_news_id ? `<span>first_news: <code style="font-family: var(--font-mono); font-size: 10.5px;">${t.first_news_id.slice(0,8)}</code></span>` : '<span>无 first_news</span>'}
+            <span style="margin-left:auto;">活跃 ${formatTime(t.last_active_at)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function warningCard(w, idx) {
+  const sev = w.severity || w.level || 'warning';
+  return `
+    <div class="card warning-card" data-idx="${idx}">
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(w.title || w.message || w.id)}</div>
+        ${w.message ? `<div class="card-summary">${escapeHtml(w.message)}</div>` : ''}
+        <div class="card-meta">
+          <span class="badge badge-danger">${escapeHtml(sev)}</span>
+          ${w.created_at ? `<span class="meta-time" style="margin-left:auto;">${formatTime(w.created_at)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function fissionCard(f, idx) {
+  return `
+    <div class="card" data-idx="${idx}">
+      <div class="fission-card">
+        <div class="fission-marker">✳</div>
+        <div class="topic-body">
+          <div class="topic-key">${escapeHtml(f.topic_key || f.id)}</div>
+          <div class="topic-stats">
+            <span class="badge badge-pending">pending</span>
+            <span>score <strong style="color: var(--accent);">${f.score ?? 0}</strong></span>
+            <span style="margin-left:auto;">活跃 ${formatTime(f.last_active_at)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function rawCard(x, idx) {
+  return `
+    <div class="card" data-idx="${idx}">
+      <div class="card-body">
+        <pre style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); white-space: pre-wrap; word-break: break-all;">${escapeHtml(JSON.stringify(x, null, 2))}</pre>
+      </div>
+    </div>
+  `;
+}
+
+/* ===================== 详情 ===================== */
+
+function openDetail(item, idx) {
+  const d = document.getElementById('detail');
+  const title = document.getElementById('detail-title');
+  const body = document.getElementById('detail-body');
+  title.textContent = `Item #${idx + 1}`;
+  body.innerHTML = Object.entries(item).map(([k, v]) => {
+    let val = v;
+    let wrap = false;
+    if (typeof v === 'string' && v.length > 100) { wrap = true; }
+    if (typeof v === 'object' && v !== null) { val = JSON.stringify(v, null, 2); wrap = true; }
+    return `
+      <div class="detail-field">
+        <div class="detail-field-label">${escapeHtml(k)}</div>
+        <div class="detail-field-value ${wrap ? 'wrap' : ''}">${escapeHtml(val)}</div>
+      </div>
+    `;
+  }).join('');
+  d.classList.add('show');
+}
+
+document.getElementById('detail-close').addEventListener('click', () => {
+  document.getElementById('detail').classList.remove('show');
+});
+
+/* ===================== 设置 ===================== */
+
+function openSettings() {
+  const cfg = getConfig();
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal">
+      <div class="modal-title">配置 Worker</div>
+      <div class="modal-desc">填上你的 Worker 地址和 Bearer Token。存到浏览器 <code style="font-family: var(--font-mono);">localStorage</code>，不发送到任何地方。</div>
+      <div class="field">
+        <label class="field-label">Worker Base URL</label>
+        <input class="field-input" id="cfg-url" placeholder="https://your-worker.workers.dev/api/v1/" value="${escapeHtml(cfg.baseUrl)}">
+        <div class="field-hint">包含 <code>/api/v1/</code> 路径前缀，不要带 <code>?</code></div>
+      </div>
+      <div class="field">
+        <label class="field-label">Bearer Token</label>
+        <input class="field-input" id="cfg-token" type="password" placeholder="paste-your-bearer-token-here" value="${escapeHtml(cfg.token)}">
+        <div class="field-hint">从 <code>wrangler secret</code> 或环境变量获取</div>
+      </div>
+      <div class="modal-actions">
+        ${isConfigured() ? '<button class="btn danger" id="cfg-clear">清除配置</button>' : ''}
+        <button class="btn" id="cfg-cancel">取消</button>
+        <button class="btn primary" id="cfg-save">保存</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const close = () => backdrop.remove();
+  backdrop.querySelector('#cfg-cancel').addEventListener('click', close);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+
+  backdrop.querySelector('#cfg-save').addEventListener('click', () => {
+    const baseUrl = backdrop.querySelector('#cfg-url').value.trim();
+    const token = backdrop.querySelector('#cfg-token').value.trim();
+    if (!baseUrl || !token) { toast('两个都要填', 'error'); return; }
+    STORAGE.set('config', { baseUrl, token });
+    toast('已保存', 'success');
+    close();
+    render();
+  });
+
+  const clear = backdrop.querySelector('#cfg-clear');
+  if (clear) clear.addEventListener('click', () => {
+    STORAGE.remove('config');
+    toast('已清除', 'info');
+    close();
+    render();
+  });
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+
+/* ===================== 主题 ===================== */
+
+const savedTheme = STORAGE.get('theme', 'dark');
+document.documentElement.setAttribute('data-theme', savedTheme);
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  STORAGE.set('theme', next);
+});
+
+/* ===================== Toast ===================== */
+
+let toastTimer;
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.className = 'toast ' + type;
+  t.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      ${type === 'success' ? '<path d="M20 6L9 17l-5-5"/>' : type === 'error' ? '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>' : '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'}
+    </svg>
+    <span>${escapeHtml(msg)}</span>
+  `;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ===================== 快捷键 ===================== */
+
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    run();
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('detail').classList.remove('show');
+  }
+});
+
+/* ===================== 启动 ===================== */
+
+state.params = { ...TYPE_SCHEMAS.news.defaults };
+render();
+
+if (!isConfigured()) {
+  setTimeout(openSettings, 200);
+} else {
+  // 自动跑一次默认查询
+  setTimeout(run, 100);
+}
+</script>
+</body>
+</html>
