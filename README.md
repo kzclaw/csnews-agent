@@ -85,11 +85,11 @@ wrangler deploy
 
 ## 🛠️ Viewer（本地浏览器工具）
 
-仓库 `csnews-agent/tools/pull-viewer.html`（**gitignored**，本地用）：
+仓库 `tools/pull-viewer.html`（**已入库**，通用占位符模板）：
 
 ```bash
 # 路径相对于仓库根
-open csnews-agent/tools/pull-viewer.html
+open tools/pull-viewer.html
 ```
 
 - 单文件 1426 行，零外部依赖

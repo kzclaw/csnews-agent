@@ -124,11 +124,11 @@ curl "<wrangler-dev-url>/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
 
 ## 🛠️ Viewer 工具
 
-仓库 `csnews-agent/tools/pull-viewer.html`（**gitignored**，本地用）：
+仓库 `tools/pull-viewer.html`（**已入库**，通用占位符模板）：
 
 ```bash
 # 路径相对于仓库根
-open csnews-agent/tools/pull-viewer.html
+open tools/pull-viewer.html
 ```
 
 **特性**：
