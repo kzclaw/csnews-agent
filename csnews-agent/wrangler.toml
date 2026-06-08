@@ -8,3 +8,13 @@ binding = "AI"
 [[r2_buckets]]
 binding = "csnews_raw"
 [vars]
+
+# 每小时整点(UTC)跑一次 process action
+# 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions
+# 选 CF cron 的原因:
+#   1. Free tier 实际可用(每账号 5 个,CPU 10ms 限制)
+#   2. Worker → 自家域名走 CF 内部 routing,绕开 Bot Fight Mode
+#   3. 0 漂移(精准整点),0 外部依赖
+#   4. process 主要是 fetch 等待,不算 CPU,10ms 限制够用
+[triggers]
+crons = [ "0 * * * *" ]

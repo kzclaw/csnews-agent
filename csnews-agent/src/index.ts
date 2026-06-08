@@ -874,4 +874,35 @@ export default {
       status: 400, headers: { 'Content-Type': 'application/json', ...cors }
     });
   },
+
+  // ====== Cron Trigger: 每小时整点(UTC) 跑 process action ======
+  // 替代之前误用的 GitHub Actions (HTTP 403 + Cloudflare challenge)
+  // 选 CF cron 原因:
+  //   1. Free tier 实际可用(每账号 5 个, CPU 10ms 限制, process 主要是 fetch 等待不算 CPU)
+  //   2. Worker → 自家域名走 CF 内部 routing, 绕开 Bot Fight Mode challenge
+  //   3. 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
+  //   4. Mac cron 也可以删了
+  // 调试: wrangler dev --test-scheduled
+  //       curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
+  async scheduled(controller, env, ctx) {
+    const start = Date.now();
+    const ts = new Date().toISOString();
+    console.log(`[cron] process triggered at ${ts} cron=${controller?.cron || 'unknown'}`);
+    try {
+      // fetch 自家域名 — 走 CF 内部 routing, 不会触发 Bot Fight Mode
+      const url = 'https://REDACTED-INTERNAL-DOMAIN/?action=process';
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${env.BEARER_TOKEN}`,
+          'User-Agent': 'csnews-cron-trigger/1.0',
+        },
+      });
+      const body = await res.text();
+      const elapsed = Date.now() - start;
+      console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
+    } catch (e: any) {
+      const elapsed = Date.now() - start;
+      console.error(`[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    }
+  },
 };
