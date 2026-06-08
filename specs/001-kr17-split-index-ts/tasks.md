@@ -26,7 +26,7 @@
 
 **Purpose**: 拆分前 baseline 记录 + git 干净状态
 
-- [ ] T000 [US1] 记录 7 核心端点 baseline 响应（拆分前）— 手动 curl + 保存 JSON 快照
+- [x] T000 [US1] 记录 7 核心端点 baseline 响应 ✅（拆分前）— 手动 curl + 保存 JSON 快照
 - [ ] T000 [US1] 确认 `git status` 干净，无未提交改动
 - [ ] T000 [US1] 确认 `git checkout -b 001-kr17-split-index-ts`（feature branch 已建）
 
