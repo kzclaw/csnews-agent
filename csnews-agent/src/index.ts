@@ -868,10 +868,10 @@ export default {
           trend: trendSnapshot ? {
             snapshot_id: trendSnapshot.snapshot_id,
             warning_id: trendSnapshot.warning_id,
-            velocity: trendSnapshot.velocity,
-            acceleration: trendSnapshot.acceleration,
-            stage: trendSnapshot.stage,
-            warning_created: trendSnapshot.warning_created,
+            velocity: trendSnapshot.out_velocity,        // v0.30.1: RETURNS TABLE 列改名避开 PL/pgSQL 歧义
+            acceleration: trendSnapshot.out_acceleration, // v0.30.1
+            stage: trendSnapshot.out_stage,              // v0.30.1
+            warning_created: trendSnapshot.out_warning_created, // v0.30.1
           } : null,
           fission,
         });
