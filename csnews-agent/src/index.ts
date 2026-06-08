@@ -224,17 +224,19 @@ export function classifyRule(title: string): string {
 }
 
 // Workers AI 分类(主分类,优先于关键词兜底)
-// 注意:kimi-k2.5 在免费 Worker 内响应太慢(15s+),暂时改用关键词兜底
-// 启用条件:升级 Paid 版后 Worker 侧加 timeout 再开启 AI 分类
+// 注意:kimi-k2.5 在 Free Worker 内响应太慢(15s+ 受 Free 10ms CPU 限制),暂时改用关键词兜底
+// 启用条件:Workers AI 加 timeout / 异步批处理 / 拆独立 Worker 后再开启 AI 分类
+// (项目硬约束:Free Tier,不准写"升级 Paid 版"暗示)
 export async function classifyByAI(title: string, env: Env): Promise<string> {
   return classifyRule(title); // 暂时禁用 AI,降级为纯关键词
 }
 
 // 双保险分类:AI 优先,关键词兜底,综合保底
-// 注意:AI 分类(classifyByAI)因 Workers AI 响应慢,已暂时禁用
-// 启用条件:升级 Paid 版后 Worker 侧加 timeout 再开启
+// 注意:AI 分类(classifyByAI)因 Workers AI 响应慢(Free 10ms CPU 限制),已暂时禁用
+// 启用条件:Workers AI 加 timeout / 异步批处理 / 拆独立 Worker 后再开启
+// (项目硬约束:Free Tier,不准写"升级 Paid 版"暗示)
 export async function classify(title: string, env: Env): Promise<string> {
-  // AI 分类(kimi-k2.5)暂时禁用,待 Paid 版加 timeout 后启用
+  // AI 分类(kimi-k2.5)暂时禁用,待 Free Tier 限制解决后启用
   return classifyRule(title);
 }
 
