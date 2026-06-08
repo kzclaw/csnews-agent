@@ -80,9 +80,15 @@ async function recordTrendSnapshot(env: Env, topicId: string) {
       method: 'POST',
       body: JSON.stringify({ p_topic_id: topicId }),
     });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0, 200)}`);
+      return null;
+    }
     const data = await safeJson(res) as any[];
     return Array.isArray(data) ? data[0] || null : null;
-  } catch {
+  } catch (e: any) {
+    console.error(`[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`);
     return null;
   }
 }
@@ -604,15 +610,28 @@ export default {
     // -------- 列出 R2 中的新闻 --------
     if (action === 'list') {
       const prefix = url.searchParams.get('prefix') || 'news/zaker/';
+      // 支持 ?limit=N（默认 50，上限 200）和 ?order=desc|asc（默认 desc，因为 R2 list 默认字典序是 asc）
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 200);
+      const order = (url.searchParams.get('order') || 'desc').toLowerCase();
       const list = await env.csnews_raw.list({ prefix });
+      // R2 list() 不支持 order，必须客户端排序（修复 KR0 #1）
+      const sorted = [...list.objects].sort((a, b) =>
+        order === 'desc' ? b.key.localeCompare(a.key) : a.key.localeCompare(b.key)
+      );
       const items = await Promise.all(
-        list.objects.slice(0, 20).map(async (obj) => {
+        sorted.slice(0, limit).map(async (obj) => {
           const body = await env.csnews_raw.get(obj.key);
           const text = await body?.text();
           try { return JSON.parse(text || '{}'); } catch { return { key: obj.key }; }
         })
       );
-      return new Response(JSON.stringify({ count: items.length, items }), {
+      return new Response(JSON.stringify({
+        count: items.length,
+        total: list.objects.length,
+        truncated: list.objects.length > limit,
+        order,
+        items,
+      }), {
         headers: { 'Content-Type': 'application/json', ...cors }
       });
     }
@@ -791,7 +810,12 @@ export default {
           }
 
           if (!topicId) {
-            const topicKey = title.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '') + Math.abs(hashStr(title)).toString(36);
+            // topic_key 只是「topic 标识」，相似新闻不依赖它撞同 key
+            // （findSimilarNews 已基于 bge-m3 向量聚类，相似新闻走 update_topic_score 不走这里）
+            // 修复 KR0：原实现对中文标题会被清空（title.slice(0,8).replace(/[^a-zA-Z0-9]/g,'')）
+            // 改为纯 hashStr，兼容中文；加 't-' 前缀便于辨识
+            const titleHash = Math.abs(hashStr(title)).toString(36);
+            const topicKey = `t-${titleHash}`;
             const created = await createTopic(env, topicKey, 'follow') as any;
             if (created?.id) {
               topicId = created.id;
