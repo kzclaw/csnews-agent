@@ -889,8 +889,9 @@ export default {
     const ts = new Date().toISOString();
     console.log(`[cron] process triggered at ${ts} cron=${controller?.cron || 'unknown'}`);
     try {
-      // fetch 自家域名 — 走 CF 内部 routing, 不会触发 Bot Fight Mode
-      const url = 'https://REDACTED-INTERNAL-DOMAIN/?action=process';
+      // fetch 自家 Worker —— 走 CF 内部 routing, 不会触发 Bot Fight Mode
+      // URL 从 env 读取 (wrangler.toml [vars].WORKER_SELF_URL), 不硬编码
+      const url = `${env.WORKER_SELF_URL}?action=process`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${env.BEARER_TOKEN}`,

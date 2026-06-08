@@ -7,7 +7,12 @@ binding = "AI"
 
 [[r2_buckets]]
 binding = "csnews_raw"
+
 [vars]
+# Worker 自身的公开 URL —— 用于 Cron Trigger 自调 process action
+# 部署时必须替换为你的真实 Worker URL (例: https://csnews.your-domain.workers.dev)
+# 留占位符则 Worker 部署后 scheduled handler 会失败(URL 无效)
+WORKER_SELF_URL = "https://YOUR-WORKER.workers.dev"
 
 # 每小时整点(UTC)跑一次 process action
 # 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions

@@ -1,5 +1,4 @@
 -- CSNEWS Agent · Initial Schema
--- Project: REDACTED-SUPABASE-PROJECT-ID
 -- Created: 2026-05-29
 
 -- Step 1: Enable pgvector
