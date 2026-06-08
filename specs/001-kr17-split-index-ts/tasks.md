@@ -40,7 +40,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T000 [P] [US1] Create `csnews-agent/src/types.ts` — 导出 `NewsItem`（从 index.ts 行 118 抽出）+ 共享类型 + re-export `Env` from `cf-types.d.ts`（~20 行）
+- [x] T000 [P] [US1] Create `csnews-agent/src/types.ts` — 导出 `NewsItem`（从 index.ts 行 118 抽出）+ 共享类型 + re-export `Env` from `cf-types.d.ts`（~20 行）
 
 **Checkpoint**: types.ts 就位 → 其他抽屉可以开始 import
 
