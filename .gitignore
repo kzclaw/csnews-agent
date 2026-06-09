@@ -33,7 +33,9 @@ supabase/.temp/run-csnews.sh
 supabase/.temp/
 
 # Local planning docs may contain private tokens and machine paths
+# (kzclaw 2026-06-09 确定 v0.33+sweep：规划文档 = 隐私文档 · 跟 OKR 同性质 · 不上 git)
 tasks/
+specs/
 
 # Wrangler local cache
 .wrangler/
