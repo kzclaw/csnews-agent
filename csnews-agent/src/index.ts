@@ -10,16 +10,6 @@ import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
 import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction } from './endpoints';
 
-interface NewsItem {
- title: string;
- url?: string;
- source?: string;
- category?: string;
- hot_score?: number;
- published_at?: string;
- summary?: string;
-}
-
 // ============================================================
 // News Self Growth核心函数已抽到 src/news-process.ts ·T000（8 个函数：cleanupStaleTopics/findSimilarNews/updateTopicScore/recordTrendSnapshot/createTopic/insertNewsHotspot/joinTopicMember/saveToR2）
 // ============================================================
