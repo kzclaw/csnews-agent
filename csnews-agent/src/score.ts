@@ -9,7 +9,8 @@
 // NOTE: scoreRule max=7.6, AI_ROUTE_R_THRESHOLD 必须 <=7.6 才能 reachable
 
 // R threshold for Workers AI routing (KR0: Neurons saving)
-// NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
+// NOTE: scoreRule max=8.6 (5 base + 2 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
+//       threshold must be <= 8.6 to be reachable
 export const AI_ROUTE_R_THRESHOLD =7.0;
 export const TOPIC_MATCH_THRESHOLD =0.72;
 export const R2_DUP_THRESHOLD =0.88;

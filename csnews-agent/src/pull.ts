@@ -15,7 +15,7 @@ import { Env, supabaseFetch, safeJson } from './shared';
 
 // ====== Type 白名单配置(v0.31) ======
 
-interface TypeConfig {
+export interface TypeConfig {
   /** Supabase 表名 */
   table: string;
   /** 默认 order_by 字段 */
@@ -30,7 +30,7 @@ interface TypeConfig {
   timeField: string;
 }
 
-const TYPE_CONFIG: Record<string, TypeConfig> = {
+export const TYPE_CONFIG: Record<string, TypeConfig> = {
   news: {
     table: 'news_hotspots',
     defaultOrderBy: 'created_at',
@@ -71,9 +71,9 @@ const TYPE_CONFIG: Record<string, TypeConfig> = {
 
 // ====== format 三档投影 ======
 
-type Format = 'ids' | 'summary' | 'full';
+export type Format = 'ids' | 'summary' | 'full';
 
-interface PullResponse {
+export interface PullResponse {
   type: string;
   count: number;
   total: number;
@@ -110,7 +110,7 @@ function projectFormat(items: any[], format: Format): any[] {
 
 // ====== 参数解析 ======
 
-interface ParsedFilters {
+export interface ParsedFilters {
   type: string;
   limit: number;
   order: 'asc' | 'desc';
@@ -128,10 +128,10 @@ interface ParsedFilters {
   format: Format;
 }
 
-const VALID_LEVELS = ['follow', 'important', 'explosive'];
-const VALID_STATUS = ['open', 'acknowledged', 'validated', 'dismissed', 'closed'];
-const VALID_STAGES = ['emerging', 'growing', 'hot', 'mature', 'declining'];
-const VALID_FORMATS: Format[] = ['ids', 'summary', 'full'];
+export const VALID_LEVELS = ['follow', 'important', 'explosive'];
+export const VALID_STATUS = ['open', 'acknowledged', 'validated', 'dismissed', 'closed'];
+export const VALID_STAGES = ['emerging', 'growing', 'hot', 'mature', 'declining'];
+export const VALID_FORMATS: Format[] = ['ids', 'summary', 'full'];
 
 /**
  * 解析相对时间(24h / 7d / 30m)为 ISO 8601
@@ -146,7 +146,7 @@ function resolveRelativeTime(rel: string): string | null {
   return new Date(now - ms).toISOString();
 }
 
-function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | { ok: false; error: string } {
+export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | { ok: false; error: string } {
   const type = url.searchParams.get('type') || '';
   if (!type) {
     return { ok: false, error: 'missing type param. Valid: ' + Object.keys(TYPE_CONFIG).join(', ') };

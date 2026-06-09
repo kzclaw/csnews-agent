@@ -41,6 +41,12 @@ specs/
 .wrangler/
 csnews-agent/.wrangler/
 
+# Wrangler dry-run output (deploy --dry-run --outdir=dist)
+csnews-agent/dist/
+
+# vitest coverage report (npm run validate:coverage)
+csnews-agent/coverage/
+
 # Local Spec Kit scaffolding and agent instructions
 .agents/
 .specify/
