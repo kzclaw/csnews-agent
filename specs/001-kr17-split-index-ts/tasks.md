@@ -63,7 +63,7 @@
 - [x] T000 ✅ commit c8a4b59 [P] [US1] Create `csnews-agent/src/score.ts` — `scoreRule()` + 路由常量（`AI_ROUTE_R_THRESHOLD` / `TOPIC_MATCH_THRESHOLD` / `R2_DUP_THRESHOLD`）（~30 行）
 - [x] T000 ✅ commit583b561 [US1] Create `csnews-agent/src/news-process.ts` — 9 个 News Self Growth 核心函数（~100 行）[depends T000]
 - [x] T000 ✅ commit04c1c17 [US1] Create `csnews-agent/src/endpoints.ts` — 14 个 action handler（~600 行）[depends T000-T000]
-- [ ] T000 [US1] Slim `csnews-agent/src/index.ts` to **< 100 行**（default export + 必要的 import + dispatch）[depends T000]
+- [x] T000 ✅ commit b0d1142 [US1] Slim `csnews-agent/src/index.ts` to **< 100 行**（default export + 必要的 import + dispatch）[depends T000]
 
 **Checkpoint**: 6 文件就位 / index.ts 瘦身 / tsc 0 error（US1 完成）
 
@@ -80,7 +80,7 @@
 
 ### Implementation for US2
 
-- [ ] T000 [US1] 运行 `tsc --noEmit --strict`（0 error）[depends T000]
+- [x] T000 ✅ tsc0 新 error（5 pre-existing不变）[US1] 运行 `tsc --noEmit --strict`（0 error）[depends T000]
 - [ ] T000 [US1] 运行 `wrangler deploy --dry-run`（编译 OK）[depends T000]
 - [ ] T000 [US1] 运行 **7 核心端点** curl 行为对比 baseline（ping / diag / pull / process / score / model-test / list）[depends T000]
 - [ ] T000 [US1] `git add` + `git commit`（**每个 T000-T000 一个 commit**，共 6-7 个 commit）[depends T000]
