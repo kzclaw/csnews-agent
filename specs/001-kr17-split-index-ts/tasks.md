@@ -62,7 +62,7 @@
 - [x] T000 ✅ commit d6737f7 [P] [US1] Create `csnews-agent/src/classify.ts` — `CATEGORY_KW` + `classifyRule()` + `classifyByAI()` + `classify()`（~90 行）
 - [x] T000 ✅ commit c8a4b59 [P] [US1] Create `csnews-agent/src/score.ts` — `scoreRule()` + 路由常量（`AI_ROUTE_R_THRESHOLD` / `TOPIC_MATCH_THRESHOLD` / `R2_DUP_THRESHOLD`）（~30 行）
 - [x] T000 ✅ commit583b561 [US1] Create `csnews-agent/src/news-process.ts` — 9 个 News Self Growth 核心函数（~100 行）[depends T000]
-- [ ] T000 [US1] Create `csnews-agent/src/endpoints.ts` — 14 个 action handler（~600 行）[depends T000-T000]
+- [x] T000 ✅ commit04c1c17 [US1] Create `csnews-agent/src/endpoints.ts` — 14 个 action handler（~600 行）[depends T000-T000]
 - [ ] T000 [US1] Slim `csnews-agent/src/index.ts` to **< 100 行**（default export + 必要的 import + dispatch）[depends T000]
 
 **Checkpoint**: 6 文件就位 / index.ts 瘦身 / tsc 0 error（US1 完成）
