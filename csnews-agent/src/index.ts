@@ -67,7 +67,7 @@ export default {
   //   4. Mac cron 也可以删了
   // 调试: wrangler dev --test-scheduled
   //       访问 wrangler dev 暴露的 scheduled handler 触发路由(详见 CF 文档)
-  async scheduled(controller, env, ctx) {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const start = Date.now();
     const ts = new Date().toISOString();
     console.log(`[cron] process triggered at ${ts} cron=${controller?.cron || 'unknown'}`);

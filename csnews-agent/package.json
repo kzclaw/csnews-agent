@@ -1,5 +1,14 @@
 {
   "devDependencies": {
-    "typescript": "^5.3.3"
+    "@cloudflare/workers-types": "^4.20260609.1",
+    "@vitest/coverage-v8": "^4.1.8",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.8"
+  },
+  "scripts": {
+    "validate": "vitest run",
+    "validate:watch": "vitest",
+    "validate:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
   }
 }
