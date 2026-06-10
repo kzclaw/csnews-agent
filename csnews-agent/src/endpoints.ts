@@ -16,6 +16,7 @@ import { logEvent } from './log';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  try {
  const result = await handlePull(env, url);
  return new Response(JSON.stringify(result), {
@@ -32,6 +33,7 @@ export async function handlePullAction(request: Request, env: Env, url: URL, cor
 
 // ===================== diag =====================
 export async function handleDiagAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const results = [];
 
  //1. Insert topic
@@ -91,6 +93,7 @@ export async function handleDiagAction(request: Request, env: Env, url: URL, cor
 
 // ===================== ping =====================
 export async function handlePingAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
  headers: { 'Content-Type': 'application/json', ...cors }
  });
@@ -101,6 +104,7 @@ export async function handlePingAction(request: Request, env: Env, url: URL, cor
 import { extractText, maybeFissionReport } from './utils';
 
 export async function handleModelTestAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const r = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
  messages: [{ role: 'user', content: '说一段话介绍自己' }],
  max_tokens:100,
@@ -116,6 +120,7 @@ export async function handleModelTestAction(request: Request, env: Env, url: URL
 
 // ===================== ai-test =====================
 export async function handleAiTestAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const title = url.searchParams.get('title') || 'OpenAI发布GPT-5,AI行业迎来新一轮革命';
  const report = await maybeFissionReport(title, env,9.0); // test always uses high score
  return new Response(JSON.stringify({ title, report }), {
@@ -125,6 +130,7 @@ export async function handleAiTestAction(request: Request, env: Env, url: URL, c
 
 // ===================== score =====================
 export async function handleScoreAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const title = url.searchParams.get('title');
  if (!title) {
  return new Response(JSON.stringify({ error: 'missing title param' }), {
@@ -154,6 +160,7 @@ export async function handleScoreAction(request: Request, env: Env, url: URL, co
 
 // ===================== classify =====================
 export async function handleClassifyAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const title = url.searchParams.get('title');
  if (!title) {
  return new Response(JSON.stringify({ error: 'missing title param' }), {
@@ -169,6 +176,7 @@ export async function handleClassifyAction(request: Request, env: Env, url: URL,
 
 // ===================== batch-score =====================
 export async function handleBatchScoreAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  let body: { items: NewsItem[]; use_ai?: boolean } | null = null;
  try {
  body = await request.json();
@@ -204,6 +212,7 @@ export async function handleBatchScoreAction(request: Request, env: Env, url: UR
 
 // ===================== fission =====================
 export async function handleFissionAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const seed = url.searchParams.get('seed') || url.searchParams.get('title');
  if (!seed) {
  return new Response(JSON.stringify({ error: 'missing seed param' }), {
@@ -243,6 +252,7 @@ export async function handleFissionAction(request: Request, env: Env, url: URL, 
 
 // ===================== save =====================
 export async function handleSaveAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const title = url.searchParams.get('title') || '';
  const category = url.searchParams.get('category') || '综合';
  const score = parseFloat(url.searchParams.get('score') || '5');
@@ -273,6 +283,7 @@ export async function handleSaveAction(request: Request, env: Env, url: URL, cor
 
 // ===================== list =====================
 export async function handleListAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const prefix = url.searchParams.get('prefix') || 'news/zaker/';
  // 支持 ?limit=N（默认50，上限200）和 ?order=desc|asc（默认 desc，因为 R2 list 默认字典序是 asc）
  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'),200);
@@ -302,6 +313,7 @@ export async function handleListAction(request: Request, env: Env, url: URL, cor
 
 // ===================== embed =====================
 export async function handleEmbedAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  const text = url.searchParams.get('text') || url.searchParams.get('title') || '';
  if (!text) {
  return new Response(JSON.stringify({ error: 'missing text param' }), {
@@ -354,6 +366,7 @@ export async function handleEmbedAction(request: Request, env: Env, url: URL, co
 
 // ===================== zaker-hot =====================
 export async function handleZakerHotAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  try {
  const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
  const json = await r.json() as any;
@@ -393,6 +406,7 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
 
 // ===================== process (KR0 News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
  //Step0:清理过期话题簇(1 subrequest)
  const cleaned = await cleanupStaleTopics(env) as any;
 
@@ -550,6 +564,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 // 返回: worker_version / last_process_at / supabase_counts / r2_latest_key / cron_health / ts
 // 任何子查询失败降级
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
   const ts = Date.now();
   const result: any = {
     worker_version: env.WORKER_VERSION || "unknown",
@@ -621,6 +636,7 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
 // ?action=logs&date=YYYY-MM-DD&hour=HH&limit=N 端点
 // 读 R2 `logs/YYYY-MM-DD/HH.log` 按 ts 倒序返回
 export async function handleLogsAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  logEvent(env, "info", action + " called", { endpoint: action }, "handler").catch(() => {});
   const params = url.searchParams;
   const now = new Date();
   const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
