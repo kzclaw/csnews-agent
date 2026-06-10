@@ -9,7 +9,7 @@
 import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
 import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction } from './endpoints';
-import { logEvent, pruneOldLogs } from './log';
+import { logEvent } from './log';
 
 // ============================================================
 // News Self Growth核心函数已抽到 src/news-process.ts ·T000（8 个函数：cleanupStaleTopics/findSimilarNews/updateTopicScore/recordTrendSnapshot/createTopic/insertNewsHotspot/joinTopicMember/saveToR2）
@@ -74,25 +74,6 @@ export default {
     const start = Date.now();
     const ts = new Date().toISOString();
     const cron = controller?.cron || 'unknown';
-
-    // 多个 cron 表达式分发 (wrangler.toml [triggers].crons 数组)
-    // 当前 2 个: `0 * * * *` (hourly process) + `0 3 * * *` (daily prune, 北京 11:00)
-    if (cron === "0 3 * * *") {
-      // daily prune: 删 30d 前的 log (失败降级)
-      console.log(`[cron] prune triggered at ${ts}`);
-      logEvent(env, "info", "[cron] prune triggered", { cron, ts }, "scheduler");
-      try {
-        const result = await pruneOldLogs(env, 30);
-        console.log(`[cron] prune done deleted=${result.deleted} errors=${result.errors}`);
-        logEvent(env, "info", "[cron] prune done", { deleted: result.deleted, errors: result.errors, retention_days: 30 }, "scheduler");
-      } catch (e: any) {
-        console.error(`[cron] prune failed err=${e?.message || e}`);
-        logEvent(env, "error", "[cron] prune failed", { err: e?.message || String(e) }, "scheduler");
-      }
-      return;
-    }
-
-    // 默认 = hourly process
     console.log(`[cron] process triggered at ${ts} cron=${cron}`);
     logEvent(env, "info", "[cron] process triggered", { cron, ts }, "scheduler");
     try {

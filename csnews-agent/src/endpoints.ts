@@ -626,9 +626,14 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
   const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
 
   // 1. 解析 + 校验
-  const date = params.get("date") || todayUtc;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return new Response(JSON.stringify({ error: "date must be YYYY-MM-DD" }), {
+  const rawDate = params.get("date") || "today";
+  let date: string;
+  if (rawDate === "today") {
+    date = todayUtc;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    date = rawDate;
+  } else {
+    return new Response(JSON.stringify({ error: "date must be YYYY-MM-DD or 'today'" }), {
       status: 400, headers: { "Content-Type": "application/json", ...cors },
     });
   }

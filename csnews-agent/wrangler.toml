@@ -29,13 +29,12 @@ WORKER_SELF_URL = "https://YOUR-WORKER.workers.dev"
 WORKER_VERSION = "v0.34.0-dev"
 
 # 每小时整点(UTC)跑一次 process action
-# + 每天 03:00 UTC (北京 11:00) 跑一次 log prune (30d TTL)
 # 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions
 # 选 CF cron 的原因:
 #   1. Free tier 实际可用(每账号 5 个,CPU 10ms 限制)
 #   2. Worker → 自家域名走 CF 内部 routing,绕开 Bot Fight Mode
 #   3. 0 漂移(精准整点),0 外部依赖
 #   4. process 主要是 fetch 等待,不算 CPU,10ms 限制够用
-# prune 触发: controller.cron === "0 3 * * *" 分支判断 (src/index.ts scheduled handler)
+# log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *" ]
+crons = [ "0 * * * *" ]

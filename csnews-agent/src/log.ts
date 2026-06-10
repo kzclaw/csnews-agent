@@ -3,6 +3,9 @@
  * 写入 R2 `logs/YYYY-MM-DD/HH.log` (一行 JSON 格式)
  * 失败降级: console.error + 不抛
  * fire-and-forget: 调用方不 await, 失败不影响主流程
+ *
+ * 30 天 TTL 由 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/, MaxAge=30d)
+ * 本文件不写 prune 代码
  */
 import { Env } from './shared';
 
@@ -71,64 +74,3 @@ export async function logEvent(
   }
 }
 
-/**
- * 算 cutoff date (UTC): today - retentionDays
- * 返回 `YYYY-MM-DD` 格式
- */
-export function getPruneCutoffDate(now: Date, retentionDays: number): string {
-  const cutoff = new Date(now.getTime() - retentionDays * 86400_000);
-  const yyyy = cutoff.getUTCFullYear();
-  const mm = String(cutoff.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(cutoff.getUTCDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-/**
- * 删 R2 `logs/<cutoff-date>/` 之前的所有日期目录
- * 失败降级: console.error + 不抛
- * 推荐 retentionDays = 30
- */
-export async function pruneOldLogs(env: Env, retentionDays: number = 30): Promise<{ deleted: number; errors: number }> {
-  if (!env.csnews_raw) {
-    console.error("[log] csnews_raw binding missing");
-    return { deleted: 0, errors: 1 };
-  }
-  const now = new Date();
-  const cutoffDate = getPruneCutoffDate(now, retentionDays);
-  const cutoffMs = Date.parse(cutoffDate + "T00:00:00Z");
-
-  let deleted = 0;
-  let errors = 0;
-
-  try {
-    // 列 R2 `logs/` 下所有对象
-    const list = await env.csnews_raw.list({ prefix: "logs/" });
-    const toDelete: string[] = [];
-    for (const obj of list.objects) {
-      // obj.key 格式: logs/YYYY-MM-DD/HH.log
-      const match = obj.key.match(/^logs\/(\d{4}-\d{2}-\d{2})\//);
-      if (!match) continue;
-      const objDate = match[1];
-      const objMs = Date.parse(objDate + "T00:00:00Z");
-      if (Number.isFinite(objMs) && objMs < cutoffMs) {
-        toDelete.push(obj.key);
-      }
-    }
-    for (const key of toDelete) {
-      try {
-        await env.csnews_raw.delete(key);
-        deleted++;
-      } catch (e: any) {
-        console.error("[log] delete failed", key, e?.message || e);
-        errors++;
-      }
-    }
-    if (deleted > 0 || errors > 0) {
-      console.log(`[log] prune: deleted ${deleted}, errors ${errors}, cutoff=${cutoffDate}`);
-    }
-  } catch (e: any) {
-    console.error("[log] prune list failed", e?.message || e);
-    errors++;
-  }
-  return { deleted, errors };
-}
