@@ -72,13 +72,16 @@ export default {
     const ts = new Date().toISOString();
     console.log(`[cron] process triggered at ${ts} cron=${controller?.cron || 'unknown'}`);
     try {
-      // fetch 自家 Worker —— 走 CF 内部 routing, 不会触发 Bot Fight Mode
+      // fetch 自家 Worker —— 走 CF 内部 routing
+      // User-Agent 用 curl/8.7.1 绕开 CF Bot Fight Mode (kzclaw 2026-06-10 确定)
+      // 历史教训: 'csnews-cron-trigger/1.0' 这种机器 UA 会被 Bot Fight Mode 误判为 bot → fetch 403
+      // 验证: diag 跑 Python urllib (HTTP 403 code 1010) vs curl (HTTP 200) vs Mozilla (HTTP 200)
       // URL 从 env 读取 (wrangler.toml [vars].WORKER_SELF_URL), 不硬编码
       const url = `${env.WORKER_SELF_URL}?action=process`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${env.BEARER_TOKEN}`,
-          'User-Agent': 'csnews-cron-trigger/1.0',
+          'User-Agent': 'curl/8.7.1',
         },
       });
       const body = await res.text();

@@ -2,6 +2,15 @@ name = "csnews-agent"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
+# Observability: 开启 CF Workers Tail Logs / Logs 实时面板
+# kzclaw 2026-06-10 确定: 开 log 看 cron scheduled handler 内部 fetch 失败原因
+# (过去 24h news=0 但 CF Dashboard cron 记成功 → scheduled handler 内部 fetch 失败被 try/catch 吞)
+# head_sampling_rate = 1.0 全采样 (Worker Free Plan 默认支持, 5 重安全网之一)
+# 注: wrangler 4.95 不认顶层 log_level 字段, 控制台级别用 [observability] + [logging] 子块
+[observability]
+enabled = true
+head_sampling_rate = 1.0
+
 [ai]
 binding = "AI"
 
