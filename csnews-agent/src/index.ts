@@ -78,7 +78,7 @@ export default {
     const ts = new Date().toISOString();
     const cron = controller?.cron || 'unknown';
     console.log(`[cron] process triggered at ${ts} cron=${cron}`);
-    logEvent(env, "info", "[cron] process triggered", { cron, ts }, "scheduler");
+    ctx.waitUntil(logEvent(env, "info", "[cron] process triggered", { cron, ts }, "scheduler").catch(() => {}));
     try {
       // fetch 自家 Worker —— 走 CF 内部 routing
       // User-Agent 用 curl/8.7.1 绕开 CF Bot Fight Mode (kzclaw 2026-06-10 确定)
@@ -95,11 +95,11 @@ export default {
       const body = await res.text();
       const elapsed = Date.now() - start;
       console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
-      logEvent(env, "info", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler");
+      ctx.waitUntil(logEvent(env, "info", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler").catch(() => {}));
     } catch (e: any) {
       const elapsed = Date.now() - start;
       console.error(`[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
-      logEvent(env, "error", "[cron] process failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler");
+      ctx.waitUntil(logEvent(env, "error", "[cron] process failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler").catch(() => {}));
     }
   },
 };
