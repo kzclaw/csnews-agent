@@ -26,7 +26,7 @@ import { logEvent } from './log';
 // 主 Worker
 // ============================================================
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = request.headers.get('Origin');
     const cors = corsHeaders(origin);
 
@@ -39,6 +39,9 @@ export default {
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'ping';
+
+    // 写一条 endpoint-level log (fire-and-forget with ctx.waitUntil so R2 put completes)
+    ctx.waitUntil(logEvent(env, "info", "endpoint called", { endpoint: action, method: request.method }, "dispatcher").catch(() => {}));
 
 // --------16 action dispatch (handlers 已抽到 src/endpoints.ts) --------
  if (action === 'pull') return await handlePullAction(request, env, url, cors);
