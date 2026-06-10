@@ -17,6 +17,18 @@ export interface Env {
    * 在 wrangler.toml 的 [vars] 里配置（占位符 YOUR-WORKER.workers.dev 部署时替换）。
    */
   WORKER_SELF_URL: string;
+  /**
+   * Worker 版本标识。
+   * 用于 ?action=health 端点返回 worker_version 字段。
+   * kzclaw部署新版本后手动改 wrangler.toml [vars].WORKER_VERSION (或接 GitHub Actions 自动化)。
+   */
+  WORKER_VERSION?: string;
+  /**
+   * KV namespace 存 process 最后状态 (last_process_at + last_process_result)。
+   * kzclaw部署后跑 `npx wrangler kv namespace create PROCESS_STATE` + 把 id 填到 wrangler.toml。
+   * 本次实施不绑 (handler 中 env.PROCESS_STATE 判空跳过, 后续 KR 启用)。
+   */
+  PROCESS_STATE?: KVNamespace;
 }
 
 export function getSupabaseHost(env: Env): string {

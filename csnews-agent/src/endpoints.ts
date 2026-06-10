@@ -1,10 +1,10 @@
 // ============================================================
-//14 个 Action Handler（v0.33+sweep·FT-KR0 · Phase0 · T000）
+// 16 个 Action Handler
 // ============================================================
-//用途：从 index.ts抽出14 个 action=xxx端点处理函数
-// KR0通用 pull 在独立 pull.ts(已存在)
-//详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-// specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
+// 用途：从 index.ts 抽出 16 个 action=xxx 端点处理函数
+// 通用 pull 在独立 pull.ts
+// 新增 health + logs 端点 (Worker 可观测性)
+// 详见：tasks/csnews-agent-okr.md (本地私密 OKR 文档, 不入库)
 import { Env, getSupabaseHost } from './shared';
 import { NewsItem } from './types';
 import { handlePull } from './pull';
@@ -12,6 +12,7 @@ import { corsHeaders } from './auth';
 import { classify, classifyByAI, classifyRule } from './classify';
 import { scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD, hashStr } from './score';
 import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, saveToR2, joinTopicMember } from './news-process';
+import { logEvent } from './log';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -537,9 +538,165 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
  if (fission) console.log(`[FISSION] ${title}`);
  }
 
- return new Response(JSON.stringify({
- processed: results.length,
- cleaned: cleaned?.deleted_topic_count ||0,
- items: results,
- }), { headers: { 'Content-Type': 'application/json', ...cors } });
+  return new Response(JSON.stringify({
+  processed: results.length,
+  cleaned: cleaned?.deleted_topic_count ||0,
+  items: results,
+  }), { headers: { 'Content-Type': 'application/json', ...cors } });
+}
+
+// ===================== health =====================
+// ?action=health 端点
+// 返回: worker_version / last_process_at / supabase_counts / r2_latest_key / cron_health / ts
+// 任何子查询失败降级
+export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  const ts = Date.now();
+  const result: any = {
+    worker_version: env.WORKER_VERSION || "unknown",
+    last_process_at: null,
+    supabase_counts: {} as Record<string, number | { error: string }>,
+    r2_latest_key: null,
+    cron_health: "ok",
+    ts,
+  };
+
+  // 1. last_process_at (KV, optional, 缺失降级)
+  try {
+    if (env.PROCESS_STATE) {
+      result.last_process_at = await env.PROCESS_STATE.get("last_process_at");
+    } else {
+      result.last_process_at = null;
+    }
+  } catch (e: any) {
+    result.last_process_at = { error: e?.message || "kv unavailable" };
+  }
+
+  // 2. cron_health (last_process_at > 1h 前 = degraded)
+  try {
+    if (typeof result.last_process_at === "string") {
+      const lastMs = Date.parse(result.last_process_at);
+      if (Number.isFinite(lastMs) && ts - lastMs > 3600_000) {
+        result.cron_health = "degraded";
+      }
+    }
+  } catch {}
+
+  // 3. supabase_counts (4 表行数, 失败降级)
+  const tables = ["news_hotspots", "topics", "news_topic_members", "trend_snapshots"];
+  for (const tbl of tables) {
+    try {
+      const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl}?select=id&limit=0`, {
+        headers: {
+          "apikey": env.SUPABASE_SERVICE_KEY,
+          "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          "Prefer": "count=exact",
+        },
+      });
+      const cr = r.headers.get("Content-Range") || "";
+      const total = cr.split("/").pop();
+      result.supabase_counts[tbl] = (total && total !== "*") ? parseInt(total, 10) : 0;
+    } catch (e: any) {
+      result.supabase_counts[tbl] = { error: e?.message || "supabase unavailable" };
+    }
+  }
+
+  // 4. r2_latest_key (news/zaker/ 最新 key, 失败降级)
+  try {
+    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1 });
+    if (list.objects && list.objects.length > 0) {
+      result.r2_latest_key = list.objects[0].key;
+    } else {
+      result.r2_latest_key = null;
+    }
+  } catch (e: any) {
+    result.r2_latest_key = { error: e?.message || "r2 unavailable" } as any;
+  }
+
+  return new Response(JSON.stringify(result), {
+    headers: { "Content-Type": "application/json", ...cors },
+  });
+}
+
+// ===================== logs =====================
+// ?action=logs&date=YYYY-MM-DD&hour=HH&limit=N 端点
+// 读 R2 `logs/YYYY-MM-DD/HH.log` 按 ts 倒序返回
+export async function handleLogsAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  const params = url.searchParams;
+  const now = new Date();
+  const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+
+  // 1. 解析 + 校验
+  const date = params.get("date") || todayUtc;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return new Response(JSON.stringify({ error: "date must be YYYY-MM-DD" }), {
+      status: 400, headers: { "Content-Type": "application/json", ...cors },
+    });
+  }
+
+  const hourParam = params.get("hour");
+  let hour: number | null = null;
+  if (hourParam !== null) {
+    hour = parseInt(hourParam, 10);
+    if (isNaN(hour) || hour < 0 || hour > 23) {
+      return new Response(JSON.stringify({ error: "hour must be 0-23" }), {
+        status: 400, headers: { "Content-Type": "application/json", ...cors },
+      });
+    }
+  }
+
+  const limit = Math.min(Math.max(parseInt(params.get("limit") || "100", 10), 1), 500);
+
+  // 2. date range ≤ 7d 校验
+  const requestedDate = new Date(date + "T00:00:00Z");
+  const todayDate = new Date(todayUtc + "T00:00:00Z");
+  const diffDays = (todayDate.getTime() - requestedDate.getTime()) / 86400_000;
+  if (diffDays > 7 || diffDays < 0) {
+    return new Response(JSON.stringify({ error: "date range max 7 days (0-7 days back)" }), {
+      status: 400, headers: { "Content-Type": "application/json", ...cors },
+    });
+  }
+
+  // 3. R2 list + 读 hour 文件
+  let entries: any[] = [];
+  try {
+    const prefix = `logs/${date}/`;
+    const list = await env.csnews_raw.list({ prefix, limit: 24 });
+    for (const obj of list.objects) {
+      if (hour !== null && !obj.key.endsWith(`/${String(hour).padStart(2, "0")}.log`)) continue;
+      const body = await env.csnews_raw.get(obj.key);
+      if (!body) continue;
+      const text = await body.text();
+      for (const line of text.split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          entries.push(JSON.parse(t));
+        } catch {
+          // 跳过损坏行
+        }
+      }
+    }
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: "r2 unavailable", detail: e?.message || String(e) }), {
+      status: 503, headers: { "Content-Type": "application/json", ...cors },
+    });
+  }
+
+  // 4. 按 ts 倒序
+  entries.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+
+  // 5. 取 limit
+  const items = entries.slice(0, limit);
+  const truncated = entries.length > items.length;
+
+  return new Response(JSON.stringify({
+    date,
+    hour: hour,
+    count: items.length,
+    total: entries.length,
+    truncated,
+    items,
+  }), {
+    headers: { "Content-Type": "application/json", ...cors },
+  });
 }

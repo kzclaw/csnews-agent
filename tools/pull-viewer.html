@@ -787,6 +787,17 @@ const TYPE_SCHEMAS = {
       { key: 'limit', label: 'limit', type: 'number', min: 1, max: 100, default: 20 },
       { key: 'order_by', label: 'order_by', type: 'select', options: ['score', 'last_active_at'], default: 'score' },
     ]
+  },
+  // logs 走 ?action=logs (不同 action) — 不走 ?action=pull
+  logs: {
+    label: 'Worker 日志',
+    action: 'logs',
+    defaults: { date: 'today', hour: '', limit: 100 },
+    params: [
+      { key: 'date', label: 'date', type: 'text', placeholder: 'YYYY-MM-DD 或 today', default: 'today' },
+      { key: 'hour', label: 'hour (0-23)', type: 'number', min: 0, max: 23, optional: true },
+      { key: 'limit', label: 'limit (1-500)', type: 'number', min: 1, max: 500, default: 100 },
+    ]
   }
 };
 
@@ -798,10 +809,11 @@ const SCENARIOS = [
   { name: '裂变待办 (KR0b)', icon: '✳️', query: { type: 'fission-pending', limit: 20, order_by: 'score' } },
   { name: 'ID 列表（省流量）', icon: '🆔', query: { type: 'news', format: 'ids', limit: 20, order_by: 'created_at' } },
   { name: '最近 24h', icon: '⏱', query: { type: 'news', limit: 20, since: '24h', order_by: 'created_at' } },
+  { name: 'Worker 日志 (当天)', icon: '📋', query: { type: 'logs', date: 'today', limit: 100 } },
 ];
 
 const SCENARIO_ICONS = {
-  news: '📰', topics: '🔥', warnings: '⚠️', 'fission-pending': '✳️'
+  news: '📰', topics: '🔥', warnings: '⚠️', 'fission-pending': '✳️', logs: '📋'
 };
 
 /* ===================== 渲染 ===================== */
@@ -1010,9 +1022,11 @@ function buildUrl() {
   const cfg = getConfig();
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const params = new URLSearchParams();
-  params.set('action', 'pull');
-  params.set('type', state.type);
   const schema = TYPE_SCHEMAS[state.type];
+  // action 分两种: pull (4 type) / logs (1 type) — 由 schema.action 决定
+  const action = schema.action || 'pull';
+  params.set('action', action);
+  if (action === 'pull') params.set('type', state.type);
   const all = { ...schema.defaults, ...state.params };
   for (const p of schema.params) {
     if (all[p.key] !== undefined && all[p.key] !== '') {

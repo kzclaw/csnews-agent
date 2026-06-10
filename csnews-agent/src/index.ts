@@ -8,7 +8,8 @@
  */
 import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
-import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction } from './endpoints';
+import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction } from './endpoints';
+import { logEvent, pruneOldLogs } from './log';
 
 // ============================================================
 // News Self Growth核心函数已抽到 src/news-process.ts ·T000（8 个函数：cleanupStaleTopics/findSimilarNews/updateTopicScore/recordTrendSnapshot/createTopic/insertNewsHotspot/joinTopicMember/saveToR2）
@@ -39,7 +40,7 @@ export default {
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'ping';
 
-// --------14 action dispatch (T000: handlers 已抽到 src/endpoints.ts) --------
+// --------16 action dispatch (handlers 已抽到 src/endpoints.ts) --------
  if (action === 'pull') return await handlePullAction(request, env, url, cors);
  if (action === 'diag') return await handleDiagAction(request, env, url, cors);
  if (action === 'ping') return await handlePingAction(request, env, url, cors);
@@ -54,6 +55,8 @@ export default {
  if (action === 'embed') return await handleEmbedAction(request, env, url, cors);
  if (action === 'zaker-hot') return await handleZakerHotAction(request, env, url, cors);
  if (action === 'process') return await handleProcessAction(request, env, url, cors);
+ if (action === 'health') return await handleHealthAction(request, env, url, cors);
+ if (action === 'logs') return await handleLogsAction(request, env, url, cors);
  return new Response(JSON.stringify({ error: 'unknown action' }), {
  status:400, headers: { 'Content-Type': 'application/json', ...cors }
  });  },
@@ -70,7 +73,28 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const start = Date.now();
     const ts = new Date().toISOString();
-    console.log(`[cron] process triggered at ${ts} cron=${controller?.cron || 'unknown'}`);
+    const cron = controller?.cron || 'unknown';
+
+    // 多个 cron 表达式分发 (wrangler.toml [triggers].crons 数组)
+    // 当前 2 个: `0 * * * *` (hourly process) + `0 3 * * *` (daily prune, 北京 11:00)
+    if (cron === "0 3 * * *") {
+      // daily prune: 删 30d 前的 log (失败降级)
+      console.log(`[cron] prune triggered at ${ts}`);
+      logEvent(env, "info", "[cron] prune triggered", { cron, ts }, "scheduler");
+      try {
+        const result = await pruneOldLogs(env, 30);
+        console.log(`[cron] prune done deleted=${result.deleted} errors=${result.errors}`);
+        logEvent(env, "info", "[cron] prune done", { deleted: result.deleted, errors: result.errors, retention_days: 30 }, "scheduler");
+      } catch (e: any) {
+        console.error(`[cron] prune failed err=${e?.message || e}`);
+        logEvent(env, "error", "[cron] prune failed", { err: e?.message || String(e) }, "scheduler");
+      }
+      return;
+    }
+
+    // 默认 = hourly process
+    console.log(`[cron] process triggered at ${ts} cron=${cron}`);
+    logEvent(env, "info", "[cron] process triggered", { cron, ts }, "scheduler");
     try {
       // fetch 自家 Worker —— 走 CF 内部 routing
       // User-Agent 用 curl/8.7.1 绕开 CF Bot Fight Mode (kzclaw 2026-06-10 确定)
@@ -87,9 +111,11 @@ export default {
       const body = await res.text();
       const elapsed = Date.now() - start;
       console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
+      logEvent(env, "info", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler");
     } catch (e: any) {
       const elapsed = Date.now() - start;
       console.error(`[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
+      logEvent(env, "error", "[cron] process failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler");
     }
   },
 };
