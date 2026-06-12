@@ -19,9 +19,10 @@ binding = "csnews_raw"
 
 [vars]
 # Worker 自身的公开 URL —— 用于 Cron Trigger 自调 process action
-# 部署时必须替换为你的真实 Worker URL (例: https://example.workers.dev)
-# 留占位符则 Worker 部署后 scheduled handler 会失败(URL 无效)
-WORKER_SELF_URL = "https://YOUR-WORKER.workers.dev"
+# kzclaw 2026-06-12 确定: 真实 URL 走 CF Secret (wrangler secret put WORKER_SELF_URL)
+# 占位符 "DO_NOT_USE" 防止 commit 5798b18 隐私坑重演 (用占位符 + 不替换 = cron 14h+ 静默)
+# 真值用 secret 注入,不入 git / 不入 OKR / 不入 commit message
+WORKER_SELF_URL = "DO_NOT_USE"
 
 # Worker 版本标识 —— ?action=health 端点返回 worker_version 字段
 # kzclaw部署新版本后手动改这里(或接 GitHub Actions 自动化)
