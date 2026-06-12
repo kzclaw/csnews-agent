@@ -679,10 +679,10 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   };
 
   // ========== 7. r2_latest_write（按 created_at 排序的真正最新 news）==========
-  // 旧实现用 list() 字典序最大 key → 2 周前的 1780049985620
-  // 修: list desc → get obj content → 看 created_at
+  // v0.36.1 旧实现 bug: list 默认升序, limit 50 全是老 obj, sort 倒序取到 5-29 范围内最大
+  // 修 v0.36.2: list 拿 1000 条 (R2 单次 list 上限) + 按 R2 key 倒序 + get obj content
   try {
-    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 50 });
+    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1000 });
     if (list.objects && list.objects.length > 0) {
       // 按 R2 key 倒序（key 含毫秒时间戳，字典序 = 时间序）
       const sorted = [...list.objects].sort((a, b) => b.key.localeCompare(a.key));
