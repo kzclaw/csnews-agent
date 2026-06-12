@@ -392,7 +392,7 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
 }
 
 // ===================== process (KR0 News Self Growth 主流程) =====================
-export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
  //Step0:清理过期话题簇(1 subrequest)
  const cleaned = await cleanupStaleTopics(env) as any;
 
@@ -537,6 +537,16 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
  });
  if (fission) console.log(`[FISSION] ${title}`);
  }
+
+  // 写 KV last_process_at (v0.36.2 kzclaw 21:18 确定: 让 health 端点 last_process_at 不再 null)
+  // 注: ctx.waitUntil 包装由 index.ts fetch handler 负责 (process 调自己 URL 时 ctx 在那里)
+  // 这里只用 env.PROCESS_STATE.put 即可 — fetch handler 在 process 返回后会 await response
+  //   → 不会 GC (因为 fetch 是 await, 等于在 waitUntil 链路上)
+  if (env.PROCESS_STATE) {
+    ctx.waitUntil(
+      env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 })
+    );
+  }
 
   return new Response(JSON.stringify({
   processed: results.length,

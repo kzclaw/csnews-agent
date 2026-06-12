@@ -57,7 +57,7 @@ export default {
  if (action === 'list') return await handleListAction(request, env, url, cors);
  if (action === 'embed') return await handleEmbedAction(request, env, url, cors);
  if (action === 'zaker-hot') return await handleZakerHotAction(request, env, url, cors);
- if (action === 'process') return await handleProcessAction(request, env, url, cors);
+  if (action === 'process') return await handleProcessAction(request, env, url, cors, ctx);
  if (action === 'health') return await handleHealthAction(request, env, url, cors);
  if (action === 'logs') return await handleLogsAction(request, env, url, cors);
  return new Response(JSON.stringify({ error: 'unknown action' }), {
