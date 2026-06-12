@@ -32,29 +32,39 @@ describe("formatLogLine", () => {
 });
 
 describe("getLogKey", () => {
-  it("返回 `logs/YYYY-MM-DD/HH.log` 格式", () => {
-    const d = new Date(Date.UTC(2026, 5, 10, 19, 0, 0));  // 2026-06-10 19:00 UTC
-    expect(getLogKey(d, 19)).toBe("logs/2026-06-10/19.log");
+  // kzclaw 2026-06-12 确定: 把颗粒度做细 (v0.36)
+  // 旧签名 getLogKey(date, hour) → 新签名 getLogKey(date, source)
+  //   - key = logs/YYYY-MM-DD/HH/MM-SS-fff-source.log
+  //   - 每条 log 独立 R2 object, 不再被覆盖
+  it("返回 `logs/YYYY-MM-DD/HH/MM-SS-fff-source.log` 格式 (带 source)", () => {
+    const d = new Date(Date.UTC(2026, 5, 10, 19, 30, 45, 123));
+    expect(getLogKey(d, "worker")).toMatch(/^logs\/2026-06-10\/19\/30-45-123-worker\.log$/);
   });
 
-  it("hour 0 边界", () => {
-    const d = new Date(Date.UTC(2026, 5, 10, 0, 0, 0));
-    expect(getLogKey(d, 0)).toBe("logs/2026-06-10/00.log");
+  it("source 多种值 (dispatcher / scheduler)", () => {
+    const d = new Date(Date.UTC(2026, 5, 10, 19, 0, 0));
+    expect(getLogKey(d, "dispatcher")).toMatch(/dispatcher\.log$/);
+    expect(getLogKey(d, "scheduler")).toMatch(/scheduler\.log$/);
   });
 
-  it("hour 23 边界", () => {
-    const d = new Date(Date.UTC(2026, 5, 10, 23, 0, 0));
-    expect(getLogKey(d, 23)).toBe("logs/2026-06-10/23.log");
+  it("minute 边界 0-59", () => {
+    const d = new Date(Date.UTC(2026, 5, 10, 19, 0, 0));
+    expect(getLogKey(d, "w")).toMatch(/\/00-00-000-w\.log$/);
+  });
+
+  it("minute 边界 59", () => {
+    const d = new Date(Date.UTC(2026, 5, 10, 19, 59, 59, 999));
+    expect(getLogKey(d, "w")).toMatch(/\/59-59-999-w\.log$/);
   });
 
   it("date 跨月", () => {
-    const d = new Date(Date.UTC(2026, 6, 1, 0, 0, 0));  // 2026-07-01
-    expect(getLogKey(d, 0)).toBe("logs/2026-07-01/00.log");
+    const d = new Date(Date.UTC(2026, 6, 1, 0, 0, 0, 0));  // 2026-07-01
+    expect(getLogKey(d, "w")).toMatch(/^logs\/2026-07-01\//);
   });
 
   it("date 跨年", () => {
-    const d = new Date(Date.UTC(2027, 0, 1, 0, 0, 0));  // 2027-01-01
-    expect(getLogKey(d, 0)).toBe("logs/2027-01-01/00.log");
+    const d = new Date(Date.UTC(2027, 0, 1, 0, 0, 0, 0));  // 2027-01-01
+    expect(getLogKey(d, "w")).toMatch(/^logs\/2027-01-01\//);
   });
 });
 
@@ -66,13 +76,14 @@ describe("logEvent", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  it("level=info 写 R2", async () => {
+  it("level=info 写 R2 (每条 log 独立 key)", async () => {
     const put = vi.fn().mockResolvedValue(undefined);
     const env = { csnews_raw: { put } } as any;
     await logEvent(env, "info", "test info", { a: 1 });
     expect(put).toHaveBeenCalledOnce();
     const [key, body] = put.mock.calls[0];
-    expect(key).toMatch(/^logs\/\d{4}-\d{2}-\d{2}\/\d{2}\.log$/);
+    // kzclaw 2026-06-12 确定: 颗粒度做细 → key=logs/YYYY-MM-DD/HH/MM-SS-fff-source.log
+    expect(key).toMatch(/^logs\/\d{4}-\d{2}-\d{2}\/\d{2}\/\d{2}-\d{2}-\d{3}-[a-z]+\.log$/);
     const entry = JSON.parse(body.trim());
     expect(entry.level).toBe("info");
     expect(entry.msg).toBe("test info");
