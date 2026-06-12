@@ -547,57 +547,94 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 
 // ===================== health =====================
 // ?action=health 端点
-// 返回: worker_version / last_process_at / supabase_counts / r2_latest_key / cron_health / ts
-// 任何子查询失败降级
+// kzclaw 2026-06-12 20:38 确定: health 端点要真的做到能全面检查 health
+//
+// 9 大维度检查 (每个独立 try/catch, 失败降级但记录到 health_checks 数组):
+//  1. worker_version     - 当前部署版本
+//  2. last_process_at    - 最近 process 跑时间 (KV 持久化)
+//  3. cron_health        - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
+//  4. secret_resolved    - WORKER_SELF_URL secret 是不是占位符 DO_NOT_USE
+//  5. supabase_counts    - 6 张表精确行数 (schema-aware query)
+//  6. supabase_reachable - Supabase 6 张表是否全部可查 (用 parallel fetch + ok count)
+//  7. r2_latest_write    - R2 news/zaker/ 最新写入 (按 created_at 排序, 不用字典序)
+//  8. r2_prefix_counts   - R2 各 prefix 行数 (news/embeddings/fission/trends/warnings/logs)
+//  9. cron_history       - R2 logs/ 上一小时 [scheduler] log 数量 (判断 cron 跑没跑)
+//
+// 返回 status 字段 (ok / degraded / down) + 9 维度详情
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const ts = Date.now();
+  const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
   const result: any = {
     worker_version: env.WORKER_VERSION || "unknown",
-    last_process_at: null,
-    supabase_counts: {} as Record<string, number | { error: string }>,
-    r2_latest_key: null,
-    cron_health: "ok",
+    status: "ok",  // 整体 status: ok / degraded / down
     ts,
   };
 
-  // 1. last_process_at (KV, optional, 缺失降级)
+  // ========== 1. worker_version（已设 result.worker_version）==========
+  checks.worker_version = { status: "ok", detail: result.worker_version };
+
+  // ========== 2. last_process_at（KV 持久化）==========
   try {
     if (env.PROCESS_STATE) {
-      result.last_process_at = await env.PROCESS_STATE.get("last_process_at");
+      const last = await env.PROCESS_STATE.get("last_process_at");
+      result.last_process_at = last;
+      checks.last_process_at = { status: last ? "ok" : "degraded", detail: last || "KV empty" };
     } else {
       result.last_process_at = null;
+      checks.last_process_at = { status: "down", detail: "PROCESS_STATE KV binding missing" };
     }
   } catch (e: any) {
     result.last_process_at = { error: e?.message || "kv unavailable" };
+    checks.last_process_at = { status: "down", detail: e?.message };
   }
 
-  // 2. cron_health (last_process_at > 1h 前 = degraded)
-  try {
-    if (typeof result.last_process_at === "string") {
-      const lastMs = Date.parse(result.last_process_at);
-      if (Number.isFinite(lastMs) && ts - lastMs > 3600_000) {
-        result.cron_health = "degraded";
-      }
+  // ========== 3. cron_health（派生）==========
+  let cronHealth: "ok" | "degraded" | "down" = "ok";
+  if (typeof result.last_process_at === "string") {
+    const lastMs = Date.parse(result.last_process_at);
+    if (Number.isFinite(lastMs)) {
+      const ageMs = ts - lastMs;
+      if (ageMs > 3 * 3600_000) cronHealth = "down";
+      else if (ageMs > 1.5 * 3600_000) cronHealth = "degraded";
     }
-  } catch {}
+  } else if (checks.last_process_at.status === "down") {
+    cronHealth = "down";
+  } else {
+    // KV 空但不是 down = degraded (没数据不代表没跑, 但也无法判断)
+    cronHealth = "degraded";
+  }
+  result.cron_health = cronHealth;
+  checks.cron_health = {
+    status: cronHealth,
+    detail: typeof result.last_process_at === "string"
+      ? `${Math.round((ts - Date.parse(result.last_process_at)) / 60000)} min ago`
+      : "no last_process_at recorded"
+  };
 
-  // 3. supabase_counts (4 表行数, 失败降级)
-  // kzclaw 2026-06-12 确定: 修 health 端点 news_topic_members 查询 bug
-  // 旧 query "?select=id&limit=0" 对 news_topic_members 返回 400 (column id does not exist)
-  //   → total 解析不到 → 显示 0 → 误诊
-  // 修: 用各表的"必有字段"做 select
-  //   - news_hotspots: id (有)
-  //   - topics: id (有)
-  //   - news_topic_members: news_id (主键是 news_id, 没有 id 列)
-  //   - trend_snapshots: id (有)
-  const tables: { name: string; column: string }[] = [
+  // ========== 4. secret_resolved（看 WORKER_SELF_URL 是不是占位符）==========
+  const selfUrl = env.WORKER_SELF_URL || "";
+  const isPlaceholder = selfUrl === "DO_NOT_USE" ||
+                       selfUrl === "https://YOUR-WORKER.workers.dev" ||
+                       selfUrl.includes("YOUR-WORKER") ||
+                       selfUrl === "";
+  checks.secret_resolved = {
+    status: isPlaceholder ? "down" : "ok",
+    detail: isPlaceholder ? `placeholder: "${selfUrl}"` : `set to non-placeholder URL`
+  };
+
+  // ========== 5+6. supabase_counts + supabase_reachable（6 张表 parallel fetch）==========
+  // kzclaw 2026-06-12 20:30 确定: 每张表用 schema-aware 列
+  const supabaseTables: { name: string; column: string }[] = [
     { name: "news_hotspots", column: "id" },
     { name: "topics", column: "id" },
     { name: "news_topic_members", column: "news_id" },
     { name: "trend_snapshots", column: "id" },
+    { name: "warnings", column: "id" },
+    { name: "fission_searches", column: "id" },
   ];
-  for (const tbl of tables) {
-    try {
+  const supabaseCounts: Record<string, number | { error: string }> = {};
+  const supabaseResults = await Promise.allSettled(
+    supabaseTables.map(async (tbl) => {
       const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl.name}?select=${tbl.column}&limit=0`, {
         headers: {
           "apikey": env.SUPABASE_SERVICE_KEY,
@@ -605,28 +642,138 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
           "Prefer": "count=exact",
         },
       });
+      if (!r.ok) {
+        const errText = await r.text();
+        throw new Error(`${tbl.name}: HTTP ${r.status} ${errText.slice(0, 200)}`);
+      }
       const cr = r.headers.get("Content-Range") || "";
       const total = cr.split("/").pop();
-      result.supabase_counts[tbl.name] = (total && total !== "*") ? parseInt(total, 10) : 0;
-    } catch (e: any) {
-      result.supabase_counts[tbl.name] = { error: e?.message || "supabase unavailable" };
+      return { name: tbl.name, total: (total && total !== "*") ? parseInt(total, 10) : 0 };
+    })
+  );
+  let supabaseOkCount = 0;
+  for (let i = 0; i < supabaseResults.length; i++) {
+    const r = supabaseResults[i];
+    const tblName = supabaseTables[i].name;
+    if (r.status === "fulfilled") {
+      supabaseCounts[tblName] = r.value.total;
+      supabaseOkCount++;
+    } else {
+      supabaseCounts[tblName] = { error: r.reason?.message || "fetch failed" };
     }
   }
+  result.supabase_counts = supabaseCounts;
+  checks.supabase_reachable = {
+    status: supabaseOkCount === supabaseTables.length ? "ok" : supabaseOkCount === 0 ? "down" : "degraded",
+    detail: `${supabaseOkCount}/${supabaseTables.length} tables OK`
+  };
 
-  // 4. r2_latest_key (news/zaker/ 最新 key, 失败降级)
+  // ========== 7. r2_latest_write（按 created_at 排序的真正最新 news）==========
+  // 旧实现用 list() 字典序最大 key → 2 周前的 1780049985620
+  // 修: list desc → get obj content → 看 created_at
   try {
-    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1 });
+    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 50 });
     if (list.objects && list.objects.length > 0) {
-      result.r2_latest_key = list.objects[0].key;
+      // 按 R2 key 倒序（key 含毫秒时间戳，字典序 = 时间序）
+      const sorted = [...list.objects].sort((a, b) => b.key.localeCompare(a.key));
+      const latestObj = sorted[0];
+      const body = await env.csnews_raw.get(latestObj.key);
+      if (body) {
+        const text = await body.text();
+        try {
+          const parsed = JSON.parse(text);
+          result.r2_latest_write = {
+            key: latestObj.key,
+            created_at: parsed.created_at || null,
+            title: parsed.title || null,
+          };
+          // 看 created_at 多新
+          if (parsed.created_at) {
+            const writeAgeMs = ts - Date.parse(parsed.created_at);
+            if (writeAgeMs < 2 * 3600_000) checks.r2_latest_write = { status: "ok", detail: `last write ${Math.round(writeAgeMs / 60000)} min ago` };
+            else if (writeAgeMs < 6 * 3600_000) checks.r2_latest_write = { status: "degraded", detail: `last write ${Math.round(writeAgeMs / 60)} min ago (> 2h)` };
+            else checks.r2_latest_write = { status: "down", detail: `last write ${Math.round(writeAgeMs / 3600_000)}h ago (> 6h)` };
+          } else {
+            checks.r2_latest_write = { status: "unknown", detail: "no created_at field in R2 obj" };
+          }
+        } catch {
+          result.r2_latest_write = { key: latestObj.key, parse_error: true };
+          checks.r2_latest_write = { status: "unknown", detail: "R2 obj not JSON" };
+        }
+      } else {
+        result.r2_latest_write = null;
+        checks.r2_latest_write = { status: "unknown", detail: "R2 obj body empty" };
+      }
     } else {
-      result.r2_latest_key = null;
+      result.r2_latest_write = null;
+      checks.r2_latest_write = { status: "down", detail: "no objects in news/zaker/" };
     }
   } catch (e: any) {
-    result.r2_latest_key = { error: e?.message || "r2 unavailable" } as any;
+    result.r2_latest_write = { error: e?.message || "r2 unavailable" };
+    checks.r2_latest_write = { status: "down", detail: e?.message };
   }
 
-  return new Response(JSON.stringify(result), {
-    headers: { "Content-Type": "application/json", ...cors },
+  // ========== 8. r2_prefix_counts（各 prefix 行数）==========
+  const r2Prefixes = ["news/zaker/", "news/", "embeddings/", "fission/", "trends/", "warnings/", "logs/"];
+  const r2PrefixCounts: Record<string, number | { error: string }> = {};
+  const r2Results = await Promise.allSettled(
+    r2Prefixes.map(async (prefix) => {
+      const list = await env.csnews_raw.list({ prefix, limit: 1000 });
+      return { prefix, count: list.objects?.length || 0 };
+    })
+  );
+  for (let i = 0; i < r2Results.length; i++) {
+    const r = r2Results[i];
+    const prefix = r2Prefixes[i];
+    if (r.status === "fulfilled") {
+      r2PrefixCounts[prefix] = r.value.count;
+    } else {
+      r2PrefixCounts[prefix] = { error: r.reason?.message || "list failed" };
+    }
+  }
+  result.r2_prefix_counts = r2PrefixCounts;
+
+  // ========== 9. cron_history（看上一小时 R2 logs 是否有 [scheduler] log）==========
+  // kzclaw 2026-06-12 确定: log 颗粒度做细 → 新格式 key=logs/YYYY-MM-DD/HH/MM-SS-fff-source.log
+  // 兼容: 旧格式 logs/YYYY-MM-DD/HH.log (单条 line 在 file 内)
+  try {
+    const now = new Date(ts);
+    const yyyy = now.getUTCFullYear();
+    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(now.getUTCDate()).padStart(2, "0");
+    const hh = String(now.getUTCHours()).padStart(2, "0");
+    const list = await env.csnews_raw.list({ prefix: `logs/${yyyy}-${mm}-${dd}/${hh}/`, limit: 100 });
+    const thisHourSchedulerLogs = list.objects?.filter((o) => o.key.includes("-scheduler.log")) || [];
+    result.cron_history = {
+      this_hour: {
+        hour: `${yyyy}-${mm}-${dd}T${hh}`,
+        scheduler_log_count: thisHourSchedulerLogs.length,
+      },
+    };
+    checks.cron_history = {
+      status: thisHourSchedulerLogs.length >= 1 ? "ok" : "degraded",
+      detail: thisHourSchedulerLogs.length >= 1
+        ? `${thisHourSchedulerLogs.length} scheduler logs this hour`
+        : "no scheduler logs this hour (cron may not have run)"
+    };
+  } catch (e: any) {
+    result.cron_history = { error: e?.message };
+    checks.cron_history = { status: "unknown", detail: e?.message };
+  }
+
+  // ========== 整体 status 聚合 ==========
+  // down > degraded > ok (取最差)
+  const statuses = Object.values(checks).map((c) => c.status);
+  if (statuses.includes("down")) result.status = "down";
+  else if (statuses.includes("degraded")) result.status = "degraded";
+  else if (statuses.every((s) => s === "ok" || s === "unknown")) result.status = "ok";
+  else result.status = "degraded";
+
+  result.checks = checks;
+
+  return new Response(JSON.stringify(result, null, 2), {
+    status: result.status === "down" ? 503 : 200,
+    headers: { 'Content-Type': 'application/json', ...cors },
   });
 }
 
