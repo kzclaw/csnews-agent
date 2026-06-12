@@ -661,13 +661,28 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
     });
   }
 
-  // 3. R2 list + 读 hour 文件
+  // 3. R2 list + 读 log entries
+  // kzclaw 2026-06-12 确定: log 颗粒度做细 (v0.36)
+  // 旧设计: 1 小时 1 个 file (key=logs/YYYY-MM-DD/HH.log) → put 覆盖丢失
+  // 新设计: 每条 log 1 个 file (key=logs/YYYY-MM-DD/HH/MM-SS-fff-{source}.log)
+  //   - 改用 prefix=logs/YYYY-MM-DD/ 列出当天所有 hour 子目录
+  //   - 每个 hour 子目录下 MM-SS-fff-*.log 是单条 log
+  //   - 用 obj.key 路径分段过滤 hour
   let entries: any[] = [];
   try {
     const prefix = `logs/${date}/`;
-    const list = await env.csnews_raw.list({ prefix, limit: 24 });
+    const list = await env.csnews_raw.list({ prefix, limit: 1000 });
     for (const obj of list.objects) {
-      if (hour !== null && !obj.key.endsWith(`/${String(hour).padStart(2, "0")}.log`)) continue;
+      // 旧格式兼容: HH.log (无子目录)
+      if (/^\d{2}\.log$/.test(obj.key.split("/").pop() || "")) {
+        if (hour !== null && !obj.key.endsWith(`/${String(hour).padStart(2, "0")}.log`)) continue;
+      } else {
+        // 新格式: HH/MM-SS-fff-source.log
+        const parts = obj.key.split("/");
+        if (parts.length < 3) continue;
+        const hh = parts[parts.length - 2];
+        if (hour !== null && hh !== String(hour).padStart(2, "0")) continue;
+      }
       const body = await env.csnews_raw.get(obj.key);
       if (!body) continue;
       const text = await body.text();
@@ -683,7 +698,7 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
     }
   } catch (e: any) {
     return new Response(JSON.stringify({ error: "r2 unavailable", detail: e?.message || String(e) }), {
-      status: 503, headers: { "Content-Type": "application/json", ...cors },
+      status: 503, headers: { 'Content-Type': 'application/json', ...cors },
     });
   }
 
