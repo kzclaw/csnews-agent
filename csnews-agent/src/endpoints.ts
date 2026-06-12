@@ -582,10 +582,23 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   } catch {}
 
   // 3. supabase_counts (4 表行数, 失败降级)
-  const tables = ["news_hotspots", "topics", "news_topic_members", "trend_snapshots"];
+  // kzclaw 2026-06-12 确定: 修 health 端点 news_topic_members 查询 bug
+  // 旧 query "?select=id&limit=0" 对 news_topic_members 返回 400 (column id does not exist)
+  //   → total 解析不到 → 显示 0 → 误诊
+  // 修: 用各表的"必有字段"做 select
+  //   - news_hotspots: id (有)
+  //   - topics: id (有)
+  //   - news_topic_members: news_id (主键是 news_id, 没有 id 列)
+  //   - trend_snapshots: id (有)
+  const tables: { name: string; column: string }[] = [
+    { name: "news_hotspots", column: "id" },
+    { name: "topics", column: "id" },
+    { name: "news_topic_members", column: "news_id" },
+    { name: "trend_snapshots", column: "id" },
+  ];
   for (const tbl of tables) {
     try {
-      const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl}?select=id&limit=0`, {
+      const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl.name}?select=${tbl.column}&limit=0`, {
         headers: {
           "apikey": env.SUPABASE_SERVICE_KEY,
           "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
@@ -594,9 +607,9 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
       });
       const cr = r.headers.get("Content-Range") || "";
       const total = cr.split("/").pop();
-      result.supabase_counts[tbl] = (total && total !== "*") ? parseInt(total, 10) : 0;
+      result.supabase_counts[tbl.name] = (total && total !== "*") ? parseInt(total, 10) : 0;
     } catch (e: any) {
-      result.supabase_counts[tbl] = { error: e?.message || "supabase unavailable" };
+      result.supabase_counts[tbl.name] = { error: e?.message || "supabase unavailable" };
     }
   }
 
