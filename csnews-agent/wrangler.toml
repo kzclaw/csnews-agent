@@ -17,6 +17,11 @@ binding = "AI"
 [[r2_buckets]]
 binding = "csnews_raw"
 
+[[kv_namespaces]]
+binding = "PROCESS_STATE"
+id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
+preview_id = "c8b14c901b114f32aa5903a2d733ff91"
+
 [vars]
 # kzclaw 2026-06-12 确定: WORKER_SELF_URL 真值走 CF Secret
 # (wrangler secret put WORKER_SELF_URL) — 不入 wrangler.toml / 不入 git
@@ -26,7 +31,7 @@ binding = "csnews_raw"
 # Worker 版本标识 —— ?action=health 端点返回 worker_version 字段
 # kzclaw部署新版本后手动改这里(或接 GitHub Actions 自动化)
 # 默认值: v0.34.0-dev (本次 5 步实施基线, 部署后由kzclaw决定升级)
-WORKER_VERSION = "v0.34.0-dev"
+WORKER_VERSION = "v0.36.2"
 
 # 每小时整点(UTC)跑一次 process action
 # 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions
