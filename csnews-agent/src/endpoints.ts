@@ -538,14 +538,11 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
  if (fission) console.log(`[FISSION] ${title}`);
  }
 
-  // 写 KV last_process_at (v0.36.2 kzclaw 21:18 确定: 让 health 端点 last_process_at 不再 null)
-  // 注: ctx.waitUntil 包装由 index.ts fetch handler 负责 (process 调自己 URL 时 ctx 在那里)
-  // 这里只用 env.PROCESS_STATE.put 即可 — fetch handler 在 process 返回后会 await response
-  //   → 不会 GC (因为 fetch 是 await, 等于在 waitUntil 链路上)
+  // 写 KV last_process_at (v0.36.4 修: ctx.waitUntil → await)
+  // scheduled handler 调 fetch(url) → handleProcessAction → fetch 的 ctx.waitUntil 在 fetch 返回后可能被 GC
+  // 改 await: handleProcessAction 是 batch endpoint, 多 50ms 无感, 但保证写完才 return
   if (env.PROCESS_STATE) {
-    ctx.waitUntil(
-      env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 })
-    );
+    await env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 });
   }
 
   return new Response(JSON.stringify({
