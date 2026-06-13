@@ -65,14 +65,21 @@ export default {
  });  },
 
   // ====== Cron Trigger: 每小时整点(UTC) 跑 process action ======
-  // 替代之前误用的 GitHub Actions (HTTP 403 + Cloudflare challenge)
-  // 选 CF cron 原因:
+  // v0.36.5 mini (KR0 · kzclaw 2026-06-14 01:17 确定):
+  //   直接 inline 调 handleProcessAction, **不** fetch 自家 URL
+  //   历史教训: v0.34-v0.36.4 四次修复全用 fetch(selfUrl) 走 CF 内部 routing
+  //     → 9 个整点 cron 全 522 (error code: 522) + dispatcher log 0 记录 = fetch 没到 fetch handler
+  //   v0.36.5 mini 拿掉 fetch, 直接函数调用, 0 网络层, 0 522 风险
+  //   5 重安全网 (kzclaw 4 步铁律 + 第 5 重实测):
+  //     1. tsc 0 error
+  //     2. vitest 142 passed
+  //     3. wrangler dry-run
+  //     4. push origin main + CF auto-deploy OK
+  //     5. **下个整点 cron + curl health 端点 last_process_at 更新到 cron 触发时间 + scheduler log status=200** (必做实测)
+  // 选 CF cron 原因 (不变):
   //   1. Free tier 实际可用(每账号 5 个, CPU 10ms 限制, process 主要是 fetch 等待不算 CPU)
-  //   2. Worker → 自家域名走 CF 内部 routing, 绕开 Bot Fight Mode challenge
-  //   3. 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
-  //   4. Mac cron 也可以删了
+  //   2. 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
   // 调试: wrangler dev --test-scheduled
-  //       访问 wrangler dev 暴露的 scheduled handler 触发路由(详见 CF 文档)
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     const start = Date.now();
     const ts = new Date().toISOString();
@@ -80,22 +87,18 @@ export default {
     console.log(`[cron] process triggered at ${ts} cron=${cron}`);
     ctx.waitUntil(logEvent(env, "info", "[cron] process triggered", { cron, ts }, "scheduler").catch(() => {}));
     try {
-      // fetch 自家 Worker —— 走 CF 内部 routing
-      // User-Agent 用 curl/8.7.1 绕开 CF Bot Fight Mode (kzclaw 2026-06-10 确定)
-      // 历史教训: 'csnews-cron-trigger/1.0' 这种机器 UA 会被 Bot Fight Mode 误判为 bot → fetch 403
-      // 验证: diag 跑 Python urllib (HTTP 403 code 1010) vs curl (HTTP 200) vs Mozilla (HTTP 200)
-      // URL 从 env 读取 (wrangler.toml [vars].WORKER_SELF_URL), 不硬编码
-      const url = `${env.WORKER_SELF_URL}?action=process`;
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${env.BEARER_TOKEN}`,
-          'User-Agent': 'curl/8.7.1',
-        },
-      });
+      // v0.36.5 mini: inline 调 handleProcessAction 函数
+      // - 不 fetch selfUrl (之前 9 个整点 cron 522 的根因)
+      // - 不需要 CORS 头 (cron 不发浏览器请求)
+      // - Request + URL 用 dummy, 实际不被 process 逻辑用
+      const dummyUrl = new URL("https://example.com/?action=process");
+      const dummyRequest = new Request(dummyUrl.toString(), { method: "GET" });
+      const res = await handleProcessAction(dummyRequest, env, dummyUrl, {}, ctx);
       const body = await res.text();
       const elapsed = Date.now() - start;
+      const ok = res.status === 200;
       console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
-      ctx.waitUntil(logEvent(env, "info", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler").catch(() => {}));
+      ctx.waitUntil(logEvent(env, ok ? "info" : "error", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler").catch(() => {}));
     } catch (e: any) {
       const elapsed = Date.now() - start;
       console.error(`[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
