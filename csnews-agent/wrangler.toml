@@ -31,7 +31,7 @@ preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 # Worker 版本标识 —— ?action=health 端点返回 worker_version 字段
 # kzclaw 2026-06-12 21:40 确定 v0.36.3: pre-commit hook (scripts/bump-version.sh) 自动注入 git commit 短 hash
 # kzclaw不再手改本字段 — commit 时 hook 自动 = git rev-parse --short HEAD
-WORKER_VERSION = "d51de0e"
+WORKER_VERSION = "d422ba9"
 
 # 每小时整点(UTC)跑一次 process action
 # 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions
