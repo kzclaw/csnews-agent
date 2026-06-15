@@ -50,4 +50,5 @@ csnews-agent/coverage/
 # Local Spec Kit scaffolding and agent instructions
 .agents/
 .specify/
-AGENTS.md
+# AGENTS.md: Spec Kit standard context 文档 (v0.36.9 KR0 实施 · 戴大确定) - 入库
+# (原 v0.33 确定 ignore, v0.36.9 确定入库 - 戴大确定)
