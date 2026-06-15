@@ -16,6 +16,7 @@ import { logEvent } from './log';
 import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES } from './content-validation';
 import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKeyForIp, dailyHitsKeyForToday as trendHitsKeyForToday, RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as TREND_PAYLOAD_LIMIT_BYTES } from './trend-validation';
 import { validateType as knowledgeValidateType, validateSince as knowledgeValidateSince, validateLimit as knowledgeValidateLimit, validateTopicId, rateKeyForIp as knowledgeRateKeyForIp, dailyHitsKeyForToday as knowledgeHitsKeyForToday, RATE_LIMIT_PER_MIN as KNOWLEDGE_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES, knowledgeR2Key, KNOWLEDGE_INDEX_KEY } from './knowledge-validation';
+import { countAnomalySignals, Z_THRESHOLD, ZSCORE_REASON_PREFIX } from './zscore';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -769,6 +770,53 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   } catch (e: any) {
     result.cron_history = { error: e?.message };
     checks.cron_history = { status: "unknown", detail: e?.message };
+  }
+
+  // ========== 10. zscore_signals_today (KR0+1 · 蓝图 2.5 公式 · v0.36.8) ==========
+  // 0 DDL: 从 trend_snapshots 拉 last 7d 算 z-score > 3 的 topic 数
+  // kzclaw OKR KR0+1 确定: "z-score 异常信号 30 天内累计 ≥ 5 条" 指标
+  // kzclaw 5h 配额期"快赢" v2 修订: 推迟到下个 5h 配额期kzclaw起床拍 schema migration 时集成到 record_trend_snapshot RPC
+  // kzclaw 5h 配额期 04:39 确定"0 确定点, 蓝图公式已定, 直接推"
+  try {
+    const sevenDaysAgo = new Date(ts - 7 * 24 * 3600 * 1000).toISOString();
+    const snapshotsRes = await supabaseFetch(env, `/rest/v1/trend_snapshots?select=id,topic_id,score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`);
+    const snapshots = (await safeJson(snapshotsRes) as any[]) || [];
+
+    let totalAnomalies = 0;
+    const anomaliesByField: Record<string, number> = { score: 0, velocity: 0, acceleration: 0 };
+    if (snapshots.length >= 2) {
+      // 按 topic_id 分组, 对每个 topic 算 z-score
+      const byTopic: Record<string, any[]> = {};
+      for (const s of snapshots) {
+        if (!s.topic_id) continue;
+        if (!byTopic[s.topic_id]) byTopic[s.topic_id] = [];
+        byTopic[s.topic_id].push(s);
+      }
+      for (const topicSnapshots of Object.values(byTopic)) {
+        if (topicSnapshots.length < 2) continue;
+        for (const field of ['score', 'velocity', 'acceleration'] as const) {
+          const count = countAnomalySignals(topicSnapshots, field);
+          anomaliesByField[field] += count;
+          totalAnomalies += count;
+        }
+      }
+    }
+
+    result.zscore_signals_today = {
+      total_7d: totalAnomalies,
+      by_field_7d: anomaliesByField,
+      snapshots_analyzed: snapshots.length,
+      window: '7d',
+    };
+    checks.zscore_signals_today = {
+      status: "ok",  // 0 = 正常 (新功能, 没异常是 expected)
+      detail: totalAnomalies > 0
+        ? `${totalAnomalies} z-score anomalies in last 7d (${JSON.stringify(anomaliesByField)})`
+        : `0 anomalies in last 7d (algorithm ready, kzclaw起床 review)`,
+    };
+  } catch (e: any) {
+    result.zscore_signals_today = { error: e?.message || "zscore calc failed" };
+    checks.zscore_signals_today = { status: "unknown", detail: e?.message };
   }
 
   // ========== 整体 status 聚合 ==========
