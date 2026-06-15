@@ -1130,7 +1130,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     if (topics && topics.length > 0) {
       // 对每个 topic 计算 since 之后的 news count
       items = await Promise.all(topics.map(async (t) => {
-        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
+        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
         // 用 head 模式拿 total (PostgREST Content-Range)
         const totalHeader = countRes.headers.get('content-range');
         const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
@@ -1154,7 +1154,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         // 1h 增量: news_topic_members joined_at >= sinceTime - 1h
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
         const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // since 总数: news_topic_members joined_at >= since
         const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
