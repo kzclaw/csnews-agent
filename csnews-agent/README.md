@@ -220,6 +220,7 @@ wrangler deploy --dry-run        # dry-run 部署
 ## 📚 相关链接
 
 - [📖 仓库根 README](../README.md)
+- [🤖 AGENTS.md](./AGENTS.md) — AI Agent 接项目标准 context 文档
 - [☁️ Cloudflare Workers 文档](https://developers.cloudflare.com/workers/)
 - [🗄️ Supabase 文档](https://supabase.com/docs)
 
