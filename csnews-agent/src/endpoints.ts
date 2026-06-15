@@ -17,6 +17,7 @@ import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeH
 import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKeyForIp, dailyHitsKeyForToday as trendHitsKeyForToday, RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as TREND_PAYLOAD_LIMIT_BYTES } from './trend-validation';
 import { validateType as knowledgeValidateType, validateSince as knowledgeValidateSince, validateLimit as knowledgeValidateLimit, validateTopicId, rateKeyForIp as knowledgeRateKeyForIp, dailyHitsKeyForToday as knowledgeHitsKeyForToday, RATE_LIMIT_PER_MIN as KNOWLEDGE_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES, knowledgeR2Key, KNOWLEDGE_INDEX_KEY } from './knowledge-validation';
 import { countAnomalySignals, Z_THRESHOLD, ZSCORE_REASON_PREFIX } from './zscore';
+import { getBudgetStatus } from './ai-budget';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -817,6 +818,27 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   } catch (e: any) {
     result.zscore_signals_today = { error: e?.message || "zscore calc failed" };
     checks.zscore_signals_today = { status: "unknown", detail: e?.message };
+  }
+
+  // ========== 11. ai_budget_today (KR0+1 · 蓝图 2.9 · v0.36.9) ==========
+  // 复用 ai-budget.ts getBudgetStatus，0 新逻辑
+  try {
+    const budget = await getBudgetStatus(env);
+    result.ai_budget_today = {
+      used: budget.used,
+      tier: budget.tier,
+      remaining: budget.remaining,
+      quota: budget.quota,
+    };
+    checks.ai_budget_today = {
+      status: budget.tier === 'shutdown' ? 'down'
+        : budget.tier === 'critical' ? 'degraded'
+        : 'ok',
+      detail: `daily used: ${budget.used} / ${budget.quota} (${budget.tier})`,
+    };
+  } catch (e: any) {
+    result.ai_budget_today = { error: e?.message || "ai_budget calc failed" };
+    checks.ai_budget_today = { status: "unknown", detail: e?.message };
   }
 
   // ========== 整体 status 聚合 ==========
