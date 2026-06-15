@@ -5,7 +5,7 @@
 // 通用 pull 在独立 pull.ts
 // 新增 health + logs 端点 (Worker 可观测性)
 // 详见：tasks/csnews-agent-okr.md (本地私密 OKR 文档, 不入库)
-import { Env, getSupabaseHost } from './shared';
+import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { NewsItem } from './types';
 import { handlePull } from './pull';
 import { corsHeaders } from './auth';
@@ -13,6 +13,7 @@ import { classify, classifyByAI, classifyRule } from './classify';
 import { scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD, hashStr } from './score';
 import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, saveToR2, joinTopicMember } from './news-process';
 import { logEvent } from './log';
+import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES } from './content-validation';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -885,5 +886,176 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
     items,
   }), {
     headers: { "Content-Type": "application/json", ...cors },
+  });
+}
+
+// ===================== content (KR0 R2 全文内容读取端点 · v0.36.6) =====================
+// 用途：消费者（kzclaw 推送 / 第三方 IM 转发）从 R2 拿 news_hotspots 关联的摘要 + 原始 URL
+// v0.36.6 方案 A 范围（kzclaw 2026-06-16 02:56 确定 + main session 推荐 A）：
+//   - 不动 news-process.ts 写路径（0 风险）
+//   - 不 fetch 正文（留给 KR0 = process 加 fetch 详情页存 R2 content 字段，等 KR0 异步化后做）
+//   - 端点返 R2 真实存的 9 字段 + Supabase 关联的 url 字段
+//   - text/html/json 三档格式 (text/html 因没 content 字段, 返 '该新闻仅存摘要 + 原始 URL' 提示)
+// 反爬：单 IP 60 req/min（复用 PROCESS_STATE KV，key prefix content_rate:<ip>，TTL 60s）
+// 鉴权：index.ts fetch handler 入口已统一 authRequest, 本 handler 不重复
+// 部署边界：git push 触发 auto-deploy（v0.36.2 部署边界铁律）
+export async function handleContentAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  // 1. 输入校验 (业务红线)
+  const id = url.searchParams.get('id') || '';
+  const idValidation = validateId(id);
+  if (!idValidation.ok) {
+    return new Response(JSON.stringify({ error: idValidation.error, reason: idValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  const format = (url.searchParams.get('format') || 'json').toLowerCase();
+  const formatValidation = validateFormat(format);
+  if (!formatValidation.ok) {
+    return new Response(JSON.stringify({ error: formatValidation.error, reason: formatValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 2. 反爬限流 (单 IP 60 req/min, 复用 PROCESS_STATE KV)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const rateKey = rateKeyForIp(ip);
+  if (env.PROCESS_STATE) {
+    try {
+      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
+      if (cur >= RATE_LIMIT_PER_MIN) {
+        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
+          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+        });
+      }
+      // 计数 +1 (TTL 60s 滚动窗口)
+      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
+    } catch {
+      // 限流检查失败不阻塞主流程 (KV 临时不可用降级为不限流)
+    }
+  }
+
+  // 3. Supabase 查 news_hotspots (拿 url + r2_key + 基础摘要)
+  const newsRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${id}&select=id,title,url,source,category,hot_score,score,level,topic_id,r2_key,created_at&limit=1`);
+  const newsData = await safeJson(newsRes) as any[];
+  if (!newsData || newsData.length === 0) {
+    return new Response(JSON.stringify({ error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` }), {
+      status: 404, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const news = newsData[0];
+
+  // 4. R2 拿 content (按 news.r2_key)
+  let r2Data: any = null;
+  let r2Error: string | null = null;
+  if (news.r2_key) {
+    try {
+      const obj = await env.csnews_raw.get(news.r2_key);
+      if (obj) {
+        const text = await obj.text();
+        r2Data = JSON.parse(text);
+      } else {
+        r2Error = 'r2_key_found_but_object_missing';
+      }
+    } catch (e: any) {
+      r2Error = `r2_read_failed: ${e?.message || e}`;
+    }
+  } else {
+    r2Error = 'no_r2_key';
+  }
+
+  // 5. 大小限制 (单条 ≤ PAYLOAD_LIMIT_BYTES)
+  const contentLength = r2Data ? JSON.stringify(r2Data).length : 0;
+  if (contentLength > PAYLOAD_LIMIT_BYTES) {
+    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `R2 content > ${PAYLOAD_LIMIT_BYTES} bytes, 请用 format=ids 分页` }), {
+      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 6. 监控计数 (r2_content_endpoint_hits_24h) - 复用 PROCESS_STATE
+  if (env.PROCESS_STATE) {
+    try {
+      const counterKey = dailyHitsKeyForToday();
+      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
+      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
+    } catch {
+      // 监控失败不阻塞
+    }
+  }
+
+  // 7. 按 format 渲染响应
+  if (format === 'json') {
+    // 合并 Supabase 字段 + R2 字段 (R2 字段加 r2_ 前缀避免冲突)
+    const responseBody = {
+      id: news.id,
+      title: news.title,
+      url: news.url,
+      source: news.source,
+      category: news.category,
+      hot_score: news.hot_score,
+      score: news.score,
+      level: news.level,
+      topic_id: news.topic_id,
+      created_at: news.created_at,
+      // R2 实际存的字段
+      r2: r2Data ? {
+        key: news.r2_key,
+        title: r2Data.title,
+        category: r2Data.category,
+        score: r2Data.score,
+        level: r2Data.level,
+        topic_id: r2Data.topic_id,
+        fission: r2Data.fission,
+        created_at: r2Data.created_at,
+        content_length: contentLength,
+      } : null,
+      // 关键提示：R2 没存正文, 消费者想发全文用 url 跳到原始页面
+      ...(r2Error ? { notice: `该新闻仅存摘要 + 原始 URL · R2 不存正文 (原因: ${r2Error}) · 全文请访问 ${news.url}` } : {}),
+    };
+    return new Response(JSON.stringify(responseBody), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (format === 'text') {
+    // text 格式: 没有 content 字段, 返提示 + URL
+    const lines: string[] = [];
+    lines.push(`标题: ${news.title}`);
+    lines.push(`来源: ${news.source} · ${news.category || '未知分类'}`);
+    lines.push(`热度: hot_score=${news.hot_score ?? '?'} score=${news.score ?? '?'} level=${news.level ?? '?'}`);
+    if (news.topic_id) lines.push(`话题: ${news.topic_id}`);
+    lines.push(`入库时间: ${news.created_at}`);
+    if (r2Data) {
+      lines.push('');
+      lines.push(`R2 摘要 (key=${news.r2_key}):`);
+      lines.push(JSON.stringify(r2Data, null, 2));
+    }
+    lines.push('');
+    lines.push(`⚠️ 该新闻仅存摘要, R2 不存正文 (原因: ${r2Error || 'N/A'})`);
+    lines.push(`全文请访问: ${news.url}`);
+    return new Response(lines.join('\n'), {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors },
+    });
+  }
+
+  // format === 'html'
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(news.title || '')}</title>
+</head>
+<body>
+<h1>${escapeHtml(news.title || '')}</h1>
+<p><strong>来源:</strong> ${escapeHtml(news.source || '?')} · ${escapeHtml(news.category || '未知分类')}</p>
+<p><strong>热度:</strong> hot_score=${news.hot_score ?? '?'} · score=${news.score ?? '?'} · level=${escapeHtml(news.level || '?')}</p>
+<p><strong>入库时间:</strong> ${escapeHtml(news.created_at || '')}</p>
+${r2Data ? `<pre>${escapeHtml(JSON.stringify(r2Data, null, 2))}</pre>` : ''}
+<p style="color:#888">⚠️ 该新闻仅存摘要, R2 不存正文 (原因: ${escapeHtml(r2Error || 'N/A')})<br>
+全文请访问: <a href="${escapeHtml(news.url || '#')}">${escapeHtml(news.url || '')}</a></p>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors },
   });
 }

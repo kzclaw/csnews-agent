@@ -8,7 +8,7 @@
  */
 import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
-import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction } from './endpoints';
+import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction, handleContentAction } from './endpoints';
 import { logEvent } from './log';
 
 // ============================================================
@@ -58,9 +58,10 @@ export default {
  if (action === 'embed') return await handleEmbedAction(request, env, url, cors);
  if (action === 'zaker-hot') return await handleZakerHotAction(request, env, url, cors);
   if (action === 'process') return await handleProcessAction(request, env, url, cors, ctx);
- if (action === 'health') return await handleHealthAction(request, env, url, cors);
- if (action === 'logs') return await handleLogsAction(request, env, url, cors);
- return new Response(JSON.stringify({ error: 'unknown action' }), {
+  if (action === 'health') return await handleHealthAction(request, env, url, cors);
+  if (action === 'logs') return await handleLogsAction(request, env, url, cors);
+  if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
+  return new Response(JSON.stringify({ error: 'unknown action' }), {
  status:400, headers: { 'Content-Type': 'application/json', ...cors }
  });  },
 
