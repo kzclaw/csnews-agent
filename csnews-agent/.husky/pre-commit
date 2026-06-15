@@ -1,0 +1,13 @@
+#!/bin/sh
+# CSNEWS Agent · pre-commit hook (v0.36.8 · KR0)
+# 业务契约验证：只跑 validate/*.contract.ts，不跑 test/*.test.ts
+# 5 重安全网第 1 环：commit 前确保契约全绿
+echo "[KR0 pre-commit] Running vitest contract validation..."
+npx vitest run --reporter=default
+result=$?
+if [ $result -ne 0 ]; then
+  echo "[KR0 pre-commit] FAILED - fix contracts before committing"
+  exit 1
+fi
+echo "[KR0 pre-commit] All contracts passed ✓"
+exit 0

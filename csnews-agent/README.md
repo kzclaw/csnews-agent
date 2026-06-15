@@ -8,6 +8,7 @@
 
 [![License](https://img.shields.io/github/license/kzclaw/csnews-agent?style=flat-square)](../../)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![vitest](https://img.shields.io/badge/vitest-313%20contracts-4DB899?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
 [![CF Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
 [![Cron](https://img.shields.io/badge/cron-hourly-2EA44F?style=flat-square&logo=clockify&logoColor=white)](#-定时任务)
 
