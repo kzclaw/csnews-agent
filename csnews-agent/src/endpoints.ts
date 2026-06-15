@@ -1154,7 +1154,11 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         // 1h 增量: news_topic_members joined_at >= sinceTime - 1h
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+        // acceleration 用 now-1h / now-2h (不要用 since-1h / since-2h, since 太大查询范围大且跟 velocity 重复)
+        const nowMs = Date.now();
+        const nowMinus1h = new Date(nowMs - 3600 * 1000);
+        const nowMinus2h = new Date(nowMs - 7200 * 1000);
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
         const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // since 总数: news_topic_members joined_at >= since
         const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
@@ -1181,11 +1185,15 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     const topics = await safeJson(topicsRes) as any[];
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
+        // acceleration 用 now-1h / now-2h (不要用 since-1h / since-2h, since 太大查询范围大且跟 velocity 重复)
+        const nowMs = Date.now();
+        const nowMinus1h = new Date(nowMs - 3600 * 1000);
+        const nowMinus2h = new Date(nowMs - 7200 * 1000);
         // 1h 增量 (last 1h)
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
         const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // 2h 增量 (between 2h ago and 1h ago)
-        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
+        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus2h.toISOString()}&joined_at=lt.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
         const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // acceleration = last1h - between1h2h (正=加速, 负=减速)
         const acceleration = last1hTotal - between1h2hTotal;
