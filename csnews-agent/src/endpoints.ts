@@ -15,6 +15,7 @@ import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnaps
 import { logEvent } from './log';
 import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES } from './content-validation';
 import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKeyForIp, dailyHitsKeyForToday as trendHitsKeyForToday, RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as TREND_PAYLOAD_LIMIT_BYTES } from './trend-validation';
+import { validateType as knowledgeValidateType, validateSince as knowledgeValidateSince, validateLimit as knowledgeValidateLimit, validateTopicId, rateKeyForIp as knowledgeRateKeyForIp, dailyHitsKeyForToday as knowledgeHitsKeyForToday, RATE_LIMIT_PER_MIN as KNOWLEDGE_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES, knowledgeR2Key, KNOWLEDGE_INDEX_KEY } from './knowledge-validation';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -1240,4 +1241,258 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
   return new Response(responseStr, {
     headers: { 'Content-Type': 'application/json', ...cors },
   });
+}
+
+// ===================== knowledge (v0.36.7 · KR0 · O10 快赢) =====================
+// 快赢哲学 (5h 配额期 routine 协调授权):
+//   - 不新建 Supabase 表 (避免5h 配额期起床跑 SQL Editor)
+//   - knowledge 数据全在 R2 持久化 (早晨日报金句入口)
+//   - 累积 job 在 cron inline 跑, 遍历 active topics → 写 knowledge/yyyymm/<topic_id>-<ts>.md
+//   - 端点读 R2 索引 + 单 topic 详情 (跟 trend endpoint 模式同款)
+export async function handleKnowledgeAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  // 1. 输入校验 (跟 trend 同款, 独立 validation import)
+  const typeValidation = knowledgeValidateType(url.searchParams.get('type'));
+  if (!typeValidation.ok) {
+    return new Response(JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const type = typeValidation.reason!;
+
+  const sinceValidation = knowledgeValidateSince(url.searchParams.get('since'));
+  if (!sinceValidation.ok) {
+    return new Response(JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const sinceIso = sinceValidation.since!;
+
+  const limitValidation = knowledgeValidateLimit(url.searchParams.get('limit'));
+  if (!limitValidation.ok) {
+    return new Response(JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const limit = limitValidation.limit;
+
+  const topicIdValidation = validateTopicId(url.searchParams.get('topic_id'), type);
+  if (!topicIdValidation.ok) {
+    return new Response(JSON.stringify({ error: topicIdValidation.error, reason: topicIdValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const topicId = topicIdValidation.topicId;
+
+  // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix) (跟 trend 同模式)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const rateKey = knowledgeRateKeyForIp(ip);
+  if (env.PROCESS_STATE) {
+    try {
+      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
+      if (cur >= KNOWLEDGE_RATE_LIMIT_PER_MIN) {
+        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${KNOWLEDGE_RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
+          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+        });
+      }
+      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
+    } catch {
+      // 限流失败不阻塞
+    }
+  }
+
+  // 3. 根据 type 查数据
+  let items: any[] = [];
+  let description = '';
+
+  if (type === 'daily') {
+    // daily: 拉 R2 knowledge 索引 (早晨日报入口)
+    // 索引路径: knowledge/_index.json (累积 job 每次写新 knowledge 记录时 append)
+    // 索引格式: [{ r2_key, topic_id, topic_key, level, score, period_start, period_end, news_count, velocity_ratio, acceleration, created_at }]
+    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
+    let allIndex: any[] = [];
+    if (indexObj) {
+      const text = await indexObj.text();
+      try {
+        allIndex = JSON.parse(text);
+        if (!Array.isArray(allIndex)) allIndex = [];
+      } catch {
+        allIndex = [];
+      }
+    }
+    // 过滤 since 之后 + 按 created_at 倒序 + 取 limit
+    const sinceMs = new Date(sinceIso).getTime();
+    items = allIndex
+      .filter((k) => k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit);
+    description = 'knowledge daily 索引 (早晨日报入口, 跨 topic 累积)';
+  } else if (type === 'topic') {
+    // topic: 拉单个 topic 的所有 knowledge 记录 (从 _index.json 过滤)
+    if (!topicId) {
+      // validateTopicId 已保证 type=topic 时 topicId 必填, 这里只是 TS narrowing
+      return new Response(JSON.stringify({ error: 'internal_logic', reason: 'topic_id 缺失 (validateTopicId 应已拦截)' }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
+    let allIndex: any[] = [];
+    if (indexObj) {
+      const text = await indexObj.text();
+      try {
+        allIndex = JSON.parse(text);
+        if (!Array.isArray(allIndex)) allIndex = [];
+      } catch {
+        allIndex = [];
+      }
+    }
+    const sinceMs = new Date(sinceIso).getTime();
+    items = allIndex
+      .filter((k) => k?.topic_id === topicId)
+      .filter((k) => k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit);
+    description = `knowledge topic 详情 (topic_id=${topicId}, 累积的所有 knowledge 记录)`;
+  }
+
+  // 4. 大小限制 (跟 trend 同款)
+  const responseBody = {
+    type,
+    since: sinceIso,
+    description,
+    count: items.length,
+    limit,
+    topic_id: topicId || null,
+    items,
+  };
+  const responseStr = JSON.stringify(responseBody);
+  if (responseStr.length > KNOWLEDGE_PAYLOAD_LIMIT_BYTES) {
+    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `knowledge response > ${KNOWLEDGE_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小` }), {
+      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 5. 监控计数 (跟 trend 同模式, 独立 prefix)
+  if (env.PROCESS_STATE) {
+    try {
+      const counterKey = knowledgeHitsKeyForToday();
+      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
+      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
+    } catch {
+      // 监控失败不阻塞
+    }
+  }
+
+  return new Response(responseStr, {
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
+}
+
+// ===================== runKnowledgeAccumulation (v0.36.7 · KR0 · cron inline 调用) =====================
+// 快赢哲学: 整点 process 跑完调, 遍历 active topics → 累积 24h trend → 写 1 条 knowledge 记录
+// 不调 LLM, 纯 SQL + 模板 + R2 only (0 Supabase DDL, 0 5h 配额期打扰)
+export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext): Promise<{ written: number; errors: number }> {
+  let written = 0;
+  let errors = 0;
+  try {
+    // 1. 拉所有 active topics (跟 trend 同款, last_active_at desc, limit 50 = 早晨日报默认覆盖)
+    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=50`);
+    const topics = await safeJson(topicsRes) as any[];
+    if (!topics || topics.length === 0) {
+      return { written: 0, errors: 0 };
+    }
+
+    // 2. 对每个 topic 累积 24h 趋势数据 (复用 trend endpoint 的 since-1h / since-24h 模式)
+    const sinceIso = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const oneHourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
+    const twoHourAgo = new Date(Date.now() - 7200 * 1000).toISOString();
+
+    // 3. 读 R2 索引 (累积分页查询用)
+    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
+    let allIndex: any[] = [];
+    if (indexObj) {
+      const text = await indexObj.text();
+      try {
+        allIndex = JSON.parse(text);
+        if (!Array.isArray(allIndex)) allIndex = [];
+      } catch {
+        allIndex = [];
+      }
+    }
+
+    // 4. 累积每个 topic
+    for (const t of topics) {
+      try {
+        // 4.1 24h news count
+        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+        const since24hTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // 4.2 1h 增量
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // 4.3 2h 增量 (跟 trend acceleration 同款)
+        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo}&joined_at=lt.${oneHourAgo}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+        const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // 4.4 计算 velocity + acceleration
+        const hourlyAvg = since24hTotal / 24;
+        const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
+        const acceleration = last1hTotal - between1h2hTotal;
+
+        // 4.5 写 R2 knowledge Markdown (早晨日报金句)
+        const ts = new Date();
+        const r2Key = knowledgeR2Key(t.id, ts);
+        const markdown = `# ${t.topic_key}\n\n` +
+          `> 累积时间: ${ts.toISOString()}\n` +
+          `> 等级: ${t.level} · 分数: ${t.score}\n\n` +
+          `## 24h 累积数据\n\n` +
+          `- **24h 新闻数**: ${since24hTotal}\n` +
+          `- **1h 增量**: ${last1hTotal}\n` +
+          `- **2h 增量**: ${between1h2hTotal}\n` +
+          `- **24h 均值 (per hour)**: ${Math.round(hourlyAvg * 100) / 100}\n` +
+          `- **Velocity Ratio** (1h / 24h均值): ${Math.round(velocityRatio * 100) / 100}\n` +
+          `- **Acceleration** (1h - 2h): ${acceleration}\n\n` +
+          `## 趋势判定\n\n` +
+          `- **Velocity Trend**: ${velocityRatio > 2 ? '🔥 explosive' : velocityRatio > 1 ? '📈 rising' : velocityRatio < 0.5 ? '📉 declining' : '➡️ stable'}\n` +
+          `- **Acceleration Trend**: ${acceleration > 0 ? '⚡ accelerating' : acceleration < 0 ? '🐌 decelerating' : '⚖️ stable'}\n\n` +
+          `## 早晨金句模板 (待 KR0+1 接 AI 摘要)\n\n` +
+          `_本 topic 在过去 24h 累积 ${since24hTotal} 条新闻, 1h 增量 ${last1hTotal} (${velocityRatio > 1 ? '高于' : '低于'} 24h 均值 ${Math.round(hourlyAvg * 100) / 100}), ` +
+          `${acceleration > 0 ? '呈加速上升' : acceleration < 0 ? '呈减速下降' : '保持稳定'}._\n`;
+        await env.csnews_raw.put(r2Key, markdown, { httpMetadata: { contentType: 'text/markdown' } });
+
+        // 4.6 append 索引 (9:00 起床看 1 个 GET 拿所有 knowledge 索引)
+        const indexEntry = {
+          r2_key: r2Key,
+          topic_id: t.id,
+          topic_key: t.topic_key,
+          level: t.level,
+          score: t.score,
+          period_start: sinceIso,
+          period_end: ts.toISOString(),
+          news_count: since24hTotal,
+          velocity_ratio: Math.round(velocityRatio * 100) / 100,
+          acceleration: acceleration,
+          created_at: ts.toISOString(),
+        };
+        allIndex.push(indexEntry);
+        written++;
+      } catch (e: any) {
+        errors++;
+        console.error(`[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`);
+      }
+    }
+
+    // 5. 写 R2 索引 (累积分页查询用, 早晨日报入口)
+    if (written > 0) {
+      // 限制索引大小 (保留最近 1000 条, 避免索引无限增长)
+      if (allIndex.length > 1000) {
+        allIndex = allIndex
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 1000);
+      }
+      await env.csnews_raw.put(KNOWLEDGE_INDEX_KEY, JSON.stringify(allIndex), { httpMetadata: { contentType: 'application/json' } });
+    }
+
+    return { written, errors };
+  } catch (e: any) {
+    console.error(`[knowledge] accumulation job failed: ${e?.message || e}`);
+    return { written, errors: errors + 1 };
+  }
 }

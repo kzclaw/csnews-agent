@@ -8,7 +8,7 @@
  */
 import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
-import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction, handleContentAction, handleTrendAction } from './endpoints';
+import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction, handleContentAction, handleTrendAction, handleKnowledgeAction, runKnowledgeAccumulation } from './endpoints';
 import { logEvent } from './log';
 
 // ============================================================
@@ -62,6 +62,7 @@ export default {
   if (action === 'logs') return await handleLogsAction(request, env, url, cors);
   if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
   if (action === 'trend') return await handleTrendAction(request, env, url, cors, ctx);
+  if (action === 'knowledge') return await handleKnowledgeAction(request, env, url, cors, ctx);
   return new Response(JSON.stringify({ error: 'unknown action' }), {
  status:400, headers: { 'Content-Type': 'application/json', ...cors }
  });  },
@@ -101,6 +102,21 @@ export default {
       const ok = res.status === 200;
       console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
       ctx.waitUntil(logEvent(env, ok ? "info" : "error", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler").catch(() => {}));
+
+      // v0.36.7 (KR0): process 跑完 inline 调 runKnowledgeAccumulation 累积 job
+      // kzclaw"快赢"哲学: 0 Supabase DDL · 全 R2 持久化 · 0 kzclaw打扰
+      // 跟 process 走同 ctx.waitUntil, 累积失败不阻塞 process 200 (kzclaw早晨日报金句是 nice-to-have, 失败可次日累积)
+      const knowledgeStart = Date.now();
+      try {
+        const knowledgeRes = await runKnowledgeAccumulation(env, ctx);
+        const knowledgeElapsed = Date.now() - knowledgeStart;
+        console.log(`[cron] knowledge accumulation done written=${knowledgeRes.written} errors=${knowledgeRes.errors} elapsed=${knowledgeElapsed}ms`);
+        ctx.waitUntil(logEvent(env, "info", "[cron] knowledge accumulation done", { written: knowledgeRes.written, errors: knowledgeRes.errors, elapsed_ms: knowledgeElapsed }, "scheduler").catch(() => {}));
+      } catch (e: any) {
+        const knowledgeElapsed = Date.now() - knowledgeStart;
+        console.error(`[cron] knowledge accumulation failed elapsed=${knowledgeElapsed}ms err=${e?.message || e}`);
+        ctx.waitUntil(logEvent(env, "error", "[cron] knowledge accumulation failed", { elapsed_ms: knowledgeElapsed, err: e?.message || String(e) }, "scheduler").catch(() => {}));
+      }
     } catch (e: any) {
       const elapsed = Date.now() - start;
       console.error(`[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
