@@ -8,7 +8,7 @@
  */
 import { Env } from './shared';
 import { authRequest, corsHeaders } from './auth';
-import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction, handleContentAction } from './endpoints';
+import { handlePullAction, handleDiagAction, handlePingAction, handleModelTestAction, handleAiTestAction, handleScoreAction, handleClassifyAction, handleBatchScoreAction, handleFissionAction, handleSaveAction, handleListAction, handleEmbedAction, handleZakerHotAction, handleProcessAction, handleHealthAction, handleLogsAction, handleContentAction, handleTrendAction } from './endpoints';
 import { logEvent } from './log';
 
 // ============================================================
@@ -61,6 +61,7 @@ export default {
   if (action === 'health') return await handleHealthAction(request, env, url, cors);
   if (action === 'logs') return await handleLogsAction(request, env, url, cors);
   if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
+  if (action === 'trend') return await handleTrendAction(request, env, url, cors, ctx);
   return new Response(JSON.stringify({ error: 'unknown action' }), {
  status:400, headers: { 'Content-Type': 'application/json', ...cors }
  });  },

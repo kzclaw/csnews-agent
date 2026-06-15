@@ -14,6 +14,7 @@ import { scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOL
 import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, saveToR2, joinTopicMember } from './news-process';
 import { logEvent } from './log';
 import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES } from './content-validation';
+import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKeyForIp, dailyHitsKeyForToday as trendHitsKeyForToday, RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as TREND_PAYLOAD_LIMIT_BYTES } from './trend-validation';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -1057,5 +1058,180 @@ ${r2Data ? `<pre>${escapeHtml(JSON.stringify(r2Data, null, 2))}</pre>` : ''}
 </html>`;
   return new Response(html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors },
+  });
+}
+
+// ===================== trend (KR0 Trend topic velocity · v0.36.7 · O8 Trend Engine) =====================
+// 用途：消费者（kzclaw 推送 / 第三方 IM 转发 / dashboard）每小时看 topic 演化
+// kzclaw 2026-06-16 03:25 确定：'trend 新闻趋势是可以的' (业务价值, 不是 system health)
+// 3 档 type:
+//   - topics: 当前所有 active topic + 最近 news count (基础信息)
+//   - velocity: topic 1h 增量 / 24h 平均 = velocity ratio (>2 = 爆发, <0.5 = 衰退)
+//   - acceleration: velocity 的 1h 增量 (二阶导 = 加速中)
+// 反爬：单 IP 60 req/min（独立 KV prefix trend_rate:<ip>, 跟 KR0 content_rate:<ip> 分开计数）
+// 鉴权：index.ts fetch handler 入口统一 authRequest
+// 部署边界：git push 触发 auto-deploy（v0.36.2 部署边界铁律）
+export async function handleTrendAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  // 1. 输入校验
+  const typeValidation = validateType(url.searchParams.get('type'));
+  if (!typeValidation.ok) {
+    return new Response(JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const type = typeValidation.reason!;
+
+  const sinceValidation = validateSince(url.searchParams.get('since'));
+  if (!sinceValidation.ok) {
+    return new Response(JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const sinceIso = sinceValidation.since!;
+
+  const limitValidation = validateLimit(url.searchParams.get('limit'));
+  if (!limitValidation.ok) {
+    return new Response(JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+  const limit = limitValidation.limit;
+
+  // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const rateKey = trendRateKeyForIp(ip);
+  if (env.PROCESS_STATE) {
+    try {
+      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
+      if (cur >= TREND_RATE_LIMIT_PER_MIN) {
+        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${TREND_RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
+          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+        });
+      }
+      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
+    } catch {
+      // 限流失败不阻塞
+    }
+  }
+
+  // 3. 计算时间窗边界
+  const sinceTime = new Date(sinceIso);
+  const oneHourAgo = new Date(sinceTime.getTime() - 3600 * 1000);
+  const twoHourAgo = new Date(sinceTime.getTime() - 7200 * 1000);
+
+  // 4. 根据 type 查数据
+  let items: any[] = [];
+  let description = '';
+
+  if (type === 'topics') {
+    // 基础信息: active topics + last_active_at + score + 最近 news count
+    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at,first_news_id&order=last_active_at.desc&limit=${limit}`);
+    const topics = await safeJson(topicsRes) as any[];
+    if (topics && topics.length > 0) {
+      // 对每个 topic 计算 since 之后的 news count
+      items = await Promise.all(topics.map(async (t) => {
+        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`);
+        // 用 head 模式拿 total (PostgREST Content-Range)
+        const totalHeader = countRes.headers.get('content-range');
+        const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
+        // since 之后 new news count (近似: total - <since 的 count)
+        return {
+          topic_id: t.id,
+          topic_key: t.topic_key,
+          level: t.level,
+          score: t.score,
+          last_active_at: t.last_active_at,
+          first_news_id: t.first_news_id,
+          total_news_count: total,
+        };
+      }));
+    }
+    description = '当前所有 active topic (按 last_active_at 倒序)';
+  } else if (type === 'velocity') {
+    // velocity: 1h 增量 / 24h 平均
+    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
+    const topics = await safeJson(topicsRes) as any[];
+    if (topics && topics.length > 0) {
+      items = await Promise.all(topics.map(async (t) => {
+        // 1h 增量: news_topic_members joined_at >= sinceTime - 1h
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // since 总数: news_topic_members joined_at >= since
+        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`);
+        const sinceTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // 24h 均值 = sinceTotal / 24 (小时)
+        const hourlyAvg = sinceTotal / 24;
+        const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
+        return {
+          topic_id: t.id,
+          topic_key: t.topic_key,
+          level: t.level,
+          score: t.score,
+          last_1h_count: last1hTotal,
+          hourly_avg: Math.round(hourlyAvg * 100) / 100,
+          velocity_ratio: Math.round(velocityRatio * 100) / 100,
+          trend: velocityRatio > 2 ? 'explosive' : velocityRatio > 1 ? 'rising' : velocityRatio < 0.5 ? 'declining' : 'stable',
+        };
+      }));
+    }
+    description = 'topic velocity (1h 增量 / 24h 均值)';
+  } else if (type === 'acceleration') {
+    // acceleration: 1h 增量 - 2h 增量 = 二阶导 (加速 / 减速)
+    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
+    const topics = await safeJson(topicsRes) as any[];
+    if (topics && topics.length > 0) {
+      items = await Promise.all(topics.map(async (t) => {
+        // 1h 增量 (last 1h)
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // 2h 增量 (between 2h ago and 1h ago)
+        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        // acceleration = last1h - between1h2h (正=加速, 负=减速)
+        const acceleration = last1hTotal - between1h2hTotal;
+        return {
+          topic_id: t.id,
+          topic_key: t.topic_key,
+          level: t.level,
+          score: t.score,
+          last_1h_count: last1hTotal,
+          previous_1h_count: between1h2hTotal,
+          acceleration: acceleration,
+          trend: acceleration > 0 ? 'accelerating' : acceleration < 0 ? 'decelerating' : 'stable',
+        };
+      }));
+    }
+    description = 'topic acceleration (二阶导, 1h 增量 - 上一小时增量)';
+  }
+
+  // 5. 大小限制
+  const responseBody = {
+    type,
+    since: sinceIso,
+    description,
+    count: items.length,
+    limit,
+    items,
+  };
+  const responseStr = JSON.stringify(responseBody);
+  if (responseStr.length > TREND_PAYLOAD_LIMIT_BYTES) {
+    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `trend response > ${TREND_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小` }), {
+      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 6. 监控计数
+  if (env.PROCESS_STATE) {
+    try {
+      const counterKey = trendHitsKeyForToday();
+      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
+      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
+    } catch {
+      // 监控失败不阻塞
+    }
+  }
+
+  return new Response(responseStr, {
+    headers: { 'Content-Type': 'application/json', ...cors },
   });
 }
