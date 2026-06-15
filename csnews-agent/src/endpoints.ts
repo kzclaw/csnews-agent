@@ -1130,7 +1130,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     if (topics && topics.length > 0) {
       // 对每个 topic 计算 since 之后的 news count
       items = await Promise.all(topics.map(async (t) => {
-        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`);
+        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
         // 用 head 模式拿 total (PostgREST Content-Range)
         const totalHeader = countRes.headers.get('content-range');
         const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
@@ -1154,10 +1154,10 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         // 1h 增量: news_topic_members joined_at >= sinceTime - 1h
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
         const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // since 总数: news_topic_members joined_at >= since
-        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`);
+        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
         const sinceTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // 24h 均值 = sinceTotal / 24 (小时)
         const hourlyAvg = sinceTotal / 24;
@@ -1185,7 +1185,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
         const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
         const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // 2h 增量 (between 2h ago and 1h ago)
-        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`);
+        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
         const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
         // acceleration = last1h - between1h2h (正=加速, 负=减速)
         const acceleration = last1hTotal - between1h2hTotal;
