@@ -41,7 +41,8 @@ csnews-agent/.wrangler/
 csnews-agent/dist/
 csnews-agent/coverage/
 
-# Spec Kit standard context 文档 — 入库
+# Spec Kit local-only — never push (contain internal codenames + KR refs)
 .agents/
 .specify/
 AGENTS.md
+csnews-agent/AGENTS.md
