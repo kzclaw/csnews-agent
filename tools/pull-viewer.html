@@ -382,9 +382,11 @@
   .topic-stats span { display: inline-flex; align-items: center; gap: 4px; }
   .topic-actions { display: flex; gap: 4px; }
 
-  /* Warning card */
-  .warning-card { border-left: 3px solid var(--warning); }
-  .warning-card.danger { border-left-color: var(--danger); }
+  /* Warning card — tinted background + leading icon (no side-tab accent) */
+  .warning-card { background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.2); }
+  .warning-card.danger { background: rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.2); }
+  .warning-icon { color: var(--warning); margin-right: 8px; font-size: 14px; line-height: 1; flex-shrink: 0; }
+  .warning-card.danger .warning-icon { color: var(--danger); }
 
   /* Fission card */
   .fission-card {
@@ -394,18 +396,12 @@
     padding: 14px 18px;
   }
   .fission-marker {
-    width: 36px;
-    height: 36px;
-    background: var(--accent-bg);
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     color: var(--accent-2);
     font-family: var(--font-mono);
     font-weight: 600;
-    font-size: 12px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
   }
 
   /* Badges */
@@ -495,8 +491,7 @@
   /* Modal */
   .modal-backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.72);
     display: flex; align-items: center; justify-content: center;
     z-index: 100;
     animation: fadein 150ms;
@@ -806,7 +801,7 @@ const SCENARIOS = [
   { name: '最新 10 条新闻', icon: '📰', query: { type: 'news', format: 'summary', limit: 10, order: 'desc', order_by: 'created_at' } },
   { name: '爆炸级话题', icon: '🔥', query: { type: 'topics', level: 'explosive', limit: 10, order_by: 'score' } },
   { name: '活跃警告', icon: '⚠️', query: { type: 'warnings', limit: 10, order_by: 'severity' } },
-  { name: '裂变待办 (KR0b)', icon: '✳️', query: { type: 'fission-pending', limit: 20, order_by: 'score' } },
+  { name: '裂变待办', icon: '✳️', query: { type: 'fission-pending', limit: 20, order_by: 'score' } },
   { name: 'ID 列表（省流量）', icon: '🆔', query: { type: 'news', format: 'ids', limit: 20, order_by: 'created_at' } },
   { name: '最近 24h', icon: '⏱', query: { type: 'news', limit: 20, since: '24h', order_by: 'created_at' } },
   { name: 'Worker 日志 (当天)', icon: '📋', query: { type: 'logs', date: 'today', limit: 100 } },
@@ -1309,14 +1304,18 @@ function topicCard(t, idx) {
 
 function warningCard(w, idx) {
   const sev = w.severity || w.level || 'warning';
+  const isDanger = sev === 'danger' || sev === 'critical' || sev === 'error';
   return `
-    <div class="card warning-card" data-idx="${idx}">
-      <div class="card-body">
-        <div class="card-title">${escapeHtml(w.title || w.message || w.id)}</div>
-        ${w.message ? `<div class="card-summary">${escapeHtml(w.message)}</div>` : ''}
-        <div class="card-meta">
-          <span class="badge badge-danger">${escapeHtml(sev)}</span>
-          ${w.created_at ? `<span class="meta-time" style="margin-left:auto;">${formatTime(w.created_at)}</span>` : ''}
+    <div class="card warning-card${isDanger ? ' danger' : ''}" data-idx="${idx}">
+      <div class="card-body" style="display: flex; align-items: flex-start;">
+        <span class="warning-icon">${isDanger ? '✕' : '⚠'}</span>
+        <div style="flex: 1; min-width: 0;">
+          <div class="card-title">${escapeHtml(w.title || w.message || w.id)}</div>
+          ${w.message ? `<div class="card-summary">${escapeHtml(w.message)}</div>` : ''}
+          <div class="card-meta">
+            <span class="badge badge-danger">${escapeHtml(sev)}</span>
+            ${w.created_at ? `<span class="meta-time" style="margin-left:auto;">${formatTime(w.created_at)}</span>` : ''}
+          </div>
         </div>
       </div>
     </div>

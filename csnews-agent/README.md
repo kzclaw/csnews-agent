@@ -125,7 +125,7 @@ curl "<wrangler-dev-url>/cdn-cgi/handler/scheduled?cron=0+*+*+*+*"
 
 ## 🛠️ Viewer 工具
 
-仓库 `tools/pull-viewer.html`（**已入库**，通用占位符模板）：
+仓库 `tools/pull-viewer.html`（已入库，浏览器本地工具）：
 
 ```bash
 # 路径相对于仓库根
@@ -133,16 +133,12 @@ open tools/pull-viewer.html
 ```
 
 **特性**：
-- 1426 行单文件，零外部依赖
+- 1487 行单文件，零外部依赖
 - Schema-driven 渲染
-- 6 个快捷场景 + 收藏 + 历史
+- 7 个快捷场景 + 收藏 + 历史
 - cURL 复制（Token 脱敏）/ JSON 下载
 - 深色 / 浅色主题切换
-
-**为啥 gitignore**：
-- HTML 默认值留空（不烤内部 API URL）
-- 跨设备同步靠 iCloud
-- 改 viewer 永远不触发 commit 噪音
+- Worker URL + Bearer Token 存浏览器 `localStorage`，不发送到任何地方
 
 ---
 
@@ -198,7 +194,7 @@ csnews-agent/
 │   ├── shared.ts         # Supabase / 通用工具
 │   └── cf-types.d.ts     # CF Workers 类型声明
 ├── tools/
-│   └── pull-viewer.html  # 本地 Viewer (gitignored)
+│   └── pull-viewer.html  # 浏览器本地 Viewer (HTML, 零依赖)
 ├── wrangler.toml         # CF 配置
 ├── package.json
 └── README.md
