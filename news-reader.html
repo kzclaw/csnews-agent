@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme="dark"">
+<title>CSNEWS Reader</title>
+<style>
+/* ============================================================
+ * CSNEWS Reader — Neo Kinpaku 设计系统
+ * 设计灵感: Reeder (极简时间线) + Flipboard (杂志卡片) + Bloomberg Terminal (暗色高密度)
+ * 本地工具 · 零外部依赖 · Token 仅存 localStorage
+ * ============================================================ */
+
+:root {
+  /* —— Neo Kinpaku tokens (warm lacquer 黑) —— */
+  color-scheme: dark;
+  /* 暖黑底 fallback (hex 近似) */
+  --bg: #14110f;
+  --bg-1: #1c1814;
+  --bg-2: #251f1a;
+  --bg-hover: #2e2722;
+  --bg-overlay: rgba(20, 17, 15, 0.72);
+  /* Hairline border (暖白) */
+  --hairline: rgba(240, 230, 215, 0.16);
+  --hairline-strong: rgba(240, 230, 215, 0.28);
+  /* 文字 — 暖白层级 */
+  --text: #f0e6d7;
+  --text-2: #c8b8a0;
+  --text-3: #8a7a64;
+  /* Kinpaku Gold 主强调 */
+  --gold: #d4a253;
+  --gold-2: #e3bf75;
+  --gold-bg: rgba(212, 162, 83, 0.10);
+  --gold-bg-strong: rgba(212, 162, 83, 0.16);
+  /* Verdigris Patina 次强调 (青绿铜绿) */
+  --patina: #7ab3a8;
+  --patina-2: #98c5bb;
+  --patina-bg: rgba(122, 179, 168, 0.10);
+  /* 语义色 (Bloomberg terminal 风味) */
+  --success: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.10);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.10);
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.10);
+  /* 几何 — 极小 border-radius,flat elevation */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-lg: 4px;
+  --shadow: none;
+  --shadow-hover: 0 1px 0 var(--hairline-strong);
+  /* 字体 */
+  --font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif;
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* OKLCH 真值 (浏览器支持时覆盖) */
+@supports (color: oklch(0% 0 0)) {
+  :root {
+    --bg: oklch(7% 0.006 95);
+    --bg-1: oklch(9% 0.006 95);
+    --bg-2: oklch(12% 0.006 95);
+    --bg-hover: oklch(14% 0.006 95);
+    --bg-overlay: oklch(7% 0.006 95 / 72%);
+    --hairline: oklch(78% 0 0 / 0.16);
+    --hairline-strong: oklch(78% 0 0 / 0.28);
+    --text: oklch(92% 0.005 95);
+    --text-2: oklch(72% 0.008 95);
+    --text-3: oklch(52% 0.008 95);
+    --gold: oklch(84% 0.19 80.46);
+    --gold-2: oklch(88% 0.16 80.46);
+    --gold-bg: oklch(84% 0.19 80.46 / 10%);
+    --gold-bg-strong: oklch(84% 0.19 80.46 / 16%);
+    --patina: oklch(70% 0.105 190);
+    --patina-2: oklch(76% 0.085 190);
+    --patina-bg: oklch(70% 0.105 190 / 10%);
+    --success: oklch(72% 0.16 150);
+    --success-bg: oklch(72% 0.16 150 / 10%);
+    --danger: oklch(62% 0.21 25);
+    --danger-bg: oklch(62% 0.21 25 / 10%);
+    --info: oklch(65% 0.15 240);
+    --info-bg: oklch(65% 0.15 240 / 10%);
+  }
+}
+
+/* ============================================================
+ * Reset & base
+ * ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--hairline-strong); }
+
+/* ============================================================
+ * Layout — sidebar + main (Reeder style)
+ * ============================================================ */
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 56px 1fr;
+  grid-template-areas: "header header" "sidebar main";
+  height: 100vh;
+}
+
+/* —— Header —— */
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+  gap: 16px;
+  -webkit-app-region: drag;
+}
+.header > * { -webkit-app-region: no-drag; }
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+.logo-mark {
+  width: 22px;
+  height: 22px;
+  background: var(--gold);
+  color: oklch(15% 0 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  border-radius: var(--radius);
+}
+.logo-text { color: var(--text); }
+.logo-sep { color: var(--text-3); margin: 0 1px; }
+.logo-sub {
+  color: var(--text-3);
+  font-weight: 400;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.header-spacer { flex: 1; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 9px;
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.status.online .status-dot { background: var(--success); }
+.status.offline .status-dot { background: var(--danger); }
+.status.config .status-dot { background: var(--gold); }
+
+/* —— Buttons —— */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  height: 30px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--hairline-strong);
+}
+.btn:active { transform: scale(0.98); }
+.btn.primary {
+  background: var(--gold);
+  color: oklch(15% 0 0);
+  border-color: var(--gold);
+  font-weight: 600;
+}
+.btn.primary:hover {
+  background: var(--gold-2);
+  border-color: var(--gold-2);
+}
+.btn.ghost { border-color: transparent; }
+.btn.ghost:hover { background: var(--bg-hover); border-color: var(--hairline); }
+.btn-icon { padding: 0; width: 30px; }
+.btn svg { width: 14px; height: 14px; }
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  background: var(--bg-2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-2);
+}
+
+/* —— Sidebar (Reeder-style 左导航) —— */
+.sidebar {
+  grid-area: sidebar;
+  background: var(--bg);
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+  padding: 20px 0 28px;
+}
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.sidebar-list { list-style: none; }
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 16px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 13px;
+  border-left: 2px solid transparent;
+  transition: all var(--transition);
+  user-select: none;
+}
+.sidebar-item:hover { background: var(--bg-1); color: var(--text); }
+.sidebar-item.active {
+  background: var(--bg-1);
+  color: var(--gold);
+  border-left-color: var(--gold);
+}
+.sidebar-item .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.sidebar-item.active .icon { color: var(--gold); }
+.sidebar-item .count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  padding: 1px 6px;
+  background: var(--bg-2);
+  border-radius: 3px;
+}
+.sidebar-item.active .count {
+  color: var(--gold);
+  background: var(--gold-bg);
+}
+
+.sidebar-divider {
+  height: 1px;
+  background: var(--hairline);
+  margin: 8px 16px;
+}
+
+.sidebar-footer {
+  padding: 12px 16px 0;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.sidebar-footer code {
+  font-family: var(--font-mono);
+  background: var(--bg-1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
+/* —— Main —— */
+.main {
+  grid-area: main;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* —— Filter bar —— */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--hairline);
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+.chip:hover {
+  background: var(--bg-1);
+  border-color: var(--hairline-strong);
+  color: var(--text);
+}
+.chip.active {
+  background: var(--gold-bg);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.chip .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.chip .count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  padding: 5px 28px 5px 11px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  height: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23c8b8a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+.select:hover { border-color: var(--hairline-strong); color: var(--text); }
+.select:focus { outline: none; border-color: var(--gold); }
+.select option { background: var(--bg-1); color: var(--text); }
+
+.filter-spacer { flex: 1; }
+
+.filter-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ============================================================
+ * News card (Flipboard-style magazine card)
+ * ============================================================ */
+.feed {
+  padding: 20px 28px 60px;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  transition: all var(--transition);
+  overflow: hidden;
+  position: relative;
+}
+.card:hover {
+  border-color: var(--hairline-strong);
+  background: var(--bg-2);
+}
+.card.expanded {
+  border-color: var(--gold);
+  background: var(--bg-1);
+}
+.card.expanded::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: var(--gold);
+}
+
+.card-body {
+  padding: 18px 22px;
+  cursor: pointer;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.meta-source {
+  color: var(--patina);
+  font-weight: 500;
+  text-transform: lowercase;
+}
+.meta-dot {
+  width: 2px;
+  height: 2px;
+  background: var(--text-3);
+  border-radius: 50%;
+}
+.meta-time { color: var(--text-3); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  letter-spacing: 0.01em;
+}
+.badge-explosive {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.badge-important {
+  background: var(--gold-bg);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.badge-follow {
+  background: var(--patina-bg);
+  border-color: var(--patina);
+  color: var(--patina);
+}
+.badge-category {
+  background: transparent;
+  border-color: var(--hairline-strong);
+  color: var(--text-2);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 8px;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.card-summary {
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.65;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card.expanded .card-summary {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.card-hot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  color: var(--gold);
+  font-weight: 500;
+}
+.card-hot.cool { color: var(--text-3); }
+.card-action {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.card-action:hover { color: var(--gold); }
+
+/* —— Inline popup (展开全文) —— */
+.card-popup {
+  display: none;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  padding: 20px 22px 22px;
+}
+.card.expanded .card-popup { display: block; }
+
+.popup-content {
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-sans);
+}
+.popup-content p { margin-bottom: 12px; }
+.popup-content p:last-child { margin-bottom: 0; }
+
+.popup-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+.popup-actions .btn { font-size: 11.5px; height: 28px; padding: 5px 12px; }
+
+/* ============================================================
+ * States
+ * ============================================================ */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 20px;
+  text-align: center;
+}
+.state-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+.state-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  margin-bottom: 6px;
+  letter-spacing: -0.005em;
+}
+.state-desc {
+  font-size: 13px;
+  color: var(--text-3);
+  max-width: 380px;
+  line-height: 1.65;
+}
+.state-desc code {
+  font-family: var(--font-mono);
+  background: var(--bg-1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.error-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.error-banner-body {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+ * Skeleton (真实卡片形状 — Reeder 风格)
+ * ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.skeleton-card {
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  padding: 18px 22px;
+}
+.skeleton-card .sk-line { height: 10px; margin-bottom: 10px; }
+.skeleton-card .sk-title { height: 16px; width: 78%; margin-bottom: 14px; }
+.skeleton-card .sk-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.skeleton-card .sk-tag { width: 48px; height: 14px; }
+.skeleton-card .sk-dot { width: 56px; height: 10px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ============================================================
+ * Modal (Settings)
+ * ============================================================ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadein 150ms;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+.modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.field:last-child { margin-bottom: 0; }
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.field-label .kbd { font-size: 9.5px; height: 18px; }
+.field-input {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 11px;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color var(--transition);
+}
+.field-input:focus { border-color: var(--gold); }
+.field-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.field-hint code {
+  font-family: var(--font-mono);
+  background: var(--bg-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  color: var(--text-2);
+}
+
+/* ============================================================
+ * Help modal (⌘K)
+ * ============================================================ */
+.help-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 11px;
+  border-radius: var(--radius);
+  transition: background var(--transition);
+}
+.help-row:hover { background: var(--bg-2); }
+.help-keys { display: flex; gap: 4px; min-width: 110px; }
+.help-desc { font-size: 12.5px; color: var(--text-2); flex: 1; }
+.help-section-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 14px 0 6px;
+  padding: 0 11px;
+}
+.help-section-title:first-child { margin-top: 0; }
+
+/* ============================================================
+ * Toast
+ * ============================================================ */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-size: 12.5px;
+  color: var(--text);
+  z-index: 200;
+  opacity: 0;
+  transition: all var(--transition-slow);
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.toast.success { border-color: var(--patina); }
+.toast.error { border-color: var(--danger); }
+
+/* ============================================================
+ * Responsive
+ * ============================================================ */
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+  .sidebar { display: none; }
+  .filter-bar { padding: 10px 16px; }
+  .feed { padding: 14px 16px 40px; }
+  .card-body { padding: 14px 16px; }
+  .card-title { font-size: 16px; }
+  .header { padding: 0 14px; }
+  .logo-sub { display: none; }
+  .modal { max-width: calc(100vw - 24px); margin: 12px; }
+}
+
+/* ============================================================
+ * Typographic refinement
+ * ============================================================ */
+.card-title, .state-title, .modal-title { text-wrap: balance; }
+.heading-1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  color: var(--text);
+}
+.text-mono { font-family: var(--font-mono); }
+.text-2 { color: var(--text-2); }
+.text-3 { color: var(--text-3); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ============ Header ============ -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">C</div>
+      <span class="logo-text">CSNEWS</span>
+      <span class="logo-sep">·</span>
+      <span class="logo-sub">Reader</span>
+    </div>
+    <div class="status" id="status">
+      <span class="status-dot"></span>
+      <span id="status-text">未配置</span>
+    </div>
+    <div class="header-spacer"></div>
+    <button class="btn" id="help-btn" title="快捷键 (⌘K)">
+      <span style="font-family: var(--font-mono); font-size: 11px;">⌘K</span>
+      <span>帮助</span>
+    </button>
+    <button class="btn" id="refresh-btn" title="刷新 (⌘R)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/><path d="M0 21v-5h5"/></svg>
+      <span>刷新</span>
+    </button>
+    <button class="btn" id="settings-btn">设置</button>
+  </header>
+
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">等级</div>
+      <ul class="sidebar-list" id="level-list">
+        <li class="sidebar-item active" data-level="">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          <span>全部</span>
+          <span class="count" id="level-all-count">—</span>
+        </li>
+        <li class="sidebar-item" data-level="explosive">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 22h20L12 2z"/></svg>
+          <span>爆炸</span>
+          <span class="count" id="level-explosive-count">—</span>
+        </li>
+        <li class="sidebar-item" data-level="important">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M0 12h20"/></svg>
+          <span>重要</span>
+          <span class="count" id="level-important-count">—</span>
+        </li>
+        <li class="sidebar-item" data-level="follow">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 12h14M12 5l7 7-7 7"/></svg>
+          <span>关注</span>
+          <span class="count" id="level-follow-count">—</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">分类</div>
+      <ul class="sidebar-list" id="category-list">
+        <li class="sidebar-item active" data-category="">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>全部分类</span>
+        </li>
+        <!-- 动态注入 -->
+      </ul>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="sidebar-footer">
+      本地工具 · 数据仅在你的浏览器<br>
+      Token 存于 <code>localStorage</code>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <main class="main">
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <select class="select" id="sort-select" title="排序方式">
+        <option value="desc">最新优先</option>
+        <option value="asc">最旧优先</option>
+        <option value="hot">最热</option>
+      </select>
+      <select class="select" id="since-select" title="时间范围">
+        <option value="">全部时间</option>
+        <option value="1h">最近 1 小时</option>
+        <option value="24h">最近 24 小时</option>
+        <option value="7d">最近 7 天</option>
+      </select>
+      <div class="filter-spacer"></div>
+      <span class="filter-meta" id="result-meta">— 条</span>
+    </div>
+
+    <!-- Feed -->
+    <div class="feed" id="feed">
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <div class="state-title">还没拉取新闻</div>
+        <div class="state-desc">点右上角 <code>设置</code> 填 URL + Token,然后按 <code>⌘R</code> 或 <code>刷新</code> 开始阅读</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ Settings Modal ============ -->
+<div class="modal-backdrop" id="settings-modal" style="display: none;">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">CSNEWS Reader 设置</div>
+      <button class="btn ghost btn-icon" id="settings-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-label">Worker URL</label>
+        <input class="field-input" id="cfg-url" type="text" placeholder="https://csnews.kwokzit.info" autocomplete="off" />
+        <div class="field-hint">CSNEWS Agent Worker 域名,带 <code>https://</code> 前缀</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Bearer Token <span class="kbd">↵ 测试</span></label>
+        <input class="field-input" id="cfg-token" type="password" placeholder="64 位 hex token" autocomplete="off" />
+        <div class="field-hint">Token 存于 <code>localStorage</code>,不上传任何第三方</div>
+      </div>
+      <div class="field">
+        <label class="field-label">每页条数</label>
+        <select class="field-input" id="cfg-limit">
+          <option value="20">20 条</option>
+          <option value="30" selected>30 条</option>
+          <option value="50">50 条</option>
+          <option value="100">100 条</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" id="settings-cancel">取消</button>
+      <button class="btn primary" id="settings-save">保存并刷新</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Help Modal (⌘K) ============ -->
+<div class="modal-backdrop" id="help-modal" style="display: none;">
+  <div class="modal" style="width: 540px;">
+    <div class="modal-header">
+      <div class="modal-title">快捷键 & 功能</div>
+      <button class="btn ghost btn-icon" id="help-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="help-body">
+      <!-- 动态渲染 -->
+    </div>
+  </div>
+</div>
+
+<!-- ============ Toast ============ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================
+ * CSNEWS Reader
+ * 复用 Worker ?action=pull&type=news + ?action=content&id=
+ * =========================================================== */
+
+const STORAGE = {
+  base: 'csnews_reader',
+  get(k, d) { try { const v = localStorage.getItem(this.base + ':' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(this.base + ':' + k, JSON.stringify(v)); } catch {} },
+  remove(k) { localStorage.removeItem(this.base + ':' + k); }
+};
+
+const STATE = {
+  items: [],
+  loading: false,
+  lastError: null,
+  filters: {
+    level: '',         // '' | follow | important | explosive
+    category: '',
+    sort: 'desc',
+    since: '',
+    limit: 30
+  },
+  expandedId: null,
+  contentCache: new Map(),  // id → content text
+};
+
+// --- Helpers ---
+function getConfig() {
+  return STORAGE.get('config', { baseUrl: '', token: '', limit: 30 });
+}
+function isConfigured() {
+  const cfg = getConfig();
+  return cfg.baseUrl && cfg.token;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = Date.now();
+  const diff = (now - d.getTime()) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`;
+  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+}
+
+function fmtHot(score) {
+  if (score == null) return null;
+  return Number(score).toFixed(1);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// --- HTTP ---
+async function fetchNews() {
+  const cfg = getConfig();
+  const params = new URLSearchParams({
+    action: 'pull',
+    type: 'news',
+    format: 'full',
+    limit: String(STATE.filters.limit),
+    order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
+    order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
+  });
+  if (STATE.filters.level) params.set('level', STATE.filters.level);
+  if (STATE.filters.category) params.set('category', STATE.filters.category);
+  if (STATE.filters.since) params.set('since', STATE.filters.since);
+
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
+  const start = performance.now();
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + cfg.token }
+  });
+  const elapsed = Math.round(performance.now() - start);
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  return { items: data.items || [], total: data.total, truncated: data.truncated, elapsed };
+}
+
+async function fetchContent(id) {
+  if (STATE.contentCache.has(id)) return STATE.contentCache.get(id);
+  const cfg = getConfig();
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=content&id=${encodeURIComponent(id)}&format=text`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + cfg.token }
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || `HTTP ${res.status}`);
+  }
+  const text = data.content || data.text || data.full || '';
+  STATE.contentCache.set(id, text);
+  return text;
+}
+
+// --- Render: sidebar ---
+function renderCategoryList(items) {
+  // 统计分类
+  const catCount = {};
+  items.forEach(it => {
+    const c = it.category || '未分类';
+    catCount[c] = (catCount[c] || 0) + 1;
+  });
+  const sorted = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
+
+  const list = document.getElementById('category-list');
+  // 保留 "全部分类" 第一项
+  list.innerHTML = `
+    <li class="sidebar-item ${STATE.filters.category === '' ? 'active' : ''}" data-category="">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>全部分类</span>
+      <span class="count">${items.length}</span>
+    </li>
+  ` + sorted.map(([c, n]) => `
+    <li class="sidebar-item ${STATE.filters.category === c ? 'active' : ''}" data-category="${escapeHtml(c)}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
+      <span>${escapeHtml(c)}</span>
+      <span class="count">${n}</span>
+    </li>
+  `).join('');
+
+  // bind
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.filters.category = el.dataset.category || '';
+      renderCategoryList(STATE.items);
+      refresh();
+    });
+  });
+}
+
+function renderLevelCounts(items) {
+  const total = items.length;
+  const c = { explosive: 0, important: 0, follow: 0 };
+  items.forEach(it => {
+    if (it.level && c[it.level] !== undefined) c[it.level]++;
+  });
+  document.getElementById('level-all-count').textContent = total;
+  document.getElementById('level-explosive-count').textContent = c.explosive;
+  document.getElementById('level-important-count').textContent = c.important;
+  document.getElementById('level-follow-count').textContent = c.follow;
+}
+
+// --- Render: feed ---
+function renderFeedSkeleton() {
+  document.getElementById('feed').innerHTML = Array(4).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skeleton sk-meta">
+        <div class="skeleton sk-tag"></div>
+        <div class="skeleton sk-dot"></div>
+      </div>
+      <div class="skeleton sk-line sk-title"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line" style="width: 60%;"></div>
+    </div>
+  `).join('');
+}
+
+function renderFeed() {
+  const feed = document.getElementById('feed');
+  const items = STATE.items;
+
+  document.getElementById('result-meta').textContent =
+    `${items.length} 条${STATE.lastError ? ' · 错误' : ''}`;
+
+  if (STATE.lastError) {
+    feed.innerHTML = `
+      <div class="error-banner">
+        <div class="error-banner-title">⚠ 拉取失败</div>
+        <div class="error-banner-body">${escapeHtml(STATE.lastError.message || String(STATE.lastError))}</div>
+      </div>
+    ` + (items.length ? renderCardList(items) : `
+      <div class="state">
+        <div class="state-title">暂时拉不到数据</div>
+        <div class="state-desc">检查网络 / Token / Worker 状态,按 <code>⌘R</code> 重试</div>
+      </div>
+    `);
+    bindCardClicks();
+    return;
+  }
+
+  if (!items.length) {
+    feed.innerHTML = `
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        <div class="state-title">没有匹配的新闻</div>
+        <div class="state-desc">换个等级或分类试试,或者按 <code>⌘R</code> 重新拉取</div>
+      </div>
+    `;
+    return;
+  }
+
+  feed.innerHTML = renderCardList(items);
+  bindCardClicks();
+}
+
+function renderCardList(items) {
+  return items.map((it, idx) => {
+    const level = it.level || 'follow';
+    const levelLabel = { explosive: '爆炸', important: '重要', follow: '关注' }[level] || level;
+    const isExpanded = STATE.expandedId === it.id;
+    const hot = fmtHot(it.hot_score);
+    const title = escapeHtml(it.title);
+    const summary = escapeHtml(it.summary || '');
+    const category = escapeHtml(it.category || '');
+    const source = escapeHtml(it.source || '');
+    const url = escapeHtml(it.url || '');
+    const published = fmtTime(it.published_at || it.created_at);
+
+    return `
+      <article class="card ${isExpanded ? 'expanded' : ''}" data-idx="${idx}" data-id="${escapeHtml(it.id)}">
+        <div class="card-body">
+          <div class="card-meta">
+            <span class="meta-source">${source}</span>
+            <span class="badge badge-${level}">${levelLabel}</span>
+            ${category ? `<span class="badge badge-category">${category}</span>` : ''}
+            <span class="meta-dot"></span>
+            <span class="meta-time">${published}</span>
+          </div>
+          <h2 class="card-title">${title}</h2>
+          ${summary ? `<div class="card-summary">${summary}</div>` : ''}
+          <div class="card-footer">
+            ${hot ? `<span class="card-hot ${Number(it.hot_score) < 3 ? 'cool' : ''}">🔥 ${hot}</span>` : ''}
+            <span class="card-action">${isExpanded ? '收起' : '展开 →'}</span>
+          </div>
+        </div>
+        <div class="card-popup">
+          <div class="popup-content" data-content-for="${escapeHtml(it.id)}">加载全文中…</div>
+          <div class="popup-actions">
+            ${url ? `<a class="btn" href="${url}" target="_blank" rel="noopener noreferrer">原文 ↗</a>` : ''}
+            <button class="btn ghost" data-copy-curl="${escapeHtml(it.id)}">复制 cURL</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function bindCardClicks() {
+  document.querySelectorAll('.card').forEach(card => {
+    const id = card.dataset.id;
+    const body = card.querySelector('.card-body');
+    body.addEventListener('click', () => toggleExpand(id));
+    // 双击 → 原文链接
+    body.addEventListener('dblclick', () => {
+      const item = STATE.items.find(x => x.id === id);
+      if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
+    });
+  });
+  document.querySelectorAll('[data-copy-curl]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.copyCurl;
+      const item = STATE.items.find(x => x.id === id);
+      if (!item) return;
+      const cfg = getConfig();
+      const masked = cfg.token.length > 6
+        ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6)
+        : '***';
+      const curl = `curl -s "${cfg.baseUrl}/?action=pull&type=news&format=full&limit=1" \\\n  -H "Authorization: Bearer ${masked}"`;
+      navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
+    });
+  });
+}
+
+async function toggleExpand(id) {
+  if (STATE.expandedId === id) {
+    STATE.expandedId = null;
+    renderFeed();
+    return;
+  }
+  STATE.expandedId = id;
+  renderFeed();
+  // 加载全文
+  const el = document.querySelector(`[data-content-for="${CSS.escape(id)}"]`);
+  if (!el) return;
+  if (STATE.contentCache.has(id)) {
+    el.innerHTML = formatContent(STATE.contentCache.get(id));
+    return;
+  }
+  try {
+    const text = await fetchContent(id);
+    el.innerHTML = formatContent(text);
+  } catch (e) {
+    el.innerHTML = `<span style="color: var(--danger);">全文加载失败: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+function formatContent(text) {
+  if (!text) return '<span style="color: var(--text-3);">暂无全文</span>';
+  // 分段 (按双换行)
+  const paras = text.split(/\n\n+/).map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`);
+  return paras.join('');
+}
+
+// --- Status / Toast ---
+function updateStatus() {
+  const status = document.getElementById('status');
+  const text = document.getElementById('status-text');
+  status.className = 'status';
+  if (!isConfigured()) {
+    status.classList.add('config');
+    text.textContent = '未配置';
+  } else if (STATE.loading) {
+    text.textContent = '拉取中…';
+  } else if (STATE.lastError) {
+    status.classList.add('offline');
+    text.textContent = '错误';
+  } else {
+    status.classList.add('online');
+    text.textContent = `${STATE.items.length} 条`;
+  }
+}
+
+let toastTimer = null;
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2400);
+}
+
+// --- Main flow ---
+async function refresh() {
+  if (!isConfigured()) {
+    openSettings();
+    return;
+  }
+  STATE.loading = true;
+  STATE.lastError = null;
+  renderFeedSkeleton();
+  updateStatus();
+
+  try {
+    const { items, total, truncated, elapsed } = await fetchNews();
+    STATE.items = items;
+    document.getElementById('result-meta').textContent =
+      `${items.length} 条${truncated ? ` (总 ${total})` : ''} · ${elapsed}ms`;
+    renderLevelCounts(items);
+    renderCategoryList(items);
+    renderFeed();
+    toast(`已刷新 ${items.length} 条`, 'success');
+  } catch (e) {
+    STATE.lastError = { message: e.message || String(e) };
+    renderFeed();
+    toast(`拉取失败: ${e.message}`, 'error');
+  } finally {
+    STATE.loading = false;
+    updateStatus();
+  }
+}
+
+// --- Settings modal ---
+function openSettings() {
+  const cfg = getConfig();
+  document.getElementById('cfg-url').value = cfg.baseUrl || '';
+  document.getElementById('cfg-token').value = cfg.token || '';
+  document.getElementById('cfg-limit').value = String(STATE.filters.limit);
+  document.getElementById('settings-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('cfg-url').focus(), 50);
+}
+function closeSettings() {
+  document.getElementById('settings-modal').style.display = 'none';
+}
+function saveSettings() {
+  const baseUrl = document.getElementById('cfg-url').value.trim().replace(/\/+$/, '');
+  const token = document.getElementById('cfg-token').value.trim();
+  const limit = parseInt(document.getElementById('cfg-limit').value, 10) || 30;
+  if (!baseUrl || !token) {
+    toast('URL 和 Token 必填', 'error');
+    return;
+  }
+  STORAGE.set('config', { baseUrl, token, limit });
+  STATE.filters.limit = limit;
+  closeSettings();
+  toast('已保存', 'success');
+  refresh();
+}
+
+// --- Help modal ---
+const HELP_GROUPS = [
+  {
+    title: '阅读',
+    items: [
+      { keys: ['Click'], desc: '展开 / 收起卡片全文' },
+      { keys: ['Double'], desc: '在原文链接打开' },
+      { keys: ['Esc'], desc: '关闭弹窗 / 收起卡片' },
+    ],
+  },
+  {
+    title: '导航',
+    items: [
+      { keys: ['⌘', 'K'], desc: '打开 / 关闭快捷键帮助' },
+      { keys: ['⌘', '?'], desc: '同上 (Windows 友好)' },
+      { keys: ['⌘', 'R'], desc: '刷新拉取最新新闻' },
+      { keys: ['⌘', ','], desc: '打开设置' },
+    ],
+  },
+  {
+    title: '过滤',
+    items: [
+      { keys: ['Click'], desc: '左侧等级/分类切换 filter' },
+      { keys: ['Sort'], desc: '最新 / 最旧 / 最热' },
+      { keys: ['Since'], desc: '全部 / 1h / 24h / 7d' },
+    ],
+  },
+];
+function openHelp() {
+  const body = document.getElementById('help-body');
+  body.innerHTML = `
+    <div style="color: var(--text-2); font-size: 12.5px; margin-bottom: 14px;">本工具 <code style="font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">100% 本地</code>,Token 不离开浏览器。</div>
+    ${HELP_GROUPS.map(g => `
+      <div class="help-section-title">${g.title}</div>
+      <div class="help-list">
+        ${g.items.map(it => `
+          <div class="help-row">
+            <div class="help-keys">${it.keys.map(k => `<span class="kbd">${k}</span>`).join('<span style="color:var(--text-3); font-size:11px;">+</span>')}</div>
+            <div class="help-desc">${it.desc}</div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('')}
+  `;
+  document.getElementById('help-modal').style.display = 'flex';
+}
+function closeHelp() {
+  document.getElementById('help-modal').style.display = 'none';
+}
+
+// --- Bindings ---
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-close').addEventListener('click', closeSettings);
+document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+document.getElementById('settings-save').addEventListener('click', saveSettings);
+document.getElementById('help-btn').addEventListener('click', openHelp);
+document.getElementById('help-close').addEventListener('click', closeHelp);
+document.getElementById('refresh-btn').addEventListener('click', refresh);
+
+// Modal backdrop click
+['settings-modal', 'help-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target.id === id) {
+      document.getElementById(id).style.display = 'none';
+    }
+  });
+});
+
+// Sidebar level
+document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    STATE.filters.level = el.dataset.level || '';
+    refresh();
+  });
+});
+
+// Filter bar
+document.getElementById('sort-select').addEventListener('change', e => {
+  STATE.filters.sort = e.target.value;
+  refresh();
+});
+document.getElementById('since-select').addEventListener('change', e => {
+  STATE.filters.since = e.target.value;
+  refresh();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  // ⌘K / ⌘? — 帮助
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '?')) {
+    e.preventDefault();
+    const hm = document.getElementById('help-modal');
+    hm.style.display === 'flex' ? closeHelp() : openHelp();
+    return;
+  }
+  // ⌘R — 刷新
+  if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+    e.preventDefault();
+    refresh();
+    return;
+  }
+  // ⌘, — 设置
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+    e.preventDefault();
+    openSettings();
+    return;
+  }
+  // Esc — 关闭弹窗 / 收起卡片
+  if (e.key === 'Escape') {
+    const hm = document.getElementById('help-modal');
+    const sm = document.getElementById('settings-modal');
+    if (hm.style.display === 'flex') { closeHelp(); return; }
+    if (sm.style.display === 'flex') { closeSettings(); return; }
+    if (STATE.expandedId) {
+      STATE.expandedId = null;
+      renderFeed();
+    }
+  }
+});
+
+// --- Boot ---
+updateStatus();
+if (isConfigured()) {
+  refresh();
+} else {
+  setTimeout(openSettings, 400);
+}
+</script>
+</body>
+</html>
