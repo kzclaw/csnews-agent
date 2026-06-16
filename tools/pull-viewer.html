@@ -747,9 +747,91 @@ body {
 .filter-spacer { flex: 1; }
 .filter-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
 
-.feed {
+ .feed {
   padding: 20px 28px 60px;
   max-width: 920px; width: 100%; margin: 0 auto;
+  display: grid;
+  /* v0.36.12 KR2: 跨栏 grid (戴大虾「世界引擎」Reader 杂志风) — 首条置顶大图 + 副条 2 列 */
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: row dense;
+  gap: 12px;
+}
+.feed > .card:first-child {
+  /* v0.36.12 KR2: 首条置顶大图 (lead story, 跨整行 16:9) */
+  grid-column: 1 / -1;
+}
+.feed > .card:first-child .card-title { font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; }
+.feed > .card:first-child .card-image { aspect-ratio: 21/9; }
+/* v0.36.12 KR2: 引擎节拍顶部脉冲条 (世界引擎标志) — 数据流 SVG 背景 */
+body::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 100;
+  background: linear-gradient(90deg, transparent 0%, var(--gold) 30%, var(--gold) 70%, transparent 100%);
+  animation: enginePulse 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  pointer-events: none;
+}
+@keyframes enginePulse {
+  0% { transform: translateX(-100%) scaleX(0.4); opacity: 0; }
+  50% { transform: translateX(0%) scaleX(1); opacity: 1; }
+  100% { transform: translateX(100%) scaleX(0.4); opacity: 0; }
+}
+/* v0.36.12 KR2: 数据流 SVG 背景 (戴大虾「世界引擎」数据流意象) */
+.feed::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><g fill='none' stroke='%23ffb800' stroke-width='0.5' opacity='0.06'><path d='M0 100 Q 50 60 100 100 T 200 100'/><path d='M0 130 Q 50 90 100 130 T 200 130'/><path d='M0 70 Q 50 30 100 70 T 200 70'/><circle cx='100' cy='100' r='1'/><circle cx='50' cy='90' r='0.6'/><circle cx='150' cy='110' r='0.6'/></g></svg>");
+  background-size: 200px 200px;
+  pointer-events: none; z-index: 0;
+}
+.feed > .card { position: relative; z-index: 1; }
+/* v0.36.12 KR2: 滚动 reveal (戴大虾「世界引擎」卖弄技术微交互) */
+.feed > .card { opacity: 0; transform: translateY(20px); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color var(--transition), background var(--transition); }
+.feed > .card.revealed { opacity: 1; transform: translateY(0); }
+/* v0.36.12 KR2: 卡片进场 stagger (cascade animation-delay 0/60/120/180ms) */
+.feed > .card.revealed:nth-child(1) { transition-delay: 0ms; }
+.feed > .card.revealed:nth-child(2) { transition-delay: 60ms; }
+.feed > .card.revealed:nth-child(3) { transition-delay: 120ms; }
+.feed > .card.revealed:nth-child(4) { transition-delay: 180ms; }
+.feed > .card.revealed:nth-child(5) { transition-delay: 240ms; }
+.feed > .card.revealed:nth-child(6) { transition-delay: 300ms; }
+/* v0.36.12 KR2: 数字 mono tabular-nums (戴大虾要「数字 mono」) */
+.card-meta, .card-hot, .meta-time, .card-action { font-variant-numeric: tabular-nums; }
+/* v0.36.12 KR2: hover lift -2px (v0.36.11 -1px 升级到 -2px 戴大虾要「卖弄技术」) */
+.card:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
+/* v0.36.12 KR2: Headline letter-spacing (戴大虾要「letter-spacing 大标题」) */
+.card-title { letter-spacing: -0.005em; font-feature-settings: "ss01", "cv11"; }
+/* v0.36.12 KR2: Kicker (eyebrow 替代, 戴大虾要「标题分级」) */
+.kicker {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+  padding: 2px 6px;
+  background: color-mix(in oklab, var(--gold) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+  border-radius: 2px;
+}
+/* v0.36.12 KR2: Standfirst (副标题, 戴大虾要「标题分级」) */
+.standfirst {
+  font-size: 14px; line-height: 1.55;
+  color: var(--text-2);
+  max-width: 60ch;
+  margin-top: 4px;
+  font-weight: 400;
+}
+/* v0.36.12 KR2: 衬线 class (戴大虾要「衬线+无衬线混排」) */
+.serif { font-family: ui-serif, Georgia, 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', serif; }
+/* v0.36.12 KR2: 图片占主导 (戴大虾要「图片占主导」) */
+.card-image {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--bg-1);
+  background-size: cover; background-position: center;
+  border-bottom: 1px solid var(--hairline);
+  margin: -18px -22px 14px;  /* negative 抵消 .card-body padding */
+  width: calc(100% + 44px);
 }
  .card {
   background: var(--bg);
@@ -2361,6 +2443,21 @@ function bindCardClicks() {
       if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
     });
   });
+  // v0.36.12 KR2 (戴大虾「世界引擎」微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.feed > .card:not(.revealed)').forEach(el => io.observe(el));
+  } else {
+    // 不支持 IO 直接显示
+    document.querySelectorAll('.feed > .card').forEach(el => el.classList.add('revealed'));
+  }
   document.querySelectorAll('[data-copy-curl]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
