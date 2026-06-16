@@ -16,9 +16,13 @@ const BANNED_PATTERNS = [
   { name: '戴 (真名)', regex: /(?<![\w-])戴(?![\w-])/g },
   { name: '大虾 (花名)', regex: /(?<![\w-])大虾(?![\w-])/g },
   { name: '舒柯 (真名)', regex: /(?<![\w-])舒柯(?![\w-])/g },
-  { name: '拍 (拍板)', regex: /(?<![\w-])拍(?![\w-])/g },
-  { name: 'KR + 数字 (内部 KR 编号)', regex: /(?<![\w-])KR\d+(?![\w-])/g },
-  { name: 'kr + 数字 (内部 kr 编号)', regex: /(?<![\w-])kr\d+(?![\w-])/g },
+  { name: '拍 (拍板, 排除前后汉字的专名 "土拍" "流拍" "拍卖" "拍照")', regex: /(?<![\u4e00-\u9fff])拍(?![\u4e00-\u9fff])/g },
+  { name: 'KR + 数字 ≥1 (内部 KR 编号, 排除 KR0 placeholder)', regex: /(?<![\w-])KR[1-9]\d*(?![\w-])/g },
+  { name: 'kr + 数字 ≥1 (内部 kr 编号, 排除 kr0 placeholder)', regex: /(?<![\w-])kr[1-9]\d*(?![\w-])/g },
+  { name: 'Phase ≥1 (内部 Phase 编号, 排除 Phase0 placeholder)', regex: /(?<![\w-])Phase[1-9]\d*(?![\w-])/g },
+  { name: 'T 编号 1xx+ (排除 T000 placeholder)', regex: /(?<![\w-])T[1-9]\d{2}(?![\w-])/g },
+  { name: 'M 编号 1-5 (内部里程碑)', regex: /(?<![\w-])M[1-5](?![\w-])/g },
+  { name: 'Foundation ≥1 (排除 Foundation 0 placeholder)', regex: /Foundation[ \t]+[1-9]\d*/g },
   { name: 'kwokzit.info (内部域名)', regex: /kwokzit\.info/g },
 ];
 
@@ -32,6 +36,7 @@ const EXCLUDED_PATHS = [
   'csnews-agent/dist/',
   'csnews-agent/coverage/',
   'csnews-agent/.wrangler/',
+  'validate/',  // 隐私测试自己的代码, 含规则描述
   // README + AGENTS.md + docs 是公开文档, 但仍不能含隐私 (rule 通用)
 ];
 
@@ -107,8 +112,9 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
   it('git log --grep 不能含 戴 / 大虾 / 舒柯 / 拍 / KR\\d+ / kwokzit.info', () => {
     // 历史 commit message 不能有隐私字眼 (戴大虾 00:42 rule #2)
     // 排除历史遗留: 只看最近 50 个 commit (未来 commit 必须 0 命中)
-    const searchPatterns = ['戴', '大虾', '舒柯', '拍', 'kwokzit\\.info'];
-    const numPatterns = ['KR\\d+', 'kr\\d+'];
+    // commit message 不扫 kwokzit (commit 可能描述 kwokzit 规则本身, 自指悖论)
+    const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
+    const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
 
     try {
       const log = execSync('git log --oneline -50 --no-merges', { encoding: 'utf-8', cwd: process.cwd() });

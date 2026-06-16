@@ -2146,23 +2146,48 @@ async function refreshDashboard() {
  * READER module
  * ============================================================ */
 async function fetchReaderNews() {
+  // v0.36.10.3: 戴大虾 01:24 拍板"全量显示", 循环分页拉 (Worker pull 上限 200/次, offset 翻页)
+  // 进度回调: onProgress(currentCount, batchCount) → refreshReader 实时更新"X 条 · 拉取中..." 文本
   const cfg = getConfig();
-  const params = new URLSearchParams({
-    action: 'pull', type: 'news', format: 'full',
-    limit: String(STATE.filters.limit),
-    order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
-    order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
-  });
-  if (STATE.filters.level) params.set('level', STATE.filters.level);
-  if (STATE.filters.category) params.set('category', STATE.filters.category);
-  if (STATE.filters.since) params.set('since', STATE.filters.since);
-  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
   const start = performance.now();
-  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  const pageSize = Math.min(STATE.filters.limit, 200); // Worker hard cap 200
+  const allItems = [];
+  let offset = 0;
+  let total = 0;
+  let pageCount = 0;
+  let truncated = false;
+  while (true) {
+    const params = new URLSearchParams({
+      action: 'pull', type: 'news', format: 'full',
+      limit: String(pageSize),
+      offset: String(offset),
+      order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
+      order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
+    });
+    if (STATE.filters.level) params.set('level', STATE.filters.level);
+    if (STATE.filters.category) params.set('category', STATE.filters.category);
+    if (STATE.filters.since) params.set('since', STATE.filters.since);
+    const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    const items = data.items || [];
+    allItems.push(...items);
+    total = data.total || allItems.length;
+    truncated = data.truncated || false;
+    pageCount++;
+    // 进度回调 (UI 实时显示)
+    if (typeof STATE._fetchProgress === 'function') {
+      STATE._fetchProgress(allItems.length, total, pageCount);
+    }
+    // 终止条件: 本批 < pageSize (没更多) 或 全量已拿
+    if (items.length < pageSize || allItems.length >= total) break;
+    offset += pageSize;
+    // 安全护栏: 最多拉 50 页 (10000 条), 防无限循环
+    if (pageCount >= 50) break;
+  }
   const elapsed = Math.round(performance.now() - start);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return { items: data.items || [], total: data.total, truncated: data.truncated, elapsed };
+  return { items: allItems, total, truncated, elapsed, pageCount };
 }
 
 async function fetchReaderContent(id) {
@@ -2350,11 +2375,16 @@ async function refreshReader() {
   STATE.readerLastError = null;
   renderFeedSkeleton();
   updateStatus();
+  // 进度回调: 实时显示拉取进度
+  STATE._fetchProgress = (current, total, pageCount) => {
+    document.getElementById('result-meta').textContent =
+      `拉取中... ${current} / ${total} 条 (第 ${pageCount} 页)`;
+  };
   try {
-    const { items, total, truncated, elapsed } = await fetchReaderNews();
+    const { items, total, truncated, elapsed, pageCount } = await fetchReaderNews();
     STATE.items = items;
     document.getElementById('result-meta').textContent =
-      `${items.length} 条${truncated ? ` (总 ${total})` : ''} · ${elapsed}ms`;
+      `${items.length} 条${truncated ? ` (总 ${total})` : ''} · ${elapsed}ms · ${pageCount} 页`;
     renderLevelCounts(items);
     renderCategoryList(items);
     renderFeed();
@@ -2365,6 +2395,7 @@ async function refreshReader() {
     toast(`拉取失败: ${e.message}`, 'error');
   } finally {
     STATE.readerLoading = false;
+    STATE._fetchProgress = null;
     updateStatus();
   }
 }

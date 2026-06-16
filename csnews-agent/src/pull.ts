@@ -113,6 +113,7 @@ function projectFormat(items: any[], format: Format): any[] {
 export interface ParsedFilters {
   type: string;
   limit: number;
+  offset?: number; // 分页 offset (v0.36.10.3 viewer 全量拉取用)
   order: 'asc' | 'desc';
   orderBy: string;
   since?: string; // ISO 8601
@@ -167,6 +168,13 @@ export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | {
   }
   const limit = rawLimit;
 
+  // offset (v0.36.10.3 viewer 全量分页用, 默认 0)
+  const rawOffset = parseInt(url.searchParams.get('offset') || '0', 10);
+  if (isNaN(rawOffset) || rawOffset < 0) {
+    return { ok: false, error: 'offset must be a non-negative integer' };
+  }
+  const offset = rawOffset;
+
   // order
   const order = (url.searchParams.get('order') || 'desc').toLowerCase();
   if (order !== 'asc' && order !== 'desc') {
@@ -203,6 +211,7 @@ export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | {
   const filters: ParsedFilters = {
     type,
     limit,
+    offset,
     order: order as 'asc' | 'desc',
     orderBy,
     since,
@@ -312,6 +321,11 @@ function buildPostgRestQuery(filters: ParsedFilters): string {
 
   // limit
   params.push(`limit=${filters.limit}`);
+
+  // offset (v0.36.10.3 viewer 全量分页用)
+  if (filters.offset && filters.offset > 0) {
+    params.push(`offset=${filters.offset}`);
+  }
 
   // time window
   if (filters.since) {
