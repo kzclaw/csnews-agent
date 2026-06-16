@@ -1,0 +1,154 @@
+// ============================================================
+// CSNEWS Agent · 隐私 grep 契约 (戴大虾 2026-06-17 00:42 拍板)
+// ============================================================
+//用途：扫所有入仓文件注释 + 代码 + 配置, 命中以下隐私字眼即 fail
+//禁止字眼: 戴 / 大虾 / 舒柯 / 拍 / KR\d+ / kr\d+ / kwokzit\.info
+//文件范围: git ls-files 全部入仓文件 (排除 node_modules / dist / coverage / .wrangler / .git)
+//模式: word boundary 严格匹配, 避免误报 (如 "戴维斯" 不会误中 "戴")
+//失败处理: 任何命中 → test fail, 输出 file:line:matched_content → Mavis 立刻清
+//关联: 5 重安全网第 4 项 (privacy 自检) + OKR 文档 changelog "戴大虾批评吸收"
+//详见：tasks/csnews-agent-okr.md v0.36.10 · KR34 教训段
+
+import { describe, it, expect } from 'vitest';
+import { execSync } from 'child_process';
+
+const BANNED_PATTERNS = [
+  { name: '戴 (真名)', regex: /(?<![\w-])戴(?![\w-])/g },
+  { name: '大虾 (花名)', regex: /(?<![\w-])大虾(?![\w-])/g },
+  { name: '舒柯 (真名)', regex: /(?<![\w-])舒柯(?![\w-])/g },
+  { name: '拍 (拍板)', regex: /(?<![\w-])拍(?![\w-])/g },
+  { name: 'KR + 数字 (内部 KR 编号)', regex: /(?<![\w-])KR\d+(?![\w-])/g },
+  { name: 'kr + 数字 (内部 kr 编号)', regex: /(?<![\w-])kr\d+(?![\w-])/g },
+  { name: 'kwokzit.info (内部域名)', regex: /kwokzit\.info/g },
+];
+
+const EXCLUDED_PATHS = [
+  'node_modules/',
+  'dist/',
+  'coverage/',
+  '.wrangler/',
+  '.git/',
+  '.specify/',
+  'csnews-agent/dist/',
+  'csnews-agent/coverage/',
+  'csnews-agent/.wrangler/',
+  // README + AGENTS.md + docs 是公开文档, 但仍不能含隐私 (rule 通用)
+];
+
+function getTrackedFiles(): string[] {
+  try {
+    const out = execSync('git ls-files', { encoding: 'utf-8', cwd: process.cwd() });
+    return out.trim().split('\n').filter(f => {
+      // 排除 EXCLUDED_PATHS
+      if (EXCLUDED_PATHS.some(p => f.startsWith(p))) return false;
+      // 排除二进制 / lock
+      if (f.endsWith('.lock') || f.endsWith('.png') || f.endsWith('.jpg') || f.endsWith('.gif')) return false;
+      // 排除 .bak 历史备份
+      if (f.endsWith('.bak')) return false;
+      return true;
+    });
+  } catch (e) {
+    throw new Error(`git ls-files failed: ${e}`);
+  }
+}
+
+function scanFileForBanned(filePath: string): { pattern: string; line: number; content: string }[] {
+  const fs = require('fs');
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (e) {
+    // 二进制文件跳过 (虽已过滤但保险)
+    return [];
+  }
+  const hits: { pattern: string; line: number; content: string }[] = [];
+  const lines = content.split('\n');
+  lines.forEach((line, idx) => {
+    for (const { name, regex } of BANNED_PATTERNS) {
+      const matches = line.match(regex);
+      if (matches) {
+        // 每行每个 pattern 只报一次 (避免一行 100 个 match 刷屏)
+        hits.push({ pattern: name, line: idx + 1, content: line.trim().slice(0, 200) });
+      }
+    }
+  });
+  return hits;
+}
+
+describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
+  it('所有入仓文件不能含 戴 / 大虾 / 舒柯 / 拍 / KR\\d+ / kr\\d+', () => {
+    const files = getTrackedFiles();
+    const allHits: { file: string; pattern: string; line: number; content: string }[] = [];
+
+    for (const file of files) {
+      const hits = scanFileForBanned(file);
+      for (const hit of hits) {
+        allHits.push({ file, ...hit });
+      }
+    }
+
+    if (allHits.length > 0) {
+      // 输出前 30 个命中 (避免刷屏), 戴大虾/Mavis 看清楚再修
+      const report = allHits.slice(0, 30).map(h =>
+        `  ${h.file}:${h.line}  [${h.pattern}]  ${h.content}`
+      ).join('\n');
+      const more = allHits.length > 30 ? `\n  ... 还有 ${allHits.length - 30} 处` : '';
+      throw new Error(
+        `🚨 隐私 grep 失败: ${allHits.length} 处命中 (戴大虾 00:42 hard rule)\n` +
+        `前 30 处:\n${report}${more}\n\n` +
+        `修法: (a) 代码注释清掉 (b) git filter-branch 改历史 (c) 临时 GitHub repo private\n` +
+        `详见 OKR KR34 changelog 教训段`
+      );
+    }
+
+    expect(allHits.length).toBe(0);
+  });
+
+  it('git log --grep 不能含 戴 / 大虾 / 舒柯 / 拍 / KR\\d+ / kwokzit.info', () => {
+    // 历史 commit message 不能有隐私字眼 (戴大虾 00:42 rule #2)
+    // 排除历史遗留: 只看最近 50 个 commit (未来 commit 必须 0 命中)
+    const searchPatterns = ['戴', '大虾', '舒柯', '拍', 'kwokzit\\.info'];
+    const numPatterns = ['KR\\d+', 'kr\\d+'];
+
+    try {
+      const log = execSync('git log --oneline -50 --no-merges', { encoding: 'utf-8', cwd: process.cwd() });
+      const commits = log.trim().split('\n');
+      const offenders: { commit: string; match: string }[] = [];
+
+      for (const commitLine of commits) {
+        // 提取 commit hash (第一个 token)
+        const hash = commitLine.split(' ')[0];
+        // 读 commit message (commit hash 后的所有内容)
+        const msg = commitLine.slice(hash.length).trim();
+        for (const p of searchPatterns) {
+          // word boundary 匹配
+          const re = new RegExp(`(?<![\\w-])${p}(?![\\w-])`);
+          if (re.test(msg)) {
+            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"` });
+          }
+        }
+        for (const p of numPatterns) {
+          const re = new RegExp(p);
+          if (re.test(msg)) {
+            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"` });
+          }
+        }
+      }
+
+      if (offenders.length > 0) {
+        const report = offenders.map(o => `  ${o.commit}: ${o.match}`).join('\n');
+        throw new Error(
+          `🚨 Commit history 隐私 grep 失败: ${offenders.length} 处命中\n` +
+          `${report}\n\n` +
+          `修法: git filter-branch --msg-filter 'sed -E "s/戴|大虾|舒柯/kzclaw/g"' -- --all\n` +
+          `警告: force push 会 break 其他 fork + commit hash 全变`
+        );
+      }
+
+      expect(offenders.length).toBe(0);
+    } catch (e: any) {
+      if (e.message && e.message.includes('🚨')) throw e;
+      throw e;
+    }
+  });
+});
