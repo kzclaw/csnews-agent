@@ -47,7 +47,8 @@
   --shadow: none;
   --shadow-hover: 0 1px 0 var(--hairline-strong);
   --font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Cascadia Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  /* v0.36.11 KR3 (taste-skill v2 适配): Inter 删 (taste-skill §4.1 discouraged default, LLM 最大 tell 之一), 用 system-ui 零成本 + 零 privacy 风险 */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 280ms cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -90,7 +91,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
-  line-height: 1.55;
+  /* v0.36.11 KR3: line-height 1.55 → 1.4 (taste-skill §4.7 dense dashboard 紧凑层次) */
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -749,15 +751,17 @@ body {
   padding: 20px 28px 60px;
   max-width: 920px; width: 100%; margin: 0 auto;
 }
-.card {
+ .card {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  margin-bottom: 12px;
-  transition: border-color var(--transition), background var(--transition);
+  margin-bottom: 8px; /* v0.36.11 KR3: 12px → 8px (taste-skill §4.7 紧凑 dashboard) */
+  /* v0.36.11 KR3: 加 transform 到 transition, hover 时 translateY(-1px) 物理 push (taste-skill §4.5) */
+  transition: border-color var(--transition), background var(--transition), transform var(--transition);
   overflow: hidden; position: relative;
 }
-.card:hover { border-color: var(--hairline-strong); }
+.card:hover { border-color: var(--hairline-strong); transform: translateY(-1px); }
+.card-body:active { transform: scale(0.995); transition: transform 80ms ease; } /* v0.36.11 KR3: :active scale 物理 push (taste-skill §4.5) */
 .card.expanded {
   border-color: var(--hairline-strong);
   background: var(--bg-1);
@@ -1020,7 +1024,7 @@ body {
   .reader-body { grid-template-columns: 1fr; }
   .sidebar { display: none; }
   .filter-bar { padding: 10px 16px; }
-  .feed { padding: 14px 16px 40px; }
+  .feed { padding: 12px 14px 32px; } /* v0.36.11 KR3: 14px 16px 40px → 12px 14px 32px (taste-skill §4.7 紧凑 dashboard) */
   .card-body { padding: 14px 16px; }
   .card-title { font-size: 16px; }
   .modal { max-width: calc(100vw - 24px); margin: 12px; }
