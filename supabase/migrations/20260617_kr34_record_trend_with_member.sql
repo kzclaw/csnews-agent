@@ -1,6 +1,5 @@
 -- CSNEWS Agent · KR0 subrequest 优化: 合并 join_topic_member + record_trend_snapshot
 -- 2026-06-17 00:31
---
 -- 根因: handleProcessAction 每条新闻调 2 个 endpoint (joinTopicMember + recordTrendSnapshot)
 --       = 10 条 × 2 = 20 subrequests, 加上其他 step 累计 ~56 超过 CF Free plan 50 上限
 -- 修法: 新 RPC record_trend_with_member (p_news_id, p_topic_id, p_is_seed)
