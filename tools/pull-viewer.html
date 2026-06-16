@@ -2146,7 +2146,7 @@ async function refreshDashboard() {
  * READER module
  * ============================================================ */
 async function fetchReaderNews() {
-  // v0.36.10.3: 戴大虾 01:24 拍板"全量显示", 循环分页拉 (Worker pull 上限 200/次, offset 翻页)
+  // v0.36.10.3: 全量循环分页 (Worker pull 上限 200/次, offset 翻页)
   // 进度回调: onProgress(currentCount, batchCount) → refreshReader 实时更新"X 条 · 拉取中..." 文本
   const cfg = getConfig();
   const start = performance.now();
