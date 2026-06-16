@@ -58,6 +58,10 @@
     --bg-1: oklch(9% 0.006 95);
     --bg-2: oklch(12% 0.006 95);
     --bg-hover: oklch(14% 0.006 95);
+    /* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
+    --accent-blue: #00D4FF;
+    --accent-green: #00FF88;
+    --accent-cyan: #00E5FF;
     --bg-overlay: oklch(7% 0.006 95 / 72%);
     --hairline: oklch(78% 0 0 / 0.12);
     --hairline-strong: oklch(78% 0 0 / 0.28);
@@ -173,9 +177,73 @@ body {
   font-size: 11.5px; color: var(--text-2); font-family: var(--font-mono);
 }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
-.status.online .status-dot { background: var(--success); }
-.status.offline .status-dot { background: var(--danger); }
+.status.online .status-dot { background: var(--success); animation: ledBlink 1.2s ease-in-out infinite; }
+.status.offline .status-dot { background: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
 .status.config .status-dot { background: var(--text-3); }  /* 未配置 — 灰色 */
+
+/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 状态灯闪烁 NASA HUD 感) */
+@keyframes ledBlink { 0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; } 50% { opacity: 0.4; box-shadow: 0 0 1px currentColor; } }
+.status.online .status-dot { color: var(--success); }
+.status.offline .status-dot { color: var(--danger); }
+
+/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 滚动 ticker — 横向新闻条) */
+.ticker {
+  overflow: hidden; white-space: nowrap;
+  background: var(--bg-1); border-bottom: 1px solid var(--hairline);
+  padding: 6px 0; font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-2); position: relative;
+}
+.ticker-track {
+  display: inline-block; white-space: nowrap;
+  padding-left: 100%;
+  animation: tickerScroll 40s linear infinite;
+  font-variant-numeric: tabular-nums;
+}
+.ticker-track span { padding: 0 24px; }
+.ticker-track span::before { content: '◆'; color: var(--accent-blue); margin-right: 6px; font-size: 8px; }
+@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 网格线扫描 — NASA Mission Control 背景) */
+.view#view-dashboard { position: relative; }
+.view#view-dashboard::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--accent-blue) 6%, transparent) 50%, transparent 100%),
+    repeating-linear-gradient(0deg, transparent 0px, transparent 39px, color-mix(in oklab, var(--accent-blue) 4%, transparent) 40px, transparent 41px),
+    repeating-linear-gradient(90deg, transparent 0px, transparent 79px, color-mix(in oklab, var(--accent-blue) 4%, transparent) 80px, transparent 81px);
+  background-size: 100% 600px, 100% 100%, 100% 100%;
+  animation: gridScan 8s linear infinite;
+  pointer-events: none; z-index: 0;
+}
+.view#view-dashboard > * { position: relative; z-index: 1; }
+@keyframes gridScan {
+  0% { background-position: 0% -100%, 0 0, 0 0; }
+  100% { background-position: 0% 100%, 0 0, 0 0; }
+}
+
+/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard KPI 数字翻牌 + tabular-nums) */
+.kpi-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.kpi-value.flipping { animation: flipIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes flipIn {
+  0% { opacity: 0; transform: translateY(8px) scale(0.95); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* v0.36.12 KR3 (戴大虾要「HUD 感」: 终端 monospace + 高对比 accent) */
+.dash-tab, .dash-section-title, .kpi-label, .activity-meta, .log-line {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.kpi-label { color: var(--accent-blue); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
 
 /* buttons */
 .btn {
@@ -303,8 +371,8 @@ body {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--text-3);
 }
-.kpi-status.ok { background: var(--success); }
-.kpi-status.fail { background: var(--danger); }
+.kpi-status.ok { background: var(--success); color: var(--success); animation: ledBlink 1.2s ease-in-out infinite; }
+.kpi-status.fail { background: var(--danger); color: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
 
 .row-2 {
   display: grid; grid-template-columns: 2fr 1fr;
@@ -1155,6 +1223,15 @@ body::before {
 
     <!-- ============ DASHBOARD VIEW ============ -->
     <section class="view active" id="view-dashboard">
+      <!-- v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 滚动 ticker — 横向新闻条 NASA HUD 感) -->
+      <div class="ticker" id="ticker">
+        <div class="ticker-track" id="ticker-track">
+          <span>CSNEWS · AGENT · 趋势引擎已启动</span>
+          <span>NASA MISSION CONTROL · WORLD ENGINE · 2026</span>
+          <span>TIE-LITE · NEWS SELF GROWTH · 7 层信息模型</span>
+          <span>R2 + SUPABASE + CF WORKERS · 三栈联动</span>
+        </div>
+      </div>
       <nav class="dash-tabs" id="dash-tabs">
         <button class="dash-tab active" data-tab="overview">
           <span>Overview</span>
