@@ -24,8 +24,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 20 个 action', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(20);
+  it('ALLOWED_ACTIONS 必须含 21 个 action', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(21);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {

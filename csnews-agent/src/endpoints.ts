@@ -20,6 +20,9 @@ import { countAnomalySignals, Z_THRESHOLD, ZSCORE_REASON_PREFIX } from './zscore
 import { getBudgetStatus } from './ai-budget';
 import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
+import { runEventProcess, EVENT_CLUSTERS_R2_KEY, EVENT_CLUSTERS_INDEX_R2_KEY } from './event-process';
+import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event-threshold';
+import { runEventClustering, type EventCluster } from './event-cluster';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -1700,6 +1703,160 @@ export async function handleEntityAction(request: Request, env: Env, url: URL, c
         status: 500, headers: { 'Content-Type': 'application/json', ...cors },
       });
     }
+  }
+
+  // unreachable
+  return new Response(JSON.stringify({ error: 'internal_error' }), {
+    status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+  });
+}
+
+// ===================== event (Event Graph · v0.36.11) =====================
+// kzclaw 16:48 确定: Jaccard entity_overlap 聚类 + threshold 自适应 + review 闭环
+// kzclaw 5h 配额期外 0 DDL = 聚类结果暂存 R2 event-clusters.json
+// 4 档 type:
+//   - clusters: 读 R2 event-clusters.json (kzclaw review 入口)
+//   - cluster: 跑 runEventClustering (Jaccard + threshold 自适应)
+//   - process: 跑 runEventProcess (kzclaw 0 DDL = 暂存 R2)
+//   - review: kzclaw review 错/对 → threshold 自动微调 (±0.05)
+// 反爬：单 IP 60 req/min (复用 KR0 / KR0 / KR0 模式)
+// 鉴权：index.ts fetch handler 入口统一 authRequest
+// 部署边界：git push 触发 auto-deploy (v0.36.2 部署边界铁律)
+export async function handleEventAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  // 1. 输入校验
+  const type = url.searchParams.get('type') || 'clusters';
+  const validTypes = ['clusters', 'cluster', 'process', 'review', 'threshold'];
+  if (!validTypes.includes(type)) {
+    return new Response(JSON.stringify({
+      error: 'invalid_type',
+      reason: `type 必须是 clusters|cluster|process|review|threshold 五选一, 当前 ${type}`,
+    }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 2. 反爬限流 (单 IP 60 req/min)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const rateKey = `event_rate:${ip}`;
+  if (env.PROCESS_STATE) {
+    try {
+      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
+      if (cur >= 60) {
+        return new Response(JSON.stringify({ error: 'rate_limited', reason: '单 IP 60 req/min 上限, 请稍后重试' }), {
+          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+        });
+      }
+      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
+    } catch {
+      // 限流失败不阻塞
+    }
+  }
+
+  // 3. 根据 type 处理
+  if (type === 'clusters') {
+    // 读 R2 event-clusters.json
+    try {
+      const obj = await env.csnews_raw.get(EVENT_CLUSTERS_R2_KEY);
+      if (!obj) {
+        return new Response(JSON.stringify({
+          type: 'clusters',
+          description: 'R2 event-clusters.json 不存在 (尚未运行 cluster 或 process)',
+          clusters: [],
+          total: 0,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...cors },
+        });
+      }
+      const json = await obj.json<{ clusters: EventCluster[]; threshold: number; generated_at: string }>();
+      return new Response(JSON.stringify({
+        type: 'clusters',
+        description: 'kzclaw review 入口 (R2 event-clusters.json)',
+        generated_at: json.generated_at,
+        threshold: json.threshold,
+        total: json.clusters?.length || 0,
+        clusters: json.clusters || [],
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'cluster') {
+    // 跑 runEventClustering (实时)
+    const entities = await (await import('./entity-process')).loadReviewedCandidates(env);
+    const result = await runEventClustering(env, entities);
+    return new Response(JSON.stringify({
+      type: 'cluster',
+      description: '跑 runEventClustering (Jaccard entity_overlap + threshold 自适应)',
+      threshold: result.threshold,
+      jaccard_pairs: result.jaccard_pairs,
+      total: result.clusters.length,
+      clusters: result.clusters,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'process') {
+    // kzclaw 0 DDL = 暂存 R2 event-clusters.json
+    const result = await runEventProcess(env);
+    return new Response(JSON.stringify({
+      type: 'process',
+      description: 'kzclaw 0 DDL = 暂存 R2 event-clusters.json, 等 5h 配额期外拍 schema migration',
+      clusters: result.clusters,
+      threshold: result.threshold,
+      written: result.written,
+      errors: result.errors,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'review') {
+    // kzclaw review 反馈 → threshold 自动微调 (kzclaw 16:48 确定闭环)
+    const review = url.searchParams.get('review') || 'correct';
+    const clusterId = url.searchParams.get('cluster_id') || undefined;
+    const reason = url.searchParams.get('reason') || undefined;
+
+    if (review !== 'correct' && review !== 'incorrect') {
+      return new Response(JSON.stringify({
+        error: 'invalid_review',
+        reason: `review 必须是 correct|incorrect 二选一, 当前 ${review}`,
+      }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+
+    const updated = await recordReview(env, review, clusterId, reason);
+    return new Response(JSON.stringify({
+      type: 'review',
+      description: 'kzclaw review 反馈 → threshold 自动微调 (闭环)',
+      review,
+      old_threshold: updated.history[updated.history.length - 1]?.old_value,
+      new_threshold: updated.current,
+      history_length: updated.history.length,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'threshold') {
+    // 读 threshold history
+    const history = await loadThresholdHistory(env);
+    return new Response(JSON.stringify({
+      type: 'threshold',
+      description: 'kzclaw review 反馈驱动的 threshold 调优历史',
+      current: history.current,
+      history_length: history.history.length,
+      history: history.history,
+      updated_at: history.updated_at,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
   }
 
   // unreachable
