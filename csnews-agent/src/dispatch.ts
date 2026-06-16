@@ -28,6 +28,7 @@ import {
   handleEmbedAction, handleZakerHotAction,
   handleProcessAction, handleHealthAction, handleLogsAction,
   handleContentAction, handleTrendAction, handleKnowledgeAction,
+  handleEntityAction,
 } from './endpoints';
 
 /**
@@ -41,6 +42,7 @@ export const ALLOWED_ACTIONS = [
   'fission', 'save', 'list', 'embed', 'zaker-hot',
   'process', 'health', 'logs',
   'content', 'trend', 'knowledge',
+  'entity',
 ] as const;
 export type Action = typeof ALLOWED_ACTIONS[number];
 
@@ -99,6 +101,7 @@ export async function dispatchAction(
   if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
   if (action === 'trend') return await handleTrendAction(request, env, url, cors, ctx);
   if (action === 'knowledge') return await handleKnowledgeAction(request, env, url, cors, ctx);
+  if (action === 'entity') return await handleEntityAction(request, env, url, cors, ctx);
 
   // unknown action
   return new Response(JSON.stringify({ error: 'unknown action' }), {

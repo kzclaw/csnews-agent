@@ -18,6 +18,8 @@ import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKe
 import { validateType as knowledgeValidateType, validateSince as knowledgeValidateSince, validateLimit as knowledgeValidateLimit, validateTopicId, rateKeyForIp as knowledgeRateKeyForIp, dailyHitsKeyForToday as knowledgeHitsKeyForToday, RATE_LIMIT_PER_MIN as KNOWLEDGE_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES, knowledgeR2Key, KNOWLEDGE_INDEX_KEY } from './knowledge-validation';
 import { countAnomalySignals, Z_THRESHOLD, ZSCORE_REASON_PREFIX } from './zscore';
 import { getBudgetStatus } from './ai-budget';
+import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
+import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
@@ -1565,4 +1567,143 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
     console.error(`[knowledge] accumulation job failed: ${e?.message || e}`);
     return { written, errors: errors + 1 };
   }
+}
+
+// ===================== entity (Entity Engine · v0.36.11) =====================
+// kzclaw 16:28 确定: 0 硬编码, 纯自适应/自学习/自进化
+// kzclaw 16:33 确定推 · bge-m3 走 CF Workers AI 独立池
+// 3 档 type:
+//   - candidates: 读 R2 entity-candidates.json (kzclaw review 入口)
+//   - selflearn: 触发 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type)
+//   - process: 触发 runEntityProcess (kzclaw 0 DDL = 暂存 R2 entity-finalized.json, 等 5h 配额期外拍 schema migration)
+// 反爬：单 IP 60 req/min (复用 KR0 / KR0 模式)
+// 鉴权：index.ts fetch handler 入口统一 authRequest
+// 部署边界：git push 触发 auto-deploy (v0.36.2 部署边界铁律)
+export async function handleEntityAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  // 1. 输入校验
+  const type = url.searchParams.get('type') || 'candidates';
+  const validTypes = ['candidates', 'selflearn', 'process', 'finalized'];
+  if (!validTypes.includes(type)) {
+    return new Response(JSON.stringify({
+      error: 'invalid_type',
+      reason: `type 必须是 candidates|selflearn|process|finalized 四选一, 当前 ${type}`,
+    }), {
+      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const rateKey = `entity_rate:${ip}`;
+  if (env.PROCESS_STATE) {
+    try {
+      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
+      if (cur >= 60) {
+        return new Response(JSON.stringify({ error: 'rate_limited', reason: '单 IP 60 req/min 上限, 请稍后重试' }), {
+          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+        });
+      }
+      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
+    } catch {
+      // 限流失败不阻塞
+    }
+  }
+
+  // 3. 根据 type 查数据
+  if (type === 'candidates') {
+    // 读 R2 entity-candidates.json
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(JSON.stringify({
+          type: 'candidates',
+          description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn, 或自学习 0 候选)',
+          candidates: [],
+          total: 0,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...cors },
+        });
+      }
+      const json = await obj.json<{ candidates: any[]; generated_at: string; total_news: number }>();
+      return new Response(JSON.stringify({
+        type: 'candidates',
+        description: 'kzclaw review 入口 (R2 entity-candidates.json)',
+        generated_at: json.generated_at,
+        total_news: json.total_news,
+        total: json.candidates?.length || 0,
+        candidates: json.candidates || [],
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'selflearn') {
+    // 触发 runEntitySelfLearn (n-gram + bge-m3)
+    const result = await runEntitySelfLearn(env);
+    return new Response(JSON.stringify({
+      type: 'selflearn',
+      description: '跑 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type)',
+      total_news: result.total,
+      embedded: result.embedded,
+      candidates: result.candidates.length,
+      top_candidates: result.candidates.slice(0, 10),
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'process') {
+    // kzclaw 0 DDL = 暂存 R2 entity-finalized.json
+    const result = await runEntityProcess(env);
+    return new Response(JSON.stringify({
+      type: 'process',
+      description: 'kzclaw 0 DDL = 暂存 R2 entity-finalized.json, 等 5h 配额期外拍 schema migration',
+      finalized: result.finalized,
+      written: result.written,
+      errors: result.errors,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'finalized') {
+    // 读 R2 entity-finalized.json
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_FINALIZED_R2_KEY);
+      if (!obj) {
+        return new Response(JSON.stringify({
+          type: 'finalized',
+          description: 'R2 entity-finalized.json 不存在 (尚未运行 process)',
+          entities: [],
+          total: 0,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...cors },
+        });
+      }
+      const json = await obj.json<{ entities: any[]; generated_at: string }>();
+      return new Response(JSON.stringify({
+        type: 'finalized',
+        description: 'kzclaw review 后入库的实体 (R2 entity-finalized.json, kzclaw 0 DDL = 暂存 R2)',
+        generated_at: json.generated_at,
+        total: json.entities?.length || 0,
+        entities: json.entities || [],
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  // unreachable
+  return new Response(JSON.stringify({ error: 'internal_error' }), {
+    status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+  });
 }
