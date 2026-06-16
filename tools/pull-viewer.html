@@ -2191,13 +2191,36 @@ async function fetchReaderNews() {
 }
 
 async function fetchReaderContent(id) {
+  // v0.36.10.5: Worker content endpoint (KR32 拍板) 实际返 JSON { id, title, ..., r2: { key, title, category, score, level, topic_id, fission, created_at, content_length } | null, notice?: string }
+  // R2 不存正文 (KR32 拍板 "仅存摘要 + 原始 URL"), 所以 format=text 没 content 字段, 改 format=json + 解析 r2 字段
   if (STATE.contentCache.has(id)) return STATE.contentCache.get(id);
   const cfg = getConfig();
-  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=content&id=${encodeURIComponent(id)}&format=text`;
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=content&id=${encodeURIComponent(id)}&format=json`;
   const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  const text = data.content || data.text || data.full || '';
+
+  // 渲染内容: 优先 r2 字段 (key/title/category/score/level/topic_id/fission/created_at/content_length) + notice (如果 R2 缺失)
+  // R2 不存正文, 消费者想发全文用 url 跳到原始页面 (KR32 设计如此)
+  const lines = [];
+  lines.push(`来源: ${data.source || '?'} · ${data.category || '未知分类'}`);
+  lines.push(`热度: hot_score=${data.hot_score ?? '?'} · score=${data.score ?? '?'} · level=${data.level ?? '?'}`);
+  if (data.topic_id) lines.push(`话题: ${data.topic_id}`);
+  lines.push(`入库时间: ${data.created_at || '?'}`);
+  if (data.url) lines.push(`原文链接: ${data.url}`);
+  if (data.r2) {
+    lines.push('');
+    lines.push(`R2 摘要 (key=${data.r2.key}):`);
+    lines.push(JSON.stringify(data.r2, null, 2));
+  }
+  if (data.notice) {
+    lines.push('');
+    lines.push(`⚠️ ${data.notice}`);
+  } else if (!data.r2) {
+    lines.push('');
+    lines.push('⚠️ 该新闻 R2 摘要缺失。KR32 拍板 R2 仅存摘要 + 原始 URL, 不存正文。如需全文请访问上方原文链接。');
+  }
+  const text = lines.join('\n');
   STATE.contentCache.set(id, text);
   return text;
 }
@@ -2382,13 +2405,34 @@ async function refreshReader() {
   };
   try {
     const { items, total, truncated, elapsed, pageCount } = await fetchReaderNews();
-    STATE.items = items;
+    // v0.36.10.5 戴舒柯 02:01 截图 4 次同 url 重复: 内存去重按 url + 保留最新 created_at
+    // 历史数据问题 (5-29 之前 ZAKER fetch 没去重), 修法: viewer 端内存去重, 不改 supabase / Worker
+    const deduped = [];
+    const urlMap = new Map();
+    for (const it of items) {
+      const url = it.url || it.id;
+      if (!urlMap.has(url)) {
+        urlMap.set(url, it);
+        deduped.push(it);
+      } else {
+        const existing = urlMap.get(url);
+        const eTs = Date.parse(existing.created_at || '') || 0;
+        const nTs = Date.parse(it.created_at || '') || 0;
+        if (nTs > eTs) {
+          urlMap.set(url, it);
+          const idx = deduped.indexOf(existing);
+          if (idx >= 0) deduped[idx] = it;
+        }
+      }
+    }
+    STATE.items = deduped;
+    const dupCount = items.length - deduped.length;
     document.getElementById('result-meta').textContent =
-      `${items.length} 条${truncated ? ` (总 ${total})` : ''} · ${elapsed}ms · ${pageCount} 页`;
-    renderLevelCounts(items);
-    renderCategoryList(items);
+      `${deduped.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
+    renderLevelCounts(deduped);
+    renderCategoryList(deduped);
     renderFeed();
-    toast(`已刷新 ${items.length} 条`, 'success');
+    toast(dupCount > 0 ? `已刷新 ${deduped.length} 条 (去重 ${dupCount} 条)` : `已刷新 ${deduped.length} 条`, 'success');
   } catch (e) {
     STATE.readerLastError = { message: e.message || String(e) };
     renderFeed();

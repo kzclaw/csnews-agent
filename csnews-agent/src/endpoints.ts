@@ -833,40 +833,50 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   };
 
   // ========== 7. r2_latest_write（按 created_at 排序的真正最新 news）==========
-  // v0.36.1 旧实现 bug: list 默认升序, limit 50 全是老 obj, sort 倒序取到 5-29 范围内最大
-  // 修 v0.36.2: list 拿 1000 条 (R2 单次 list 上限) + 按 R2 key 倒序 + get obj content
+  // 旧实现 bug: list 默认升序, limit 50 全是老 obj, sort 倒序取到 5-29 范围内最大
+  // 修: list 拿 1000 条 (R2 单次 list 上限) + 按 R2 key 倒序 + get obj content
+  // 修: 改用 R2 obj `uploaded` 字段 (CF R2 binding Date 类型, 反映 R2 上次 PUT 时间) 替代 content.created_at
+  //   旧 bug: ZAKER fetch 的 R2 obj 没 created_at 字段, 或 created_at 写入后不再更新, 83 天前写的 obj 永远显示 83 天
+  //   新实现: 用 R2 list 返回的 obj.uploaded (CF R2 binding 类型自带 Date)
+  //   备注: process 不再写 R2 news/zaker/, 只写 Supabase. 此字段反映 R2 历史最后写入时间, 不代表现在 process 状态
   try {
     const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1000 });
     if (list.objects && list.objects.length > 0) {
       // 按 R2 key 倒序（key 含毫秒时间戳，字典序 = 时间序）
       const sorted = [...list.objects].sort((a, b) => b.key.localeCompare(a.key));
       const latestObj = sorted[0];
-      const body = await env.csnews_raw.get(latestObj.key);
-      if (body) {
-        const text = await body.text();
-        try {
-          const parsed = JSON.parse(text);
-          result.r2_latest_write = {
-            key: latestObj.key,
-            created_at: parsed.created_at || null,
-            title: parsed.title || null,
-          };
-          // 看 created_at 多新
-          if (parsed.created_at) {
-            const writeAgeMs = ts - Date.parse(parsed.created_at);
-            if (writeAgeMs < 2 * 3600_000) checks.r2_latest_write = { status: "ok", detail: `last write ${Math.round(writeAgeMs / 60000)} min ago` };
-            else if (writeAgeMs < 6 * 3600_000) checks.r2_latest_write = { status: "degraded", detail: `last write ${Math.round(writeAgeMs / 60)} min ago (> 2h)` };
-            else checks.r2_latest_write = { status: "down", detail: `last write ${Math.round(writeAgeMs / 3600_000)}h ago (> 6h)` };
-          } else {
-            checks.r2_latest_write = { status: "unknown", detail: "no created_at field in R2 obj" };
-          }
-        } catch {
-          result.r2_latest_write = { key: latestObj.key, parse_error: true };
-          checks.r2_latest_write = { status: "unknown", detail: "R2 obj not JSON" };
-        }
+      // 优先用 R2 obj `uploaded` Date (CF R2 binding 自带, 反映 obj 上次 PUT 时间)
+      // 兜底用 content.created_at (旧 R2 obj 兼容)
+      let lastWriteTs: number | null = null;
+      let lastWriteSource: "r2_uploaded" | "content_created_at" = "r2_uploaded";
+      if (latestObj.uploaded) {
+        lastWriteTs = latestObj.uploaded.getTime();
       } else {
-        result.r2_latest_write = null;
-        checks.r2_latest_write = { status: "unknown", detail: "R2 obj body empty" };
+        // 兜底: get obj content, 读 created_at 字段
+        const body = await env.csnews_raw.get(latestObj.key);
+        if (body) {
+          const text = await body.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.created_at) {
+              lastWriteTs = Date.parse(parsed.created_at);
+              lastWriteSource = "content_created_at";
+            }
+          } catch {}
+        }
+      }
+      result.r2_latest_write = {
+        key: latestObj.key,
+        uploaded: latestObj.uploaded ? latestObj.uploaded.toISOString() : null,
+        source: lastWriteSource,
+      };
+      if (lastWriteTs) {
+        const writeAgeMs = ts - lastWriteTs;
+        if (writeAgeMs < 2 * 3600_000) checks.r2_latest_write = { status: "ok", detail: `last write ${Math.round(writeAgeMs / 60000)} min ago` };
+        else if (writeAgeMs < 6 * 3600_000) checks.r2_latest_write = { status: "degraded", detail: `last write ${Math.round(writeAgeMs / 60)} min ago (> 2h)` };
+        else checks.r2_latest_write = { status: "down", detail: `last write ${Math.round(writeAgeMs / 3600_000)}h ago (> 6h)` };
+      } else {
+        checks.r2_latest_write = { status: "unknown", detail: "no uploaded or content.created_at" };
       }
     } else {
       result.r2_latest_write = null;
