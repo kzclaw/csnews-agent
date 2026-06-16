@@ -113,41 +113,55 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
     // 历史 commit message 不能有隐私字眼 (戴大虾 00:42 rule #2)
     // 排除历史遗留: 只看最近 50 个 commit (未来 commit 必须 0 命中)
     // commit message 不扫 kwokzit (commit 可能描述 kwokzit 规则本身, 自指悖论)
+    //
+    // 戴舒柯 v0.36.10.6 拍板 (2026-06-17 02:38) — privacy 不可以再有新增命中
+    // KNOWN_FALSE_POSITIVES 是历史 commit 已知命中, 作为特殊情况接受 (force push 会 break 戴大虾 1:40 commit 21aacaa + 5h 拍板链, 不修)
+    // 未来 commit 必须 0 命中 (历史 baseline 之外)
+    const KNOWN_FALSE_POSITIVES: Record<string, string> = {
+      'd0e7bff': '5h 拍板链写"拍板"字 (戴大虾 5h 拍板链里写), 当时隐私 regex 还没加"拍"模式',
+      '21aacaa': '戴大虾 1:40 commit "Update 20260617_kr34_record_trend_with_member.sql" 含 kr34 (测试 supabase GitHub Integration 触发)',
+    };
     const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
     const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
 
     try {
       const log = execSync('git log --oneline -50 --no-merges', { encoding: 'utf-8', cwd: process.cwd() });
       const commits = log.trim().split('\n');
-      const offenders: { commit: string; match: string }[] = [];
+      const offenders: { commit: string; match: string; reason: string }[] = [];
 
       for (const commitLine of commits) {
         // 提取 commit hash (第一个 token)
         const hash = commitLine.split(' ')[0];
+        // 跳过 KNOWN_FALSE_POSITIVES (历史特殊情况, 戴舒柯 02:38 拍板接受)
+        if (KNOWN_FALSE_POSITIVES[hash]) continue;
         // 读 commit message (commit hash 后的所有内容)
         const msg = commitLine.slice(hash.length).trim();
         for (const p of searchPatterns) {
           // word boundary 匹配
           const re = new RegExp(`(?<![\\w-])${p}(?![\\w-])`);
           if (re.test(msg)) {
-            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"` });
+            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"`, reason: '新增命中' });
           }
         }
         for (const p of numPatterns) {
           const re = new RegExp(p);
           if (re.test(msg)) {
-            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"` });
+            offenders.push({ commit: hash, match: `pattern="${p}" in "${msg.slice(0, 80)}"`, reason: '新增命中' });
           }
         }
       }
 
       if (offenders.length > 0) {
-        const report = offenders.map(o => `  ${o.commit}: ${o.match}`).join('\n');
+        const report = offenders.map(o => `  ${o.commit}: ${o.match} (${o.reason})`).join('\n');
+        const fpReport = Object.entries(KNOWN_FALSE_POSITIVES)
+          .map(([h, r]) => `  ${h} (特殊情况, 戴舒柯 02:38 接受): ${r}`)
+          .join('\n');
         throw new Error(
-          `🚨 Commit history 隐私 grep 失败: ${offenders.length} 处命中\n` +
+          `🚨 Commit history 隐私 grep 失败: ${offenders.length} 处新增命中 (历史特殊情况已排除)\n` +
           `${report}\n\n` +
-          `修法: git filter-branch --msg-filter 'sed -E "s/戴|大虾|舒柯/kzclaw/g"' -- --all\n` +
-          `警告: force push 会 break 其他 fork + commit hash 全变`
+          `已知特殊情况 (force push 会 break 戴大虾 1:40 commit + 5h 拍板链, 戴舒柯 02:38 拍板接受):\n` +
+          `${fpReport}\n\n` +
+          `修法: 改 commit message 后 amend (最新 commit) / rebase -i + reword (历史 commit)`
         );
       }
 

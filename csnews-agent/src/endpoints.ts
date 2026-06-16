@@ -714,28 +714,29 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 // kzclaw 2026-06-12 20:38 确定: health 端点要真的做到能全面检查 health
 //
 // 9 大维度检查 (每个独立 try/catch, 失败降级但记录到 health_checks 数组):
-//  1. worker_version     - 当前部署版本
+//  1. deployment_id      - CF runtime env.CF_DEPLOYMENT_ID (UUID, 每次部署唯一)
 //  2. last_process_at    - 最近 process 跑时间 (KV 持久化)
 //  3. cron_health        - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
 //  4. secret_resolved    - WORKER_SELF_URL secret 是不是占位符 DO_NOT_USE
 //  5. supabase_counts    - 6 张表精确行数 (schema-aware query)
 //  6. supabase_reachable - Supabase 6 张表是否全部可查 (用 parallel fetch + ok count)
-//  7. r2_latest_write    - R2 news/zaker/ 最新写入 (按 created_at 排序, 不用字典序)
+//  7. r2_latest_write    - R2 news/zaker/ 最新写入 (按 R2 obj uploaded 字段, 不用 content.created_at)
 //  8. r2_prefix_counts   - R2 各 prefix 行数 (news/embeddings/fission/trends/warnings/logs)
 //  9. cron_history       - R2 logs/ 上一小时 [scheduler] log 数量 (判断 cron 跑没跑)
 //
 // 返回 status 字段 (ok / degraded / down) + 9 维度详情
+// 2026-06-17 删 worker_version 字段 (v0.36.10.6 拍板 B: 改用 env.CF_DEPLOYMENT_ID, 真 commit hash 查 `git log origin/main -1 --format='%h'`)
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const ts = Date.now();
   const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
   const result: any = {
-    worker_version: env.WORKER_VERSION || "unknown",
+    deployment_id: (env as any).CF_DEPLOYMENT_ID || "unknown",  // CF Workers runtime 注入, 每次部署 UUID
     status: "ok",  // 整体 status: ok / degraded / down
     ts,
   };
 
-  // ========== 1. worker_version（已设 result.worker_version）==========
-  checks.worker_version = { status: "ok", detail: result.worker_version };
+  // ========== 1. deployment_id（已设 result.deployment_id）==========
+  checks.deployment_id = { status: "ok", detail: result.deployment_id };
 
   // ========== 2. last_process_at（KV 持久化）==========
   try {
