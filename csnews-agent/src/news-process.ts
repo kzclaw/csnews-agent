@@ -94,9 +94,64 @@ export async function joinTopicMember(env: Env, newsId: string, topicId: string,
 
 //R2存储(去重存储层)
 export async function saveToR2(env: Env, prefix: string, data: object): Promise<string> {
- const key = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.json`;
- await env.csnews_raw.put(key, JSON.stringify(data), {
- httpMetadata: { contentType: 'application/json' },
- });
- return key;
+  const key = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.json`;
+  await env.csnews_raw.put(key, JSON.stringify(data), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+  return key;
+}
+
+// ============================================================
+// KR0 subrequest 优化 (v0.36.10)
+// ============================================================
+//用途：handleProcessAction 每次 cron 调用 10 条新闻, 优化 subrequest 数从 ~56 降到 ~37
+//详见：tasks/csnews-agent-okr.md v0.36.10 · KR0
+
+//批量插入新闻记录: 单次 subrequest 插 N 条, 返 N 个 id 对应原 array 顺序
+export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
+  title: string; url?: string; source?: string; category?: string;
+  hot_score?: number; published_at?: string; summary?: string;
+  embedding?: number[]; r2_key?: string; topic_id?: string;
+  level?: string; score?: number; is_stored_r2?: boolean;
+}>): Promise<string[]> {
+  if (!newsList.length) return [];
+  //Client-side 生成 UUID (Supabase 批量 insert 默认不返确定性 id)
+  const withIds = newsList.map(n => ({
+    id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    ...n,
+  }));
+  const res = await supabaseFetch(env, '/rest/v1/news_hotspots', {
+    method: 'POST',
+    body: JSON.stringify(withIds),
+    headers: { 'Prefer': 'return=representation' },
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[KR0] insertNewsHotspotsBatch HTTP ${res.status} for ${newsList.length} rows: ${errText.slice(0,200)}`);
+    return [];
+  }
+  const data = await safeJson(res) as any[];
+  //返 ids 按输入顺序 (Supabase PostgREST 保证 RETURNING 顺序 = INSERT 顺序)
+  return Array.isArray(data) ? data.map(r => r.id) : [];
+}
+
+//合并 join_topic_member + record_trend_snapshot 为 1 个 RPC
+//原子事务: news_topic_members INSERT + trend_snapshots INSERT + warnings INSERT 一起提交
+export async function recordTrendWithMember(env: Env, newsId: string, topicId: string, isNewTopic = false): Promise<any> {
+  try {
+    const res = await supabaseFetch(env, '/rest/v1/rpc/record_trend_with_member', {
+      method: 'POST',
+      body: JSON.stringify({ p_news_id: newsId, p_topic_id: topicId, p_is_seed: isNewTopic }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[KR0] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0,200)}`);
+      return null;
+    }
+    const data = await safeJson(res) as any[];
+    return Array.isArray(data) ? data[0] || null : null;
+  } catch (e: any) {
+    console.error(`[KR0] record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`);
+    return null;
+  }
 }

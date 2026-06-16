@@ -16,7 +16,7 @@ import {
   CATEGORY_SEEDS_R2_KEY, DEFAULT_CATEGORY_SEEDS,
 } from './category-seeds';
 import { scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD, hashStr } from './score';
-import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, saveToR2, joinTopicMember } from './news-process';
+import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, insertNewsHotspotsBatch, recordTrendWithMember, saveToR2, joinTopicMember } from './news-process';
 import { logEvent } from './log';
 import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES } from './content-validation';
 import { validateType, validateSince, validateLimit, rateKeyForIp as trendRateKeyForIp, dailyHitsKeyForToday as trendHitsKeyForToday, RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES as TREND_PAYLOAD_LIMIT_BYTES } from './trend-validation';
@@ -520,8 +520,11 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
 
 // ===================== process (KR0 News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
- //Step0:清理过期话题簇(1 subrequest)
- const cleaned = await cleanupStaleTopics(env) as any;
+  // KR0-C3: try/finally 包裹整个函数体, finally 写 KV last_process_at
+  // 即使 throw (subrequest 超限 / 网络失败 / SQL 错) 也能记录 cron 最后运行时间, cron_health 派生真实状态
+  try {
+  //Step0:清理过期话题簇(1 subrequest)
+  const cleaned = await cleanupStaleTopics(env) as any;
 
  //Step1:拉 ZAKER热点(1 subrequest)
  const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
@@ -531,12 +534,13 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
  return new Response(JSON.stringify({ error: 'no news' }), { headers: { 'Content-Type': 'application/json', ...cors } });
  }
 
- const results = [];
- //10 items max:
- // - Full flow adds one TIE-lite snapshot RPC after topic join.
- // -6 full items +2 global requests remain under the free Worker subrequest limit.
- // - 后4条只写Supabase(跳过向量查重)节省 Neurons
- const FULL_COUNT =6;
+  const results = [];
+  const pendingNews: any[] = [];
+  //10 items max:
+  // - Full flow adds one TIE-lite snapshot RPC after topic join.
+  // -6 full items +2 global requests remain under the free Worker subrequest limit.
+  // - 后4条只写Supabase(跳过向量查重)节省 Neurons
+  const FULL_COUNT =6;
 
  for (let i =0; i < list.slice(0,10).length; i++) {
  const item = list[i];
@@ -620,56 +624,75 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
  }
  }
 
- //Step4:写 Supabase(实时打分层)-1 subrequest
- const newsId = await insertNewsHotspot(env, {
- title,
- url: item.url || '',
- source: 'zaker',
- category,
- hot_score: rule.score,
- published_at: item.publish_time || new Date().toISOString(),
- summary: (item.summary || '').substring(0,200),
- embedding: embedding.length >0 ? embedding : undefined,
- r2_key: r2Key,
- topic_id: topicId,
- level: newsLevel,
- score: newsScore,
- is_stored_r2: isStoredR2,
- });
+  //Step4-5(KR0 优化): 收集新闻对象, 循环结束批量插入 + record_trend_with_member 合并 RPC
+  //替代原: 每条新闻 1 个 insertNewsHotspot + (1 个 joinTopicMember + 1 个 recordTrendSnapshot) = 3 subrequests/条
+  //新方案: 全部新闻 1 个 batch insertNewsHotspots + 10 个 recordTrendWithMember = 11 subrequests (-19 总)
+  pendingNews.push({
+  item, topicId, isNewTopic, newsLevel, newsScore, fission,
+  matchedSimilarity, isStoredR2, storedReason, r2Key, embedding, title, category, rule,
+  });
+  if (fission) console.log(`[FISSION] ${title}`);
+  }
 
- //Step5:关联新闻-话题(news_topic_members)-1 subrequest
- if (newsId && topicId) {
- await joinTopicMember(env, newsId, topicId, isNewTopic ? 'seed' : 'follow');
- trendSnapshot = await recordTrendSnapshot(env, topicId);
- }
+  // KR0 batch insert: 10 条新闻 1 个 subrequest (替代原 10 个)
+  const batchNewsArray = pendingNews.map(p => ({
+  title: p.title,
+  url: p.item.url || '',
+  source: 'zaker',
+  category: p.category,
+  hot_score: p.rule.score,
+  published_at: p.item.publish_time || new Date().toISOString(),
+  summary: (p.item.summary || '').substring(0,200),
+  embedding: p.embedding.length >0 ? p.embedding : undefined,
+  r2_key: p.r2Key,
+  topic_id: p.topicId,
+  level: p.newsLevel,
+  score: p.newsScore,
+  is_stored_r2: p.isStoredR2,
+  }));
+  const batchIds = await insertNewsHotspotsBatch(env, batchNewsArray);
 
- results.push({
- title,
- category,
- score: rule.score,
- topic_id: topicId,
- similarity: matchedSimilarity,
- level: newsLevel,
- is_stored_r2: isStoredR2,
- stored_reason: storedReason,
- trend: trendSnapshot ? {
- snapshot_id: trendSnapshot.snapshot_id,
- warning_id: trendSnapshot.warning_id,
- velocity: trendSnapshot.out_velocity, // v0.30.1: RETURNS TABLE 列改名避开 PL/pgSQL歧义
- acceleration: trendSnapshot.out_acceleration, // v0.30.1
- stage: trendSnapshot.out_stage, // v0.30.1
- warning_created: trendSnapshot.out_warning_created, // v0.30.1
- } : null,
- fission,
- });
- if (fission) console.log(`[FISSION] ${title}`);
- }
-
-  // 写 KV last_process_at (v0.36.4 修: ctx.waitUntil → await)
-  // scheduled handler 调 fetch(url) → handleProcessAction → fetch 的 ctx.waitUntil 在 fetch 返回后可能被 GC
-  // 改 await: handleProcessAction 是 batch endpoint, 多 50ms 无感, 但保证写完才 return
-  if (env.PROCESS_STATE) {
-    await env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 });
+  // KR0 record_trend_with_member: 合并 joinTopicMember + recordTrendSnapshot 为 1 RPC
+  // 顺序依赖: newsId 必须从 batchIds 来, topicId 已知
+  for (let i =0; i < pendingNews.length; i++) {
+  const p = pendingNews[i];
+  const newsId = batchIds[i];
+  if (newsId && p.topicId) {
+  const trendSnapshot = await recordTrendWithMember(env, newsId, p.topicId, p.isNewTopic);
+  results.push({
+  title: p.title,
+  category: p.category,
+  score: p.rule.score,
+  topic_id: p.topicId,
+  similarity: p.matchedSimilarity,
+  level: p.newsLevel,
+  is_stored_r2: p.isStoredR2,
+  stored_reason: p.storedReason,
+  trend: trendSnapshot ? {
+  snapshot_id: trendSnapshot.snapshot_id,
+  warning_id: trendSnapshot.warning_id,
+  velocity: trendSnapshot.out_velocity,
+  acceleration: trendSnapshot.out_acceleration,
+  stage: trendSnapshot.out_stage,
+  warning_created: trendSnapshot.out_warning_created,
+  } : null,
+  fission: p.fission,
+  });
+  } else {
+  // 无 newsId (batch 失败) 或无 topicId (skip trend) — 仍记录到 results
+  results.push({
+  title: p.title,
+  category: p.category,
+  score: p.rule.score,
+  topic_id: p.topicId,
+  similarity: p.matchedSimilarity,
+  level: p.newsLevel,
+  is_stored_r2: p.isStoredR2,
+  stored_reason: p.storedReason,
+  trend: null,
+  fission: p.fission,
+  });
+  }
   }
 
   return new Response(JSON.stringify({
@@ -677,6 +700,13 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
   cleaned: cleaned?.deleted_topic_count ||0,
   items: results,
   }), { headers: { 'Content-Type': 'application/json', ...cors } });
+  } finally {
+  // KR0-C3: finally 写 KV last_process_at (v0.36.4 修: ctx.waitUntil → await)
+  // 不管 try 块成功/失败都跑, 任何 throw 都不会丢 cron 健康指标
+  if (env.PROCESS_STATE) {
+    await env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 });
+  }
+  }
 }
 
 // ===================== health =====================
