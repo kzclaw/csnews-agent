@@ -5,23 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme="dark"">
-<title>CSNEWS Console — Backend Health Dashboard</title>
+<title>CSNEWS Console — Dashboard + Reader</title>
 <style>
 /* ============================================================
- * CSNEWS Console — Neo Kinpaku 设计系统
- * 跟 news-reader 共用同一份 Kinpaku tokens 块,各自特化布局
+ * CSNEWS Console — Dashboard + Reader (merged)
+ * Linear / Vercel / Raycast 风格 · Neo Kinpaku tokens
+ * Gold 仅用在: logo / 主 CTA / 关键数字 · 其余灰色系
  * 本地工具 · 零外部依赖 · Token 仅存 localStorage
  * ============================================================ */
 
 :root {
   color-scheme: dark;
-  /* —— Neo Kinpaku tokens (warm lacquer 黑) —— */
   --bg: #14110f;
   --bg-1: #1c1814;
   --bg-2: #251f1a;
   --bg-hover: #2e2722;
   --bg-overlay: rgba(20, 17, 15, 0.72);
-  --hairline: rgba(240, 230, 215, 0.16);
+  --hairline: rgba(240, 230, 215, 0.12);
   --hairline-strong: rgba(240, 230, 215, 0.28);
   --text: #f0e6d7;
   --text-2: #c8b8a0;
@@ -30,20 +30,20 @@
   --gold-2: #e3bf75;
   --gold-bg: rgba(212, 162, 83, 0.10);
   --gold-bg-strong: rgba(212, 162, 83, 0.16);
-  --patina: #7ab3a8;
-  --patina-2: #98c5bb;
-  --patina-bg: rgba(122, 179, 168, 0.10);
   --success: #4ade80;
-  --success-bg: rgba(74, 222, 128, 0.10);
+  --success-bg: rgba(74, 222, 128, 0.08);
   --danger: #f87171;
-  --danger-bg: rgba(248, 113, 113, 0.10);
+  --danger-bg: rgba(248, 113, 113, 0.08);
+  /* reserved tokens (避免 break JS, 不在 chrome 使用) */
+  --patina: #7ab3a8;
+  --patina-bg: rgba(122, 179, 168, 0.10);
   --warning: #fbbf24;
   --warning-bg: rgba(251, 191, 36, 0.10);
   --info: #60a5fa;
   --info-bg: rgba(96, 165, 250, 0.10);
-  --radius: 2px;
+  --radius: 4px;
   --radius-sm: 2px;
-  --radius-lg: 4px;
+  --radius-lg: 6px;
   --shadow: none;
   --shadow-hover: 0 1px 0 var(--hairline-strong);
   --font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Cascadia Code', monospace;
@@ -51,8 +51,6 @@
   --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 280ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* OKLCH 真值覆盖 */
 @supports (color: oklch(0% 0 0)) {
   :root {
     --bg: oklch(7% 0.006 95);
@@ -60,7 +58,7 @@
     --bg-2: oklch(12% 0.006 95);
     --bg-hover: oklch(14% 0.006 95);
     --bg-overlay: oklch(7% 0.006 95 / 72%);
-    --hairline: oklch(78% 0 0 / 0.16);
+    --hairline: oklch(78% 0 0 / 0.12);
     --hairline-strong: oklch(78% 0 0 / 0.28);
     --text: oklch(92% 0.005 95);
     --text-2: oklch(72% 0.008 95);
@@ -70,12 +68,11 @@
     --gold-bg: oklch(84% 0.19 80.46 / 10%);
     --gold-bg-strong: oklch(84% 0.19 80.46 / 16%);
     --patina: oklch(70% 0.105 190);
-    --patina-2: oklch(76% 0.085 190);
     --patina-bg: oklch(70% 0.105 190 / 10%);
     --success: oklch(72% 0.16 150);
-    --success-bg: oklch(72% 0.16 150 / 10%);
+    --success-bg: oklch(72% 0.16 150 / 8%);
     --danger: oklch(62% 0.21 25);
-    --danger-bg: oklch(62% 0.21 25 / 10%);
+    --danger-bg: oklch(62% 0.21 25 / 8%);
     --warning: oklch(78% 0.17 80);
     --warning-bg: oklch(78% 0.17 80 / 10%);
     --info: oklch(65% 0.15 240);
@@ -106,268 +103,214 @@ body {
 ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ============================================================
- * App layout — top tab bar + main
+ * Top header — logo + view tabs + actions
  * ============================================================ */
-.app {
-  display: grid;
-  grid-template-rows: 52px 1fr;
-  height: 100vh;
-}
-
-/* —— Top header (tab bar) —— */
+.app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
 .header {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
   border-bottom: 1px solid var(--hairline);
   background: var(--bg);
-  gap: 16px;
+  gap: 24px;
 }
 .logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  font-size: 13.5px;
-  letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em;
 }
 .logo-mark {
-  width: 22px;
-  height: 22px;
-  background: var(--gold);
-  color: oklch(15% 0 0);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 13px;
-  font-family: var(--font-mono);
-  border-radius: var(--radius);
+  width: 22px; height: 22px;
+  background: var(--gold); color: oklch(15% 0 0);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
 }
 .logo-text { color: var(--text); }
 .logo-sep { color: var(--text-3); margin: 0 1px; }
 .logo-sub {
-  color: var(--text-3);
-  font-weight: 400;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  color: var(--text-3); font-weight: 400; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em;
 }
 
-.tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+/* 顶层 view 切换 — Dashboard / Reader */
+.view-tabs {
+  display: flex; align-items: center; gap: 2px;
   margin: 0 auto;
 }
-.tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+.view-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px;
   background: transparent;
   border: 1px solid transparent;
-  border-bottom: none;
   color: var(--text-3);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-  user-select: none;
-  font-family: var(--font-sans);
-  position: relative;
-  border-radius: var(--radius) var(--radius) 0 0;
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  user-select: none; font-family: var(--font-sans);
+  border-radius: var(--radius);
 }
-.tab:hover {
-  color: var(--text-2);
-  background: var(--bg-1);
+.view-tab:hover { color: var(--text-2); background: var(--bg-1); }
+.view-tab.active { color: var(--gold); background: var(--bg-1); }
+.view-tab .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+.view-tab .count {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 5px;
+  background: var(--bg-2); border-radius: 3px;
 }
-.tab.active {
-  color: var(--gold);
-  background: var(--bg-1);
-  border-color: var(--hairline);
-  border-bottom: 1px solid var(--bg-1);
-  margin-bottom: -1px;
-}
-.tab .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.tab .count {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-3);
-  padding: 1px 5px;
-  background: var(--bg-2);
-  border-radius: 3px;
-}
-.tab.active .count { color: var(--gold); background: var(--gold-bg); }
+.view-tab.active .count { color: var(--gold); background: var(--gold-bg); }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* status pill — 只 success / danger 两色 */
 .status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+  display: inline-flex; align-items: center; gap: 7px;
   padding: 4px 10px 4px 9px;
   background: var(--bg-1);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  font-size: 11.5px;
-  color: var(--text-2);
-  font-family: var(--font-mono);
+  font-size: 11.5px; color: var(--text-2); font-family: var(--font-mono);
 }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
 .status.online .status-dot { background: var(--success); }
 .status.offline .status-dot { background: var(--danger); }
-.status.warning .status-dot { background: var(--warning); }
-.status.config .status-dot { background: var(--gold); }
+.status.config .status-dot { background: var(--text-3); }  /* 未配置 — 灰色 */
 
+/* buttons */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 5px 11px;
   background: transparent;
   color: var(--text-2);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  font-size: 12px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-  height: 28px;
-  white-space: nowrap;
-  text-decoration: none;
+  font-size: 12px; font-family: var(--font-sans); font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  height: 28px; white-space: nowrap; text-decoration: none;
 }
 .btn:hover { background: var(--bg-hover); color: var(--text); border-color: var(--hairline-strong); }
 .btn:active { transform: scale(0.98); }
-.btn.primary { background: var(--gold); color: oklch(15% 0 0); border-color: var(--gold); font-weight: 600; }
+.btn.primary {
+  background: var(--gold); color: oklch(15% 0 0);
+  border-color: var(--gold); font-weight: 600;
+}
 .btn.primary:hover { background: var(--gold-2); border-color: var(--gold-2); }
 .btn.ghost { border-color: transparent; }
 .btn.ghost:hover { background: var(--bg-hover); border-color: var(--hairline); }
-.btn-icon { padding: 0; width: 28px; }
-.btn svg { width: 13px; height: 13px; }
 .btn.small { height: 24px; font-size: 11px; padding: 3px 8px; }
+.btn svg { width: 13px; height: 13px; }
 
 .kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  background: var(--bg-2);
-  border: 1px solid var(--hairline-strong);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong);
   border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-2);
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2);
 }
 
-/* —— Main —— */
-.main {
-  background: var(--bg-1);
-  overflow-y: auto;
-  border-top: 1px solid var(--hairline);
+/* main area */
+.main { background: var(--bg-1); overflow: hidden; position: relative; }
+.view {
+  position: absolute; inset: 0;
+  display: none;
+  overflow: hidden;
 }
+.view.active { display: flex; flex-direction: column; }
 
 /* ============================================================
- * Overview tab — Dashboard (Linear/Vercel 风格)
+ * DASHBOARD view — 4 sub-tabs (Overview / Data / Logs / Health)
  * ============================================================ */
-.dashboard {
-  padding: 20px 28px 60px;
-  max-width: 1280px;
-  margin: 0 auto;
+.dash-tabs {
+  display: flex; align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+  gap: 2px;
+  flex-shrink: 0;
 }
+.dash-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--text-3);
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  font-family: var(--font-sans);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.dash-tab:hover { color: var(--text-2); background: var(--bg-1); }
+.dash-tab.active {
+  color: var(--gold); background: var(--bg-1);
+  border-color: var(--hairline);
+  border-bottom: 1px solid var(--bg-1);
+  margin-bottom: -1px;
+}
+.dash-tab .count {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 5px;
+  background: var(--bg-2); border-radius: 3px;
+}
+.dash-tab.active .count { color: var(--gold); background: var(--gold-bg); }
 
-/* KPI row */
+.dash-pane {
+  flex: 1; overflow-y: auto;
+  background: var(--bg-1);
+}
+.dash-pane-inner { display: none; padding: 24px 32px 60px; }
+.dash-pane-inner.active { display: block; max-width: 1280px; margin: 0 auto; }
+
+/* KPI grid */
 .kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 24px;
 }
 .kpi {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  padding: 16px 18px;
+  padding: 18px 20px;
   position: relative;
   transition: border-color var(--transition);
 }
 .kpi:hover { border-color: var(--hairline-strong); }
 .kpi-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
-  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 12px;
 }
-.kpi-label .icon {
-  width: 12px;
-  height: 12px;
-  color: var(--gold);
-}
+.kpi-label .icon { width: 12px; height: 12px; color: var(--text-3); }
 .kpi-value {
   font-family: var(--font-mono);
-  font-size: 26px;
-  font-weight: 600;
+  font-size: 30px; font-weight: 600;
   color: var(--text);
-  line-height: 1;
-  margin-bottom: 8px;
-  letter-spacing: -0.02em;
+  line-height: 1; margin-bottom: 10px;
+  letter-spacing: -0.025em;
 }
 .kpi-value.danger { color: var(--danger); }
-.kpi-value.warning { color: var(--warning); }
-.kpi-value.success { color: var(--success); }
+.kpi-value.success { color: var(--text); }   /* 不上 success 绿 — 数字就是数字 */
+.kpi-value.warning { color: var(--text); }
+.kpi-value .suffix { font-size: 14px; color: var(--text-3); font-weight: 400; }
 .kpi-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-3);
-  font-family: var(--font-mono);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3); font-family: var(--font-mono);
 }
-.kpi-meta .trend-up { color: var(--success); }
-.kpi-meta .trend-down { color: var(--danger); }
 .kpi-status {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  position: absolute; top: 16px; right: 16px;
+  width: 6px; height: 6px; border-radius: 50%;
   background: var(--text-3);
 }
 .kpi-status.ok { background: var(--success); }
-.kpi-status.warn { background: var(--warning); }
 .kpi-status.fail { background: var(--danger); }
 
-.kpi-spark {
-  margin-top: 6px;
-  height: 24px;
-  width: 100%;
-}
-
-/* Row of two: chart + activity */
 .row-2 {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: 2fr 1fr;
+  gap: 14px; margin-bottom: 24px;
+}
+.row-3 {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
 }
 .panel {
   background: var(--bg);
@@ -376,165 +319,118 @@ body {
   overflow: hidden;
 }
 .panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--hairline);
 }
 .panel-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
 }
-.panel-title .icon { width: 13px; height: 13px; color: var(--gold); }
+.panel-title .icon { width: 13px; height: 13px; color: var(--text-3); }
 .panel-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-3);
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-3);
 }
-.panel-body { padding: 16px 18px; }
+.panel-body { padding: 18px 20px; }
 
-/* Chart panels */
-.chart-panel .panel-body {
-  padding: 20px 18px 18px;
-}
-.chart-svg {
-  width: 100%;
-  height: 180px;
-  display: block;
-}
+/* SVG charts */
+.chart-svg { width: 100%; height: 180px; display: block; }
 .chart-svg .axis { stroke: var(--hairline); stroke-width: 1; }
 .chart-svg .axis-label { fill: var(--text-3); font-size: 10px; font-family: var(--font-mono); }
 .chart-svg .grid-line { stroke: var(--hairline); stroke-width: 0.5; stroke-dasharray: 2 4; }
 .chart-svg .line { fill: none; stroke: var(--gold); stroke-width: 1.5; }
-.chart-svg .area { fill: var(--gold); opacity: 0.12; }
+.chart-svg .area { fill: var(--gold); opacity: 0.10; }
 .chart-svg .point { fill: var(--gold); }
-.chart-svg .bar { fill: var(--patina); }
-.chart-svg .bar.alt { fill: var(--gold); }
-.chart-svg .bar.warn { fill: var(--warning); }
-.chart-svg .bar.danger { fill: var(--danger); }
+.chart-svg .bar { fill: var(--text-3); opacity: 0.55; }   /* 默认灰 */
+.chart-svg .bar.warn { fill: var(--text-3); opacity: 0.85; }
+.chart-svg .bar.danger { fill: var(--danger); opacity: 0.7; }
+.chart-svg .bar.alt { fill: var(--gold); opacity: 1; }     /* latest — gold 高亮 */
 .chart-svg .donut-segment { stroke: var(--bg); stroke-width: 2; }
-.chart-svg .donut-label { fill: var(--text-2); font-size: 11px; font-family: var(--font-mono); }
-
 .chart-empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-3);
-  font-size: 12px;
+  text-align: center; padding: 60px 20px;
+  color: var(--text-3); font-size: 12px;
 }
 
-/* Activity panel */
-.activity-list {
-  list-style: none;
-  max-height: 320px;
-  overflow-y: auto;
-}
+/* activity list */
+.activity-list { list-style: none; max-height: 320px; overflow-y: auto; }
 .activity-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--hairline);
   font-size: 12px;
 }
 .activity-item:last-child { border-bottom: none; }
 .activity-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--gold);
-  margin-top: 7px;
-  flex-shrink: 0;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-3); margin-top: 7px; flex-shrink: 0;
 }
 .activity-dot.ok { background: var(--success); }
-.activity-dot.warn { background: var(--warning); }
+.activity-dot.warn { background: var(--text-2); }
 .activity-dot.fail { background: var(--danger); }
 .activity-content { flex: 1; min-width: 0; }
-.activity-title {
-  color: var(--text);
-  font-weight: 500;
-  margin-bottom: 2px;
-  word-break: break-word;
-  line-height: 1.45;
-}
+.activity-title { color: var(--text); font-weight: 500; margin-bottom: 2px; word-break: break-word; line-height: 1.45; }
 .activity-meta {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--text-3);
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3);
+  display: flex; gap: 8px; flex-wrap: wrap;
 }
 .activity-meta .sep { color: var(--hairline-strong); }
 
-/* Row of three: stat tables */
-.row-3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
-}
-.stat-table {
-  width: 100%;
-  border-collapse: collapse;
-}
+/* stat tables */
+.stat-table { width: 100%; border-collapse: collapse; }
 .stat-table th {
-  text-align: left;
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
-  padding: 0 8px 8px;
-  border-bottom: 1px solid var(--hairline);
+  text-align: left; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); padding: 0 10px 10px; border-bottom: 1px solid var(--hairline);
 }
 .stat-table td {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text);
-  padding: 8px;
-  border-bottom: 1px solid var(--hairline);
-  word-break: break-word;
+  font-family: var(--font-mono); font-size: 12px; color: var(--text);
+  padding: 9px 10px; border-bottom: 1px solid var(--hairline); word-break: break-word;
 }
 .stat-table tr:last-child td { border-bottom: none; }
-.stat-table .num { text-align: right; color: var(--gold); }
+.stat-table .num { text-align: right; color: var(--text); }   /* 不再 gold */
 .stat-table .num.zero { color: var(--text-3); }
 
-/* Status badges (for health checks) */
+/* badges — 大部分灰, 状态语义用色 */
 .badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
   border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
-  font-size: 10.5px;
-  font-weight: 500;
-  font-family: var(--font-mono);
-  text-transform: lowercase;
+  font-size: 10.5px; font-weight: 500;
+  font-family: var(--font-mono); text-transform: lowercase;
+  background: var(--bg-1); color: var(--text-2);
 }
-.badge-ok { background: var(--success-bg); border-color: var(--success); color: var(--success); }
-.badge-down { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
-.badge-warn { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
-.badge-tier-normal { background: var(--success-bg); border-color: var(--success); color: var(--success); }
-.badge-tier-low { background: var(--patina-bg); border-color: var(--patina); color: var(--patina); }
-.badge-tier-high { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
-.badge-tier-degraded { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.badge-ok {
+  background: var(--success-bg); border-color: var(--success);
+  color: var(--success);
+}
+.badge-down {
+  background: var(--danger-bg); border-color: var(--danger);
+  color: var(--danger);
+}
+.badge-warn {
+  background: transparent; border-color: var(--text-2);
+  color: var(--text-2);
+}
+.badge-tier-normal {
+  background: transparent; border-color: var(--hairline-strong);
+  color: var(--text-2);
+}
+.badge-tier-low {
+  background: var(--gold-bg); border-color: var(--gold);
+  color: var(--gold);
+}
+.badge-tier-high {
+  background: transparent; border-color: var(--text-2);
+  color: var(--text);
+}
+.badge-tier-degraded {
+  background: var(--danger-bg); border-color: var(--danger);
+  color: var(--danger);
+}
 
-/* ============================================================
- * Data tab — 22 endpoints grouped
- * ============================================================ */
+/* Data tab — endpoint browser */
 .data-wrap {
-  padding: 20px 28px 60px;
-  max-width: 1280px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 280px 1fr;
+  display: grid; grid-template-columns: 280px 1fr;
   gap: 16px;
 }
 .endpoint-sidebar {
@@ -542,94 +438,69 @@ body {
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   padding: 14px 0;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
-  position: sticky;
-  top: 20px;
+  position: sticky; top: 0;
 }
 .endpoint-group { margin-bottom: 14px; }
 .endpoint-group:last-child { margin-bottom: 0; }
 .endpoint-group-title {
   padding: 0 14px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
 }
 .endpoint-group-title .count {
-  font-family: var(--font-mono);
-  color: var(--text-3);
-  font-weight: 400;
+  font-family: var(--font-mono); color: var(--text-3); font-weight: 400;
 }
 .endpoint-list { list-style: none; }
 .endpoint-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: flex; align-items: center; gap: 8px;
   padding: 6px 14px;
   cursor: pointer;
-  color: var(--text-2);
-  font-size: 12.5px;
+  color: var(--text-2); font-size: 12.5px;
   border-left: 2px solid transparent;
   transition: all var(--transition);
   font-family: var(--font-mono);
 }
 .endpoint-item:hover { background: var(--bg-1); color: var(--text); }
 .endpoint-item.active {
-  background: var(--bg-1);
-  color: var(--gold);
+  background: var(--bg-1); color: var(--gold);
   border-left-color: var(--gold);
 }
 .endpoint-item .method {
-  font-size: 9.5px;
-  padding: 0 4px;
-  background: var(--bg-2);
-  color: var(--text-3);
-  border-radius: 2px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 9.5px; padding: 0 5px;
+  background: var(--bg-2); color: var(--text-3);
+  border-radius: 2px; font-weight: 600; letter-spacing: 0.04em;
 }
-.endpoint-item.post .method { background: var(--patina-bg); color: var(--patina); }
+.endpoint-item.post .method { background: var(--bg-2); color: var(--text-2); border: 1px solid var(--hairline-strong); }
 
 .endpoint-detail {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  display: flex; flex-direction: column; overflow: hidden;
+  max-height: calc(100vh - 200px);
 }
 .endpoint-detail-header {
-  padding: 16px 20px;
+  padding: 18px 22px;
   border-bottom: 1px solid var(--hairline);
 }
 .endpoint-detail-title {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 4px;
-  font-family: var(--font-mono);
+  font-size: 13.5px; font-weight: 600; color: var(--text);
+  margin-bottom: 4px; font-family: var(--font-mono);
 }
 .endpoint-detail-desc {
-  font-size: 12px;
-  color: var(--text-3);
-  line-height: 1.5;
+  font-size: 12px; color: var(--text-3); line-height: 1.5;
 }
 .endpoint-params {
-  padding: 14px 20px;
+  padding: 14px 22px;
   border-bottom: 1px solid var(--hairline);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 .param {
-  display: inline-flex;
-  align-items: center;
+  display: inline-flex; align-items: center;
   background: var(--bg-1);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
@@ -638,93 +509,56 @@ body {
 .param:focus-within { border-color: var(--gold); }
 .param-label {
   padding: 0 8px;
-  font-size: 10.5px;
-  color: var(--text-3);
+  font-size: 10.5px; color: var(--text-3);
   font-family: var(--font-mono);
   border-right: 1px solid var(--hairline);
-  height: 100%;
-  display: flex;
-  align-items: center;
+  height: 100%; display: flex; align-items: center;
 }
 .param input, .param select {
-  background: transparent;
-  border: none;
+  background: transparent; border: none;
   color: var(--text);
-  padding: 0 10px;
-  height: 100%;
-  font-size: 11.5px;
-  font-family: var(--font-mono);
-  outline: none;
-  min-width: 50px;
+  padding: 0 10px; height: 100%;
+  font-size: 11.5px; font-family: var(--font-mono);
+  outline: none; min-width: 50px;
 }
 .param select {
-  cursor: pointer;
-  padding-right: 24px;
-  appearance: none;
-  -webkit-appearance: none;
+  cursor: pointer; padding-right: 24px;
+  appearance: none; -webkit-appearance: none;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23c8b8a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
+  background-repeat: no-repeat; background-position: right 8px center;
 }
 .param input::placeholder { color: var(--text-3); }
-
-.endpoint-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
+.endpoint-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 
 .endpoint-response {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text);
-  white-space: pre-wrap;
-  word-break: break-word;
+  flex: 1; overflow-y: auto;
+  padding: 16px 22px;
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6;
+  color: var(--text); white-space: pre-wrap; word-break: break-word;
 }
 .endpoint-response-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 22px;
   border-top: 1px solid var(--hairline);
   background: var(--bg-1);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-3);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
 }
 .endpoint-response-meta strong { color: var(--text); font-weight: 500; }
 
-/* ============================================================
- * Logs tab
- * ============================================================ */
-.logs-wrap {
-  padding: 20px 28px 60px;
-  max-width: 1280px;
-  margin: 0 auto;
-}
+/* Logs tab */
 .logs-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 16px; flex-wrap: wrap;
   padding: 14px 18px;
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
 }
-.logs-controls .field { display: flex; align-items: center; gap: 8px; }
 .logs-controls .field-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3);
+  margin-bottom: 4px; display: block;
 }
 .logs-controls input, .logs-controls select {
   background: var(--bg-1);
@@ -732,10 +566,8 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   padding: 5px 10px;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  outline: none;
-  height: 28px;
+  font-size: 12px; font-family: var(--font-mono);
+  outline: none; height: 28px;
 }
 .logs-controls input:focus, .logs-controls select:focus { border-color: var(--gold); }
 
@@ -744,103 +576,342 @@ body {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: separate; border-spacing: 0;
   overflow: hidden;
 }
 .logs-table th, .logs-table td {
-  padding: 8px 14px;
-  text-align: left;
+  padding: 9px 16px; text-align: left;
   border-bottom: 1px solid var(--hairline);
-  font-size: 11.5px;
-  font-family: var(--font-mono);
-  vertical-align: top;
+  font-size: 11.5px; font-family: var(--font-mono); vertical-align: top;
 }
 .logs-table th {
-  background: var(--bg-1);
-  color: var(--text-3);
-  font-weight: 600;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  background: var(--bg-1); color: var(--text-3);
+  font-weight: 600; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.08em;
 }
 .logs-table tr:last-child td { border-bottom: none; }
 .logs-table .level {
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 10px;
+  font-weight: 600; text-transform: uppercase; font-size: 10px;
 }
-.logs-table .level.info { color: var(--info); }
+.logs-table .level.info { color: var(--text-2); }
 .logs-table .level.warn { color: var(--warning); }
 .logs-table .level.error { color: var(--danger); }
 .logs-table .level.debug { color: var(--text-3); }
 
-/* ============================================================
- * Health tab — 9 dimensions + counts
- * ============================================================ */
-.health-wrap {
-  padding: 20px 28px 60px;
-  max-width: 1280px;
-  margin: 0 auto;
-}
+/* Health tab */
 .health-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; margin-bottom: 24px;
 }
 .check-card {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 16px 18px;
   transition: border-color var(--transition);
 }
 .check-card:hover { border-color: var(--hairline-strong); }
-.check-card.down { border-color: var(--danger); background: var(--danger-bg); }
-.check-card.warn { border-color: var(--warning); }
+.check-card.down {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.check-card.warn { border-color: var(--hairline-strong); }
 .check-card.ok { border-left: 2px solid var(--success); }
 .check-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
 }
 .check-card-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--font-mono);
+  font-size: 12.5px; font-weight: 600;
+  color: var(--text); font-family: var(--font-mono);
 }
 .check-card-detail {
-  font-size: 11px;
-  color: var(--text-3);
-  font-family: var(--font-mono);
-  word-break: break-word;
-  line-height: 1.5;
+  font-size: 11px; color: var(--text-3);
+  font-family: var(--font-mono); word-break: break-word; line-height: 1.5;
 }
-
-.health-section { margin-bottom: 20px; }
+.health-section { margin-bottom: 24px; }
 .health-section-title {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3);
-  margin-bottom: 10px;
-  padding-left: 2px;
+  margin-bottom: 12px; padding-left: 2px;
 }
 
 /* ============================================================
- * Modal (Settings)
+ * READER view — sidebar + filter bar + feed
  * ============================================================ */
+.reader-body {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.sidebar {
+  background: var(--bg);
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+  padding: 20px 0 28px;
+}
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px 8px;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.sidebar-list { list-style: none; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 16px;
+  cursor: pointer;
+  color: var(--text-2); font-size: 13px;
+  border-left: 2px solid transparent;
+  transition: all var(--transition);
+  user-select: none;
+}
+.sidebar-item:hover { background: var(--bg-1); color: var(--text); }
+.sidebar-item.active {
+  background: var(--bg-1); color: var(--gold);
+  border-left-color: var(--gold);
+}
+.sidebar-item .icon {
+  width: 14px; height: 14px;
+  color: var(--text-3); flex-shrink: 0;
+}
+.sidebar-item.active .icon { color: var(--gold); }
+.sidebar-item .count {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 6px;
+  background: var(--bg-2); border-radius: 3px;
+}
+.sidebar-item.active .count { color: var(--gold); background: var(--gold-bg); }
+.sidebar-divider { height: 1px; background: var(--hairline); margin: 8px 16px; }
+.sidebar-footer {
+  padding: 12px 16px 0;
+  font-size: 11px; color: var(--text-3); line-height: 1.5;
+}
+.sidebar-footer code {
+  font-family: var(--font-mono); background: var(--bg-1);
+  padding: 1px 5px; border-radius: 3px; font-size: 10.5px;
+}
+
+.reader-main {
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+
+.filter-bar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--hairline);
+  padding: 14px 28px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 12px; color: var(--text-2);
+  cursor: pointer; transition: all var(--transition);
+  user-select: none; font-family: var(--font-sans); font-weight: 500;
+}
+.chip:hover { background: var(--bg-1); border-color: var(--hairline-strong); color: var(--text); }
+.chip.active {
+  background: var(--bg-1); border-color: var(--gold);
+  color: var(--gold);
+}
+.chip .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; opacity: 0.7; }
+
+.select {
+  appearance: none; -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  padding: 5px 28px 5px 11px;
+  font-size: 12px; font-family: var(--font-sans); font-weight: 500;
+  cursor: pointer; height: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23c8b8a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 9px center;
+}
+.select:hover { border-color: var(--hairline-strong); color: var(--text); }
+.select:focus { outline: none; border-color: var(--gold); }
+.select option { background: var(--bg-1); color: var(--text); }
+.filter-spacer { flex: 1; }
+.filter-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+
+.feed {
+  padding: 20px 28px 60px;
+  max-width: 920px; width: 100%; margin: 0 auto;
+}
+.card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  transition: border-color var(--transition), background var(--transition);
+  overflow: hidden; position: relative;
+}
+.card:hover { border-color: var(--hairline-strong); }
+.card.expanded {
+  border-color: var(--hairline-strong);
+  background: var(--bg-1);
+}
+.card.expanded::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; width: 2px; height: 100%;
+  background: var(--gold);
+}
+.card-body { padding: 18px 22px; cursor: pointer; }
+.card-meta {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+  font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono);
+}
+.meta-source {
+  color: var(--text-2); font-weight: 500; text-transform: lowercase;
+}
+.meta-dot {
+  width: 2px; height: 2px; background: var(--text-3); border-radius: 50%;
+}
+.meta-time { color: var(--text-3); }
+
+.badge-explosive {
+  background: var(--danger-bg); border-color: var(--danger); color: var(--danger);
+}
+.badge-important {
+  background: var(--gold-bg); border-color: var(--gold); color: var(--gold);
+}
+.badge-follow {
+  background: transparent; border-color: var(--hairline-strong); color: var(--text-2);
+}
+.badge-category {
+  background: transparent; border-color: var(--hairline-strong); color: var(--text-2);
+}
+
+.card-title {
+  font-size: 17px; font-weight: 600; color: var(--text);
+  line-height: 1.4; margin-bottom: 8px;
+  letter-spacing: -0.012em; text-wrap: balance;
+}
+.card-summary {
+  color: var(--text-2); font-size: 13.5px; line-height: 1.65;
+  margin-bottom: 12px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card.expanded .card-summary { display: block; -webkit-line-clamp: unset; }
+
+.card-footer {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3);
+}
+.card-hot {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); color: var(--gold); font-weight: 500;
+}
+.card-hot.cool { color: var(--text-3); }
+.card-action {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-3); font-family: var(--font-mono);
+}
+.card-action:hover { color: var(--gold); }
+
+.card-popup {
+  display: none;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  padding: 20px 22px 22px;
+}
+.card.expanded .card-popup { display: block; }
+.popup-content {
+  font-size: 14px; line-height: 1.75;
+  color: var(--text); white-space: pre-wrap;
+  word-break: break-word; font-family: var(--font-sans);
+}
+.popup-content p { margin-bottom: 12px; }
+.popup-content p:last-child { margin-bottom: 0; }
+.popup-actions {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+.popup-actions .btn { font-size: 11.5px; height: 28px; padding: 5px 12px; }
+
+/* ============================================================
+ * Shared — states / modals / toast / json
+ * ============================================================ */
+.state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 80px 20px; text-align: center;
+}
+.state-icon { width: 36px; height: 36px; color: var(--text-3); margin-bottom: 14px; opacity: 0.5; }
+.state-title { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+.state-desc { font-size: 12.5px; color: var(--text-3); max-width: 380px; line-height: 1.65; }
+.state-desc code {
+  font-family: var(--font-mono); background: var(--bg-2);
+  padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--text-2);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-skeleton { height: 80px; border-radius: var(--radius); }
+.chart-skeleton { height: 180px; border-radius: var(--radius); margin-top: 12px; }
+.skeleton-card {
+  background: var(--bg); border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 12px; padding: 18px 22px;
+}
+.skeleton-card .sk-line { height: 10px; margin-bottom: 10px; }
+.skeleton-card .sk-title { height: 16px; width: 78%; margin-bottom: 14px; }
+.skeleton-card .sk-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.skeleton-card .sk-tag { width: 48px; height: 14px; }
+.skeleton-card .sk-dot { width: 56px; height: 10px; }
+
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.error-banner-title {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--danger); font-size: 12.5px; font-weight: 500;
+  margin-bottom: 6px;
+}
+.error-banner-body {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.json-view {
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
+  white-space: pre; word-break: normal; overflow-x: auto;
+}
+.json-key { color: var(--gold); }
+.json-string { color: var(--text-2); }
+.json-number { color: var(--text); }
+.json-bool { color: var(--gold); font-weight: 600; }
+.json-null { color: var(--text-3); font-style: italic; }
+.json-punct { color: var(--text-3); }
+
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   background: var(--bg-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   z-index: 100;
   animation: fadein 150ms;
 }
@@ -853,158 +924,74 @@ body {
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  display: flex; flex-direction: column;
 }
 .modal-header {
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--hairline);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; justify-content: space-between;
 }
-.modal-title { font-size: 13px; font-weight: 600; }
-.modal-body { padding: 16px 18px; overflow-y: auto; }
+.modal-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.modal-body { padding: 18px 20px; overflow-y: auto; }
 .modal-footer {
-  padding: 12px 18px;
+  padding: 14px 20px;
   border-top: 1px solid var(--hairline);
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  display: flex; justify-content: flex-end; gap: 8px;
 }
 .field { margin-bottom: 14px; }
 .field:last-child { margin-bottom: 0; }
 .field-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3);
   margin-bottom: 6px;
-  display: block;
+  display: flex; align-items: center; gap: 6px;
 }
 .field-input {
-  background: var(--bg);
-  border: 1px solid var(--hairline);
+  background: var(--bg); border: 1px solid var(--hairline);
   border-radius: var(--radius);
   color: var(--text);
   padding: 8px 11px;
-  font-size: 12.5px;
-  font-family: var(--font-mono);
-  outline: none;
-  transition: border-color var(--transition);
+  font-size: 12.5px; font-family: var(--font-mono);
+  outline: none; transition: border-color var(--transition);
   width: 100%;
 }
 .field-input:focus { border-color: var(--gold); }
 .field-hint { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
 .field-hint code {
-  font-family: var(--font-mono);
-  background: var(--bg-2);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 10.5px;
-  color: var(--text-2);
+  font-family: var(--font-mono); background: var(--bg-2);
+  padding: 1px 4px; border-radius: 3px; font-size: 10.5px; color: var(--text-2);
 }
 
-/* ============================================================
- * JSON syntax highlighting (XSS-safe, 保留自 4b997c3)
- * ============================================================ */
-.json-view {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.65;
-  white-space: pre;
-  word-break: normal;
-  overflow-x: auto;
+.help-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 11px; border-radius: var(--radius);
+  transition: background var(--transition);
 }
-.json-key { color: var(--gold); }
-.json-string { color: var(--success); }
-.json-number { color: var(--info); }
-.json-bool { color: var(--patina); font-weight: 600; }
-.json-null { color: var(--text-3); font-style: italic; }
-.json-punct { color: var(--text-3); }
+.help-row:hover { background: var(--bg-2); }
+.help-keys { display: flex; gap: 4px; min-width: 110px; }
+.help-desc { font-size: 12.5px; color: var(--text-2); flex: 1; }
+.help-section-title {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 14px 0 6px; padding: 0 11px;
+}
+.help-section-title:first-child { margin-top: 0; }
 
-/* ============================================================
- * Loading & States
- * ============================================================ */
-.state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  text-align: center;
-}
-.state-icon { width: 36px; height: 36px; color: var(--text-3); margin-bottom: 14px; opacity: 0.5; }
-.state-title { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
-.state-desc { font-size: 12.5px; color: var(--text-3); max-width: 380px; line-height: 1.65; }
-.state-desc code {
-  font-family: var(--font-mono);
-  background: var(--bg-2);
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 11px;
-  color: var(--text-2);
-}
-
-.skeleton {
-  background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: var(--radius);
-}
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.kpi-skeleton { height: 80px; border-radius: var(--radius); }
-.chart-skeleton { height: 180px; border-radius: var(--radius); margin-top: 12px; }
-
-.error-banner {
-  background: var(--danger-bg);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
-  padding: 14px 18px;
-  margin-bottom: 14px;
-}
-.error-banner-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--danger);
-  font-size: 12.5px;
-  font-weight: 500;
-  margin-bottom: 6px;
-}
-.error-banner-body {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-2);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* ============================================================
- * Toast
- * ============================================================ */
 .toast {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
+  position: fixed; bottom: 20px; left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: var(--bg-1);
-  border: 1px solid var(--hairline-strong);
+  background: var(--bg-1); border: 1px solid var(--hairline-strong);
   border-radius: var(--radius);
   padding: 10px 16px;
-  font-size: 12.5px;
-  color: var(--text);
+  font-size: 12.5px; color: var(--text);
   z-index: 200;
   opacity: 0;
   transition: all var(--transition-slow);
   pointer-events: none;
 }
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-.toast.success { border-color: var(--patina); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: var(--success); }
 .toast.error { border-color: var(--danger); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1019,17 +1006,23 @@ body {
   .row-2 { grid-template-columns: 1fr; }
   .row-3 { grid-template-columns: 1fr; }
   .health-grid { grid-template-columns: repeat(2, 1fr); }
+  .data-wrap { grid-template-columns: 1fr; }
+  .reader-body { grid-template-columns: 200px 1fr; }
 }
 @media (max-width: 768px) {
-  .header { padding: 0 14px; }
+  .header { padding: 0 14px; gap: 12px; }
   .logo-sub { display: none; }
-  .tabs { gap: 0; }
-  .tab { padding: 8px 10px; font-size: 11.5px; }
-  .dashboard, .data-wrap, .logs-wrap, .health-wrap { padding: 14px 16px 40px; }
-  .data-wrap { grid-template-columns: 1fr; }
-  .endpoint-sidebar { position: static; max-height: none; }
+  .view-tabs { gap: 0; }
+  .view-tab { padding: 8px 10px; font-size: 11.5px; }
+  .dash-pane-inner { padding: 16px 16px 40px; }
   .kpi-grid { grid-template-columns: 1fr; }
   .health-grid { grid-template-columns: 1fr; }
+  .reader-body { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .filter-bar { padding: 10px 16px; }
+  .feed { padding: 14px 16px 40px; }
+  .card-body { padding: 14px 16px; }
+  .card-title { font-size: 16px; }
   .modal { max-width: calc(100vw - 24px); margin: 12px; }
 }
 </style>
@@ -1037,7 +1030,6 @@ body {
 <body>
 <div class="app" id="app">
 
-  <!-- ============ Header ============ -->
   <header class="header">
     <div class="logo">
       <div class="logo-mark">C</div>
@@ -1045,22 +1037,17 @@ body {
       <span class="logo-sep">·</span>
       <span class="logo-sub">Console</span>
     </div>
-    <div class="tabs" id="tabs">
-      <button class="tab active" data-tab="overview">
-        <span>Overview</span>
-        <span class="count" id="tab-count-overview">—</span>
+    <nav class="view-tabs" id="view-tabs">
+      <button class="view-tab active" data-view="dashboard">
+        <span class="dot"></span>
+        <span>Dashboard</span>
+        <span class="count" id="dash-count">—</span>
       </button>
-      <button class="tab" data-tab="data">
-        <span>Data</span>
-        <span class="count">22</span>
+      <button class="view-tab" data-view="reader">
+        <span class="dot"></span>
+        <span>Reader</span>
       </button>
-      <button class="tab" data-tab="logs">
-        <span>Logs</span>
-      </button>
-      <button class="tab" data-tab="health">
-        <span>Health</span>
-      </button>
-    </div>
+    </nav>
     <div class="header-actions">
       <div class="status" id="status">
         <span class="status-dot"></span>
@@ -1078,10 +1065,106 @@ body {
     </div>
   </header>
 
-  <!-- ============ Main ============ -->
   <main class="main">
-    <!-- Tab content injected by JS -->
-    <div id="tab-content"></div>
+
+    <!-- ============ DASHBOARD VIEW ============ -->
+    <section class="view active" id="view-dashboard">
+      <nav class="dash-tabs" id="dash-tabs">
+        <button class="dash-tab active" data-tab="overview">
+          <span>Overview</span>
+        </button>
+        <button class="dash-tab" data-tab="data">
+          <span>Data</span>
+          <span class="count">22</span>
+        </button>
+        <button class="dash-tab" data-tab="logs">
+          <span>Logs</span>
+        </button>
+        <button class="dash-tab" data-tab="health">
+          <span>Health</span>
+        </button>
+      </nav>
+      <div class="dash-pane">
+        <div class="dash-pane-inner active" id="pane-overview"></div>
+        <div class="dash-pane-inner" id="pane-data"></div>
+        <div class="dash-pane-inner" id="pane-logs"></div>
+        <div class="dash-pane-inner" id="pane-health"></div>
+      </div>
+    </section>
+
+    <!-- ============ READER VIEW ============ -->
+    <section class="view" id="view-reader">
+      <div class="reader-body">
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-title">等级</div>
+            <ul class="sidebar-list" id="level-list">
+              <li class="sidebar-item active" data-level="">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                <span>全部</span>
+                <span class="count" id="level-all-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="explosive">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 22h20L12 2z"/></svg>
+                <span>爆炸</span>
+                <span class="count" id="level-explosive-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="important">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M0 12h20"/></svg>
+                <span>重要</span>
+                <span class="count" id="level-important-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="follow">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 12h14M12 5l7 7-7 7"/></svg>
+                <span>关注</span>
+                <span class="count" id="level-follow-count">—</span>
+              </li>
+            </ul>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-section">
+            <div class="sidebar-title">分类</div>
+            <ul class="sidebar-list" id="category-list">
+              <li class="sidebar-item active" data-category="">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                <span>全部分类</span>
+              </li>
+            </ul>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-footer">
+            本地工具 · 数据仅在你的浏览器<br>
+            Token 存于 <code>localStorage</code>
+          </div>
+        </aside>
+
+        <div class="reader-main">
+          <div class="filter-bar">
+            <select class="select" id="sort-select" title="排序方式">
+              <option value="desc">最新优先</option>
+              <option value="asc">最旧优先</option>
+              <option value="hot">最热</option>
+            </select>
+            <select class="select" id="since-select" title="时间范围">
+              <option value="">全部时间</option>
+              <option value="1h">最近 1 小时</option>
+              <option value="24h">最近 24 小时</option>
+              <option value="7d">最近 7 天</option>
+            </select>
+            <div class="filter-spacer"></div>
+            <span class="filter-meta" id="result-meta">— 条</span>
+          </div>
+          <div class="feed" id="feed">
+            <div class="state">
+              <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <div class="state-title">还没拉取新闻</div>
+              <div class="state-desc">点右上角 <code>设置</code> 填 URL + Token,然后按 <code>⌘R</code> 或 <code>刷新</code> 开始阅读</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -1090,7 +1173,7 @@ body {
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Console 设置</div>
-      <button class="btn ghost btn-icon" id="settings-close">
+      <button class="btn ghost btn-icon" id="settings-close" style="height: 28px; width: 28px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -1118,7 +1201,7 @@ body {
   <div class="modal" style="width: 540px;">
     <div class="modal-header">
       <div class="modal-title">快捷键 & 功能</div>
-      <button class="btn ghost btn-icon" id="help-close">
+      <button class="btn ghost btn-icon" id="help-close" style="height: 28px; width: 28px;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -1129,10 +1212,10 @@ body {
 <div class="toast" id="toast"></div>
 
 <script>
-/* ===========================================================
- * CSNEWS Console — Dashboard for backend health verification
- * 共用 Neo Kinpaku tokens 块(跟 news-reader 保持同步)
- * =========================================================== */
+/* ============================================================
+ * CSNEWS Console — Dashboard + Reader
+ * Local-only · Worker URL + Bearer Token stored in localStorage
+ * ============================================================ */
 
 const STORAGE = {
   base: 'csnews_console',
@@ -1142,26 +1225,24 @@ const STORAGE = {
 };
 
 const STATE = {
-  tab: 'overview',
+  view: 'dashboard',                  // 'dashboard' | 'reader'
+  dashTab: 'overview',                // 'overview' | 'data' | 'logs' | 'health'
   config: STORAGE.get('config', { baseUrl: '', token: '' }),
-  health: null,
-  healthErr: null,
-  news7d: [],
-  news7dErr: null,
-  entity: null,
-  entityErr: null,
-  event: null,
-  eventErr: null,
+  // dashboard
+  health: null, healthErr: null,
+  news7d: [], news7dErr: null,
+  entity: null, entityErr: null,
+  event: null, eventErr: null,
   selectedEndpoint: 'pull-news',
-  endpointResponse: null,
-  endpointError: null,
-  endpointLoading: false,
-  logs: [],
-  logsErr: null,
-  logsDate: 'today',
-  logsHour: '',
-  logsLimit: 100,
+  endpointResponse: null, endpointError: null, endpointLoading: false, endpointElapsed: 0,
+  logs: [], logsErr: null,
+  logsDate: 'today', logsHour: '', logsLimit: 100,
   loading: false,
+  // reader
+  items: [], readerLastError: null, readerLoading: false,
+  filters: { level: '', category: '', sort: 'desc', since: '', limit: 30 },
+  expandedId: null,
+  contentCache: new Map(),
 };
 
 function getConfig() { return STATE.config; }
@@ -1170,9 +1251,7 @@ function baseUrl() { return STATE.config.baseUrl.replace(/\/+$/, ''); }
 
 function escapeHtml(s) {
   if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function fmtTime(iso) {
@@ -1186,12 +1265,19 @@ function fmtTime(iso) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function fmtNumber(n) {
-  if (n == null) return '—';
-  return n.toLocaleString('en-US');
+function fmtTimeZh(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`;
+  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 }
 
-// --- HTTP ---
+function fmtNumber(n) { if (n == null) return '—'; return n.toLocaleString('en-US'); }
+
 async function apiGet(path, params) {
   const cfg = getConfig();
   let url = baseUrl() + path;
@@ -1202,86 +1288,9 @@ async function apiGet(path, params) {
   return data;
 }
 
-// --- Data fetchers ---
-async function fetchHealth() {
-  return apiGet('/?action=health');
-}
-async function fetchNews7d() {
-  const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '500', format: 'full' });
-  return r.items || [];
-}
-async function fetchEntity() {
-  return apiGet('/?action=entity&text=__latest__');
-}
-async function fetchEvent() {
-  return apiGet('/?action=event&text=__latest__');
-}
-async function fetchLogs(date, hour, limit) {
-  const params = { action: 'logs', limit: String(limit) };
-  if (date) params.date = date;
-  if (hour !== '' && hour != null) params.hour = String(hour);
-  return apiGet('/', params);
-}
-
-// ============================================================
-// Endpoints catalog (22 个)
-// ============================================================
-const ENDPOINTS = [
-  // 日常检查
-  { name: 'Pull News', action: 'pull', type: 'news', group: 'daily', method: 'GET',
-    desc: '拉取新闻热点,默认按 created_at desc',
-    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' },
-             { key: 'since', label: 'since', type: 'text', placeholder: '24h / ISO 8601' },
-             { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] },
-             { key: 'category', label: 'category', type: 'text' }] },
-  { name: 'Pull Topics', action: 'pull', type: 'topics', group: 'daily', method: 'GET',
-    desc: '拉取话题列表', params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }, { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] }] },
-  { name: 'Pull Warnings', action: 'pull', type: 'warnings', group: 'daily', method: 'GET',
-    desc: '拉取警告', params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
-  { name: 'Pull Fission Pending', action: 'pull', type: 'fission-pending', group: 'daily', method: 'GET',
-    desc: '拉取待裂变', params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
-  { name: 'Logs', action: 'logs', group: 'daily', method: 'GET',
-    desc: '查 R2 持久化日志',
-    params: [{ key: 'date', label: 'date', type: 'text', default: 'today' }, { key: 'hour', label: 'hour', type: 'number', min: 0, max: 23 }, { key: 'limit', label: 'limit', type: 'number', default: '100' }] },
-  { name: 'Ping', action: 'ping', group: 'daily', method: 'GET', desc: '健康检查 (空 action fallback)', params: [] },
-  { name: 'Health', action: 'health', group: 'daily', method: 'GET', desc: '9 维度健康检查 + AI 配额', params: [] },
-  { name: 'Content', action: 'content', group: 'daily', method: 'GET', desc: '读单条新闻全文 (R2)', params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
-  { name: 'Trend', action: 'trend', group: 'daily', method: 'GET', desc: '话题趋势 (topics / velocity / acceleration)',
-    params: [{ key: 'type', label: 'type', type: 'select', options: ['topics', 'velocity', 'acceleration'], default: 'topics' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
-  { name: 'Entity', action: 'entity', group: 'daily', method: 'GET', desc: '自学习 entity candidates',
-    params: [{ key: 'text', label: 'text', type: 'text' }] },
-  { name: 'Event', action: 'event', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster',
-    params: [{ key: 'text', label: 'text', type: 'text' }] },
-  // 内部调试
-  { name: 'Diag', action: 'diag', group: 'debug', method: 'GET', desc: '环境变量诊断', params: [] },
-  { name: 'Model Test', action: 'model-test', group: 'debug', method: 'GET', desc: '测试 Workers AI 模型', params: [] },
-  { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
-    params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
-  { name: 'Score', action: 'score', group: 'debug', method: 'GET', desc: '单条标题打分',
-    params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
-  { name: 'Classify', action: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类',
-    params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
-  { name: 'Batch Score', action: 'batch-score', group: 'debug', method: 'POST', desc: '批量打分 (POST)', params: [] },
-  { name: 'Save', action: 'save', group: 'debug', method: 'POST', desc: '手动入库 (POST)', params: [] },
-  { name: 'List', action: 'list', group: 'debug', method: 'GET', desc: 'R2 prefix 列表',
-    params: [{ key: 'prefix', label: 'prefix', type: 'text' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
-  { name: 'Embed', action: 'embed', group: 'debug', method: 'GET', desc: 'bge-m3 向量化',
-    params: [{ key: 'text', label: 'text', type: 'text', required: true }] },
-  { name: 'Zaker Hot', action: 'zaker-hot', group: 'debug', method: 'GET', desc: '拉 ZAKER 热点 (调试)', params: [] },
-  { name: 'Process', action: 'process', group: 'debug', method: 'GET', desc: '手动触发 process (cron normally)',
-    params: [] },
-  { name: 'Knowledge', action: 'knowledge', group: 'debug', method: 'GET', desc: '知识累积 daily/topic',
-    params: [{ key: 'type', label: 'type', type: 'select', options: ['daily', 'topic'], default: 'daily' }] },
-];
-
-const GROUPS = {
-  daily: { name: '日常检查', desc: 'pull × 5 + logs + ping + health + content + trend + entity + event' },
-  debug: { name: '内部调试', desc: 'diag / score / classify / batch-score / save / list / embed / zaker-hot / process / knowledge / model-test / ai-test' }
-};
-
-// ============================================================
-// Status
-// ============================================================
+/* ============================================================
+ * Status / Toast (shared)
+ * ============================================================ */
 function updateStatus() {
   const status = document.getElementById('status');
   const text = document.getElementById('status-text');
@@ -1289,23 +1298,29 @@ function updateStatus() {
   if (!isConfigured()) {
     status.classList.add('config');
     text.textContent = '未配置';
-  } else if (STATE.loading) {
+  } else if (STATE.loading || STATE.readerLoading) {
     text.textContent = '加载中…';
-  } else if (STATE.healthErr) {
+  } else if (STATE.healthErr && STATE.view === 'dashboard') {
     status.classList.add('offline');
     text.textContent = '连接失败';
-  } else if (STATE.health) {
+  } else if (STATE.readerLastError && STATE.view === 'reader') {
+    status.classList.add('offline');
+    text.textContent = '错误';
+  } else if (STATE.health && STATE.view === 'dashboard') {
     const s = STATE.health.status;
     if (s === 'ok' || s === 'healthy' || s === 'up') {
       status.classList.add('online');
       text.textContent = STATE.health.worker_version || 'OK';
     } else if (s === 'degraded') {
-      status.classList.add('warning');
+      status.classList.add('offline');
       text.textContent = 'degraded';
     } else {
       status.classList.add('offline');
       text.textContent = s || 'down';
     }
+  } else if (STATE.view === 'reader' && isConfigured()) {
+    status.classList.add('online');
+    text.textContent = `${STATE.items.length} 条`;
   }
 }
 
@@ -1318,9 +1333,80 @@ function toast(msg, type = 'info') {
   toastTimer = setTimeout(() => { t.className = 'toast'; }, 2400);
 }
 
-// ============================================================
-// JSON syntax highlighting (XSS-safe, regex)
-// ============================================================
+/* ============================================================
+ * View router (Dashboard / Reader)
+ * ============================================================ */
+function switchView(view) {
+  STATE.view = view;
+  document.querySelectorAll('.view-tab').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + view));
+  updateStatus();
+  if (view === 'dashboard') refreshDashboard();
+  else if (view === 'reader') refreshReader();
+}
+
+document.querySelectorAll('.view-tab').forEach(el => {
+  el.addEventListener('click', () => switchView(el.dataset.view));
+});
+
+/* ============================================================
+ * DASHBOARD module
+ * ============================================================ */
+async function fetchHealth() { return apiGet('/?action=health'); }
+async function fetchNews7d() {
+  const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '500', format: 'full' });
+  return r.items || [];
+}
+async function fetchEntity() { return apiGet('/?action=entity&text=__latest__'); }
+async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
+async function fetchLogs(date, hour, limit) {
+  const params = { action: 'logs', limit: String(limit) };
+  if (date) params.date = date;
+  if (hour !== '' && hour != null) params.hour = String(hour);
+  return apiGet('/', params);
+}
+
+// --- Endpoints catalog (22) ---
+const ENDPOINTS = [
+  { name: 'Pull News', action: 'pull', type: 'news', group: 'daily', method: 'GET', desc: '拉取新闻热点,默认按 created_at desc',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' },
+             { key: 'since', label: 'since', type: 'text', placeholder: '24h / ISO 8601' },
+             { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] },
+             { key: 'category', label: 'category', type: 'text' }] },
+  { name: 'Pull Topics', action: 'pull', type: 'topics', group: 'daily', method: 'GET', desc: '拉取话题列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }, { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] }] },
+  { name: 'Pull Warnings', action: 'pull', type: 'warnings', group: 'daily', method: 'GET', desc: '拉取警告',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Pull Fission Pending', action: 'pull', type: 'fission-pending', group: 'daily', method: 'GET', desc: '拉取待裂变',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Logs', action: 'logs', group: 'daily', method: 'GET', desc: '查 R2 持久化日志',
+    params: [{ key: 'date', label: 'date', type: 'text', default: 'today' }, { key: 'hour', label: 'hour', type: 'number', min: 0, max: 23 }, { key: 'limit', label: 'limit', type: 'number', default: '100' }] },
+  { name: 'Ping', action: 'ping', group: 'daily', method: 'GET', desc: '健康检查 (空 action fallback)', params: [] },
+  { name: 'Health', action: 'health', group: 'daily', method: 'GET', desc: '9 维度健康检查 + AI 配额', params: [] },
+  { name: 'Content', action: 'content', group: 'daily', method: 'GET', desc: '读单条新闻全文 (R2)', params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
+  { name: 'Trend', action: 'trend', group: 'daily', method: 'GET', desc: '话题趋势 (topics / velocity / acceleration)',
+    params: [{ key: 'type', label: 'type', type: 'select', options: ['topics', 'velocity', 'acceleration'], default: 'topics' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Entity', action: 'entity', group: 'daily', method: 'GET', desc: '自学习 entity candidates', params: [{ key: 'text', label: 'text', type: 'text' }] },
+  { name: 'Event', action: 'event', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster', params: [{ key: 'text', label: 'text', type: 'text' }] },
+  { name: 'Diag', action: 'diag', group: 'debug', method: 'GET', desc: '环境变量诊断', params: [] },
+  { name: 'Model Test', action: 'model-test', group: 'debug', method: 'GET', desc: '测试 Workers AI 模型', params: [] },
+  { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
+    params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
+  { name: 'Score', action: 'score', group: 'debug', method: 'GET', desc: '单条标题打分', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Classify', action: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Batch Score', action: 'batch-score', group: 'debug', method: 'POST', desc: '批量打分 (POST)', params: [] },
+  { name: 'Save', action: 'save', group: 'debug', method: 'POST', desc: '手动入库 (POST)', params: [] },
+  { name: 'List', action: 'list', group: 'debug', method: 'GET', desc: 'R2 prefix 列表', params: [{ key: 'prefix', label: 'prefix', type: 'text' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Embed', action: 'embed', group: 'debug', method: 'GET', desc: 'bge-m3 向量化', params: [{ key: 'text', label: 'text', type: 'text', required: true }] },
+  { name: 'Zaker Hot', action: 'zaker-hot', group: 'debug', method: 'GET', desc: '拉 ZAKER 热点 (调试)', params: [] },
+  { name: 'Process', action: 'process', group: 'debug', method: 'GET', desc: '手动触发 process (cron normally)', params: [] },
+  { name: 'Knowledge', action: 'knowledge', group: 'debug', method: 'GET', desc: '知识累积 daily/topic', params: [{ key: 'type', label: 'type', type: 'select', options: ['daily', 'topic'], default: 'daily' }] },
+];
+const GROUPS = {
+  daily: { name: '日常检查', desc: 'pull × 5 + logs + ping + health + content + trend + entity + event' },
+  debug: { name: '内部调试', desc: 'diag / score / classify / batch-score / save / list / embed / zaker-hot / process / knowledge / model-test / ai-test' }
+};
+
 function highlightJson(json) {
   const escaped = escapeHtml(typeof json === 'string' ? json : JSON.stringify(json, null, 2));
   return escaped.replace(
@@ -1331,11 +1417,7 @@ function highlightJson(json) {
           ? `<span class="json-key">${str}</span><span class="json-punct">${colon}</span>`
           : `<span class="json-string">${str}</span>`;
       }
-      if (bool) {
-        return bool === 'null'
-          ? `<span class="json-null">${bool}</span>`
-          : `<span class="json-bool">${bool}</span>`;
-      }
+      if (bool) return bool === 'null' ? `<span class="json-null">${bool}</span>` : `<span class="json-bool">${bool}</span>`;
       if (num) return `<span class="json-number">${num}</span>`;
       if (punct) return `<span class="json-punct">${punct}</span>`;
       return m;
@@ -1343,9 +1425,7 @@ function highlightJson(json) {
   );
 }
 
-// ============================================================
-// SVG charts (纯手画,零依赖)
-// ============================================================
+// --- SVG charts ---
 function svgLineChart(data, opts = {}) {
   if (!data.length) return '<div class="chart-empty">暂无数据</div>';
   const w = 600, h = 180, padL = 40, padR = 12, padT = 12, padB = 28;
@@ -1357,30 +1437,23 @@ function svgLineChart(data, opts = {}) {
     const y = padT + innerH - (d.value / max) * innerH;
     return { x, y, ...d };
   });
-  // Path line
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  // Area path (close to bottom)
   const areaD = pathD + ` L ${points[points.length - 1].x} ${padT + innerH} L ${points[0].x} ${padT + innerH} Z`;
-  // Y axis grid lines
   const yLines = [0, 0.5, 1].map(t => {
     const y = padT + innerH - t * innerH;
     return `<line class="grid-line" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}"/>`;
   }).join('');
-  // Y axis labels
   const yLabels = [0, 0.5, 1].map(t => {
     const y = padT + innerH - t * innerH;
     const v = Math.round(t * max);
     return `<text class="axis-label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${v}</text>`;
   }).join('');
-  // X axis labels (every other day)
   const xLabels = data.map((d, i) => {
     if (i % Math.ceil(data.length / 7) !== 0 && i !== data.length - 1) return '';
     const x = padL + i * step;
     return `<text class="axis-label" x="${x}" y="${h - 8}" text-anchor="middle">${d.label || d.key}</text>`;
   }).join('');
-  // Points
   const dots = points.map(p => `<circle class="point" cx="${p.x}" cy="${p.y}" r="2.5"/>`).join('');
-
   return `
     <svg class="chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
       <line class="axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + innerH}"/>
@@ -1389,15 +1462,15 @@ function svgLineChart(data, opts = {}) {
       <path class="area" d="${areaD}"/>
       <path class="line" d="${pathD}"/>
       ${dots}
-    </svg>
-  `;
+    </svg>`;
 }
 
 function svgDonut(segments) {
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (!total) return '<div class="chart-empty">暂无数据</div>';
   const cx = 80, cy = 80, r = 60, ir = 38;
-  const colors = ['var(--text-3)', 'var(--patina)', 'var(--gold)', 'var(--danger)'];
+  const colors = ['var(--text-3)', 'var(--text-2)', 'var(--gold)'];  // 灰 + 浅灰 + gold (3 档足够)
+  const labeled = colors.slice(0, segments.length);
   let acc = 0;
   const arcs = segments.map((seg, i) => {
     const startAngle = (acc / total) * 2 * Math.PI - Math.PI / 2;
@@ -1414,11 +1487,11 @@ function svgDonut(segments) {
     const iy2 = cy + ir * Math.sin(startAngle);
     if (seg.value === 0) return '';
     const path = `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${ir} ${ir} 0 ${largeArc} 0 ${ix2} ${iy2} Z`;
-    return `<path class="donut-segment" d="${path}" fill="${colors[i % colors.length]}"/>`;
+    return `<path class="donut-segment" d="${path}" fill="${labeled[i % labeled.length]}"/>`;
   }).join('');
   const legend = segments.map((seg, i) => `
     <div style="display:flex; align-items:center; gap:6px; font-size:11px; padding:2px 0;">
-      <span style="width:8px; height:8px; background:${colors[i % colors.length]}; border-radius:1px;"></span>
+      <span style="width:8px; height:8px; background:${labeled[i % labeled.length]}; border-radius:1px;"></span>
       <span style="color:var(--text-2);">${escapeHtml(seg.label)}</span>
       <span style="margin-left:auto; font-family:var(--font-mono); color:var(--text);">${seg.value}</span>
       <span style="color:var(--text-3); font-family:var(--font-mono);">${((seg.value / total) * 100).toFixed(0)}%</span>
@@ -1428,8 +1501,7 @@ function svgDonut(segments) {
     <div style="display: flex; align-items: center; gap: 18px;">
       <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0;">${arcs}</svg>
       <div style="flex:1;">${legend}</div>
-    </div>
-  `;
+    </div>`;
 }
 
 function svgHistogram(bins) {
@@ -1448,7 +1520,6 @@ function svgHistogram(bins) {
     if (i === bins.length - 1) cls = 'bar alt';
     return `<rect class="${cls}" x="${x}" y="${y}" width="${w2}" height="${bh}" rx="1"/>`;
   }).join('');
-  // X labels (0, 5, 10)
   return `
     <svg class="chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
       <line class="axis" x1="${padL}" y1="${padT + innerH}" x2="${w - padR}" y2="${padT + innerH}"/>
@@ -1456,32 +1527,22 @@ function svgHistogram(bins) {
       <text class="axis-label" x="${padL + innerW / 2}" y="${h - 8}" text-anchor="middle">5</text>
       <text class="axis-label" x="${w - padR}" y="${h - 8}" text-anchor="end">10</text>
       ${bars}
-    </svg>
-  `;
+    </svg>`;
 }
 
-// ============================================================
-// Tab renderers
-// ============================================================
 function renderOverview() {
-  const c = document.getElementById('tab-content');
-  if (STATE.loading && !STATE.health) {
-    c.innerHTML = renderOverviewSkeleton();
-    return;
-  }
+  const c = document.getElementById('pane-overview');
+  if (STATE.loading && !STATE.health) { c.innerHTML = renderOverviewSkeleton(); return; }
   if (STATE.healthErr && !STATE.health) {
     c.innerHTML = `
-      <div class="dashboard">
-        <div class="error-banner">
-          <div class="error-banner-title">⚠ 后端连接失败</div>
-          <div class="error-banner-body">${escapeHtml(STATE.healthErr.message || String(STATE.healthErr))}</div>
-        </div>
-        <div class="state">
-          <div class="state-title">无法拉取后端状态</div>
-          <div class="state-desc">检查 <code>Worker URL</code> / <code>Token</code> / 网络,或按 <code>⌘R</code> 重试</div>
-        </div>
+      <div class="error-banner">
+        <div class="error-banner-title">⚠ 后端连接失败</div>
+        <div class="error-banner-body">${escapeHtml(STATE.healthErr.message || String(STATE.healthErr))}</div>
       </div>
-    `;
+      <div class="state">
+        <div class="state-title">无法拉取后端状态</div>
+        <div class="state-desc">检查 <code>Worker URL</code> / <code>Token</code> / 网络,或按 <code>⌘R</code> 重试</div>
+      </div>`;
     return;
   }
 
@@ -1497,7 +1558,6 @@ function renderOverview() {
   const totalChecks = Object.keys(checks).length;
   const cronDown = h.cron_health === 'down';
 
-  // 7-day news aggregation
   const byDay = {};
   const today = new Date();
   for (let i = 6; i >= 0; i--) {
@@ -1517,285 +1577,254 @@ function renderOverview() {
     return { key: k, label: `${d.getMonth() + 1}/${d.getDate()}`, value: v };
   });
 
-  // Level distribution
   const levelDist = { follow: 0, important: 0, explosive: 0 };
   STATE.news7d.forEach(it => { if (it.level && levelDist[it.level] != null) levelDist[it.level]++; });
   const levelTotal = levelDist.follow + levelDist.important + levelDist.explosive;
 
-  // Score histogram (10 bins: 0-1, 1-2, ..., 9-10)
   const scoreBins = new Array(10).fill(0);
   STATE.news7d.forEach(it => {
     const s = Number(it.score) || 0;
-    if (s >= 0 && s <= 10) {
-      const idx = Math.min(9, Math.floor(s));
-      scoreBins[idx]++;
-    }
+    if (s >= 0 && s <= 10) scoreBins[Math.min(9, Math.floor(s))]++;
   });
 
-  // AI budget tier badge
   const tierBadgeClass = `badge-tier-${aiBudget.tier || 'normal'}`;
   const tierLabel = (aiBudget.tier || 'normal').toUpperCase();
 
   c.innerHTML = `
-    <div class="dashboard">
-      ${cronDown ? `
-        <div class="error-banner" style="margin-bottom: 16px;">
-          <div class="error-banner-title">⚠ Cron 异常 — ${fmtTime(h.last_process_at)} 之后没跑过 process</div>
-          <div class="error-banner-body">检查 CF Workers Triggers 配置,或 worker 日志 (Logs tab) 看 scheduler 是否报错</div>
-        </div>
-      ` : ''}
+    ${cronDown ? `
+      <div class="error-banner" style="margin-bottom: 16px;">
+        <div class="error-banner-title">⚠ Cron 异常 — ${fmtTime(h.last_process_at)} 之后没跑过 process</div>
+        <div class="error-banner-body">检查 CF Workers Triggers 配置,或 worker 日志 (Logs tab) 看 scheduler 是否报错</div>
+      </div>` : ''}
 
-      <!-- KPI grid -->
-      <div class="kpi-grid">
-        <div class="kpi">
-          <div class="kpi-status ${cronDown ? 'fail' : 'ok'}"></div>
-          <div class="kpi-label">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-            <span>Cron 状态</span>
-          </div>
-          <div class="kpi-value ${cronDown ? 'danger' : 'success'}">${cronDown ? 'DOWN' : 'OK'}</div>
-          <div class="kpi-meta">${h.last_process_at ? `上次 ${fmtTime(h.last_process_at)}` : '从未跑过'}</div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-status ${cronDown ? 'fail' : 'ok'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Cron 状态</span>
         </div>
+        <div class="kpi-value ${cronDown ? 'danger' : ''}">${cronDown ? 'DOWN' : 'OK'}</div>
+        <div class="kpi-meta">${h.last_process_at ? `上次 ${fmtTime(h.last_process_at)}` : '从未跑过'}</div>
+      </div>
 
-        <div class="kpi">
-          <div class="kpi-status ${okCount === totalChecks ? 'ok' : 'warn'}"></div>
-          <div class="kpi-label">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <span>健康评分</span>
-          </div>
-          <div class="kpi-value ${okCount === totalChecks ? 'success' : (okCount < totalChecks / 2 ? 'danger' : 'warning')}">${okCount}/${totalChecks}</div>
-          <div class="kpi-meta">${totalChecks ? Math.round((okCount / totalChecks) * 100) : 0}% 维度正常 · worker ${h.worker_version || '—'}</div>
+      <div class="kpi">
+        <div class="kpi-status ${okCount === totalChecks ? 'ok' : 'fail'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>健康评分</span>
         </div>
+        <div class="kpi-value ${okCount < totalChecks / 2 ? 'danger' : ''}">${okCount}<span class="suffix">/${totalChecks}</span></div>
+        <div class="kpi-meta">${totalChecks ? Math.round((okCount / totalChecks) * 100) : 0}% 维度正常 · worker ${h.worker_version || '—'}</div>
+      </div>
 
-        <div class="kpi">
-          <div class="kpi-status ${(aiBudget.used || 0) >= (aiBudget.quota || 1) * 0.8 ? 'warn' : 'ok'}"></div>
-          <div class="kpi-label">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M0.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M0 12h4M18 12h4M0.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            <span>AI 配额 (今日)</span>
-          </div>
-          <div class="kpi-value">${fmtNumber(aiBudget.used || 0)}<span style="font-size:14px; color:var(--text-3); font-weight:400;">/${fmtNumber(aiBudget.quota || 0)}</span></div>
-          <div class="kpi-meta">
-            <span class="badge ${tierBadgeClass}">${tierLabel}</span>
-            <span>${fmtNumber(aiBudget.remaining || 0)} remaining</span>
-          </div>
+      <div class="kpi">
+        <div class="kpi-status ${(aiBudget.used || 0) >= (aiBudget.quota || 1) * 0.8 ? 'fail' : 'ok'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M0.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M0 12h4M18 12h4M0.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          <span>AI 配额 (今日)</span>
         </div>
+        <div class="kpi-value">${fmtNumber(aiBudget.used || 0)}<span class="suffix">/${fmtNumber(aiBudget.quota || 0)}</span></div>
+        <div class="kpi-meta">
+          <span class="badge ${tierBadgeClass}">${tierLabel}</span>
+          <span>${fmtNumber(aiBudget.remaining || 0)} remaining</span>
+        </div>
+      </div>
 
-        <div class="kpi">
-          <div class="kpi-status ok"></div>
-          <div class="kpi-label">
+      <div class="kpi">
+        <div class="kpi-status ok"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
+          <span>数据规模</span>
+        </div>
+        <div class="kpi-value">${fmtNumber(counts.news_hotspots || 0)}</div>
+        <div class="kpi-meta">news · ${fmtNumber(counts.topics || 0)} topics · ${fmtNumber(counts.trend_snapshots || 0)} trends</div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+            <span>7 天入库趋势</span>
+          </div>
+          <div class="panel-actions">共 ${STATE.news7d.length} 条</div>
+        </div>
+        <div class="panel-body">${svgLineChart(trendData)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+            <span>Level 分布 (7d)</span>
+          </div>
+          <div class="panel-actions">${levelTotal} 条</div>
+        </div>
+        <div class="panel-body">${svgDonut([
+          { label: 'follow', value: levelDist.follow },
+          { label: 'important', value: levelDist.important },
+          { label: 'explosive', value: levelDist.explosive }
+        ])}</div>
+      </div>
+    </div>
+
+    <div class="row-3">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
-            <span>数据规模</span>
+            <span>Supabase</span>
           </div>
-          <div class="kpi-value">${fmtNumber(counts.news_hotspots || 0)}</div>
-          <div class="kpi-meta">news · ${fmtNumber(counts.topics || 0)} topics · ${fmtNumber(counts.trend_snapshots || 0)} trends</div>
+        </div>
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
+            <tbody>
+              ${['news_hotspots', 'topics', 'news_topic_members', 'trend_snapshots', 'warnings', 'fission_searches'].map(t => `
+                <tr><td>${t}</td><td class="num ${counts[t] === 0 ? 'zero' : ''}">${fmtNumber(counts[t] || 0)}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Row 2: trend + activity -->
-      <div class="row-2">
-        <div class="panel chart-panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
-              <span>7 天入库趋势</span>
-            </div>
-            <div class="panel-actions">共 ${STATE.news7d.length} 条</div>
-          </div>
-          <div class="panel-body">
-            ${svgLineChart(trendData)}
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M0 3h22v5H1zM10 12h4"/></svg>
+            <span>R2 Prefix</span>
           </div>
         </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
-              <span>Level 分布 (7d)</span>
-            </div>
-            <div class="panel-actions">${levelTotal} 条</div>
-          </div>
-          <div class="panel-body">
-            ${svgDonut([
-              { label: 'follow', value: levelDist.follow },
-              { label: 'important', value: levelDist.important },
-              { label: 'explosive', value: levelDist.explosive }
-            ])}
-          </div>
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
+            <tbody>
+              ${['news/', 'news/zaker/', 'embeddings/', 'fission/', 'trends/', 'warnings/', 'logs/'].map(p => `
+                <tr><td>${p}</td><td class="num ${r2Counts[p] === 0 ? 'zero' : ''}">${fmtNumber(r2Counts[p] || 0)}</td></tr>
+              `).join('')}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <!-- Row 3: tables -->
-      <div class="row-3">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
-              <span>Supabase</span>
-            </div>
-          </div>
-          <div class="panel-body">
-            <table class="stat-table">
-              <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
-              <tbody>
-                ${['news_hotspots', 'topics', 'news_topic_members', 'trend_snapshots', 'warnings', 'fission_searches'].map(t => `
-                  <tr><td>${t}</td><td class="num ${counts[t] === 0 ? 'zero' : ''}">${fmtNumber(counts[t] || 0)}</td></tr>
-                `).join('')}
-              </tbody>
-            </table>
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 17l4-4 4 4 6-6"/></svg>
+            <span>Score 分布 (7d)</span>
           </div>
         </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M0 3h22v5H1zM10 12h4"/></svg>
-              <span>R2 Prefix</span>
-            </div>
-          </div>
-          <div class="panel-body">
-            <table class="stat-table">
-              <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
-              <tbody>
-                ${['news/', 'news/zaker/', 'embeddings/', 'fission/', 'trends/', 'warnings/', 'logs/'].map(p => `
-                  <tr><td>${p}</td><td class="num ${r2Counts[p] === 0 ? 'zero' : ''}">${fmtNumber(r2Counts[p] || 0)}</td></tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="panel chart-panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 17l4-4 4 4 6-6"/></svg>
-              <span>Score 分布 (7d)</span>
-            </div>
-          </div>
-          <div class="panel-body">
-            ${svgHistogram(scoreBins)}
-          </div>
-        </div>
+        <div class="panel-body">${svgHistogram(scoreBins)}</div>
       </div>
+    </div>
 
-      <!-- 最近活动 -->
-      <div class="row-2" style="margin-top: 20px; grid-template-columns: 1fr 1fr;">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-              <span>最近活动</span>
-            </div>
+    <div class="row-2" style="margin-top: 24px; grid-template-columns: 1fr 1fr;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            <span>最近活动</span>
           </div>
-          <div class="panel-body">
-            <ul class="activity-list">
-              ${lastWrite.created_at ? `
-                <li class="activity-item">
-                  <span class="activity-dot ok"></span>
-                  <div class="activity-content">
-                    <div class="activity-title">${escapeHtml(lastWrite.title || '(no title)')}</div>
-                    <div class="activity-meta">
-                      <span>R2 latest write</span><span class="sep">·</span>
-                      <span>${fmtTime(lastWrite.created_at)}</span><span class="sep">·</span>
-                      <span>${escapeHtml(lastWrite.key || '')}</span>
-                    </div>
-                  </div>
-                </li>
-              ` : ''}
-              <li class="activity-item">
-                <span class="activity-dot ${cronDown ? 'fail' : 'ok'}"></span>
-                <div class="activity-content">
-                  <div class="activity-title">${cronHist.scheduler_log_count != null ? `本小时 scheduler ${cronHist.scheduler_log_count} 次日志` : '无 cron 历史'}</div>
-                  <div class="activity-meta">
-                    <span>${cronHist.hour || '—'}</span>
-                    ${cronDown ? '<span class="sep">·</span><span style="color: var(--danger);">328+ min 未跑</span>' : ''}
-                  </div>
-                </div>
-              </li>
-              <li class="activity-item">
-                <span class="activity-dot ${(zscore.total_7d || 0) > 0 ? 'warn' : 'ok'}"></span>
-                <div class="activity-content">
-                  <div class="activity-title">z-score 异常检测: 7d 内 ${zscore.total_7d || 0} 个信号</div>
-                  <div class="activity-meta">
-                    <span>score: ${(zscore.by_field_7d || {}).score || 0}</span><span class="sep">·</span>
-                    <span>velocity: ${(zscore.by_field_7d || {}).velocity || 0}</span><span class="sep">·</span>
-                    <span>acceleration: ${(zscore.by_field_7d || {}).acceleration || 0}</span>
-                  </div>
-                </div>
-              </li>
+        </div>
+        <div class="panel-body">
+          <ul class="activity-list">
+            ${lastWrite.created_at ? `
               <li class="activity-item">
                 <span class="activity-dot ok"></span>
                 <div class="activity-content">
-                  <div class="activity-title">AI 配额今日已用 ${fmtNumber(aiBudget.used || 0)} / ${fmtNumber(aiBudget.quota || 0)} Neurons</div>
+                  <div class="activity-title">${escapeHtml(lastWrite.title || '(no title)')}</div>
                   <div class="activity-meta">
-                    <span>tier: ${tierLabel}</span>
+                    <span>R2 latest write</span><span class="sep">·</span>
+                    <span>${fmtTime(lastWrite.created_at)}</span><span class="sep">·</span>
+                    <span>${escapeHtml(lastWrite.key || '')}</span>
                   </div>
                 </div>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11H5a2 2 0 00-2 2v7h18v-7a2 2 0 00-2-2h-4M9 11V7a3 3 0 016 0v4"/></svg>
-              <span>Entity / Event</span>
-            </div>
-          </div>
-          <div class="panel-body">
-            <ul class="activity-list">
-              ${STATE.entity && STATE.entity.candidates ? STATE.entity.candidates.slice(0, 5).map(c => `
-                <li class="activity-item">
-                  <span class="activity-dot ok"></span>
-                  <div class="activity-content">
-                    <div class="activity-title">${escapeHtml(c.name)} <span style="color:var(--text-3); font-size:11px; font-family:var(--font-mono);">(${escapeHtml(c.type)})</span></div>
-                    <div class="activity-meta">
-                      <span>freq ${c.frequency || 0}</span><span class="sep">·</span>
-                      <span>conf ${((c.confidence || 0) * 100).toFixed(0)}%</span><span class="sep">·</span>
-                      <span>${c.source || '—'}</span>
-                    </div>
-                  </div>
-                </li>
-              `).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title text-3">暂无 entity 数据</div></div></li>'}
-              ${STATE.event && STATE.event.clusters ? STATE.event.clusters.slice(0, 3).map(c => `
-                <li class="activity-item">
-                  <span class="activity-dot warn"></span>
-                  <div class="activity-content">
-                    <div class="activity-title">Cluster ${escapeHtml(c.cluster_id)} · ${c.entity_count} entities</div>
-                    <div class="activity-meta">
-                      <span>${c.jaccard_pairs || 0} jaccard pairs</span><span class="sep">·</span>
-                      <span>${escapeHtml(c.reviewed || 'pending')}</span>
-                    </div>
-                  </div>
-                </li>
-              `).join('') : ''}
-            </ul>
-          </div>
+              </li>` : ''}
+            <li class="activity-item">
+              <span class="activity-dot ${cronDown ? 'fail' : 'ok'}"></span>
+              <div class="activity-content">
+                <div class="activity-title">${cronHist.scheduler_log_count != null ? `本小时 scheduler ${cronHist.scheduler_log_count} 次日志` : '无 cron 历史'}</div>
+                <div class="activity-meta">
+                  <span>${cronHist.hour || '—'}</span>
+                  ${cronDown ? '<span class="sep">·</span><span style="color: var(--danger);">328+ min 未跑</span>' : ''}
+                </div>
+              </div>
+            </li>
+            <li class="activity-item">
+              <span class="activity-dot ok"></span>
+              <div class="activity-content">
+                <div class="activity-title">z-score 异常检测: 7d 内 ${zscore.total_7d || 0} 个信号</div>
+                <div class="activity-meta">
+                  <span>score: ${(zscore.by_field_7d || {}).score || 0}</span><span class="sep">·</span>
+                  <span>velocity: ${(zscore.by_field_7d || {}).velocity || 0}</span><span class="sep">·</span>
+                  <span>acceleration: ${(zscore.by_field_7d || {}).acceleration || 0}</span>
+                </div>
+              </div>
+            </li>
+            <li class="activity-item">
+              <span class="activity-dot ok"></span>
+              <div class="activity-content">
+                <div class="activity-title">AI 配额今日已用 ${fmtNumber(aiBudget.used || 0)} / ${fmtNumber(aiBudget.quota || 0)} Neurons</div>
+                <div class="activity-meta"><span>tier: ${tierLabel}</span></div>
+              </div>
+            </li>
+          </ul>
         </div>
       </div>
-    </div>
-  `;
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11H5a2 2 0 00-2 2v7h18v-7a2 2 0 00-2-2h-4M9 11V7a3 3 0 016 0v4"/></svg>
+            <span>Entity / Event</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <ul class="activity-list">
+            ${STATE.entity && STATE.entity.candidates ? STATE.entity.candidates.slice(0, 5).map(c => `
+              <li class="activity-item">
+                <span class="activity-dot ok"></span>
+                <div class="activity-content">
+                  <div class="activity-title">${escapeHtml(c.name)} <span style="color:var(--text-3); font-size:11px; font-family:var(--font-mono);">(${escapeHtml(c.type)})</span></div>
+                  <div class="activity-meta">
+                    <span>freq ${c.frequency || 0}</span><span class="sep">·</span>
+                    <span>conf ${((c.confidence || 0) * 100).toFixed(0)}%</span><span class="sep">·</span>
+                    <span>${c.source || '—'}</span>
+                  </div>
+                </div>
+              </li>`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 entity 数据</div></div></li>'}
+            ${STATE.event && STATE.event.clusters ? STATE.event.clusters.slice(0, 3).map(c => `
+              <li class="activity-item">
+                <span class="activity-dot warn"></span>
+                <div class="activity-content">
+                  <div class="activity-title">Cluster ${escapeHtml(c.cluster_id)} · ${c.entity_count} entities</div>
+                  <div class="activity-meta">
+                    <span>${c.jaccard_pairs || 0} jaccard pairs</span><span class="sep">·</span>
+                    <span>${escapeHtml(c.reviewed || 'pending')}</span>
+                  </div>
+                </div>
+              </li>`).join('') : ''}
+          </ul>
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderOverviewSkeleton() {
   return `
-    <div class="dashboard">
-      <div class="kpi-grid">
-        ${Array(4).fill(0).map(() => '<div class="kpi"><div class="skeleton" style="height: 24px; width: 60%; margin-bottom: 12px;"></div><div class="skeleton" style="height: 36px; width: 40%;"></div></div>').join('')}
-      </div>
-      <div class="row-2">
-        <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
-        <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
-      </div>
+    <div class="kpi-grid">
+      ${Array(4).fill(0).map(() => '<div class="kpi"><div class="skeleton" style="height: 24px; width: 60%; margin-bottom: 12px;"></div><div class="skeleton" style="height: 36px; width: 40%;"></div></div>').join('')}
     </div>
-  `;
+    <div class="row-2">
+      <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
+      <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
+    </div>`;
 }
 
-// ============================================================
-// Data tab
-// ============================================================
 function renderData() {
-  const c = document.getElementById('tab-content');
+  const c = document.getElementById('pane-data');
   const ep = ENDPOINTS.find(e => e.action + (e.type ? '-' + e.type : '') === STATE.selectedEndpoint)
     || ENDPOINTS.find(e => e.action === STATE.selectedEndpoint) || ENDPOINTS[0];
 
@@ -1815,12 +1844,10 @@ function renderData() {
                   <li class="endpoint-item ${STATE.selectedEndpoint === id ? 'active' : ''} ${e.method === 'POST' ? 'post' : ''}" data-endpoint="${id}">
                     <span class="method">${e.method}</span>
                     <span>${e.name}</span>
-                  </li>
-                `;
+                  </li>`;
               }).join('')}
             </ul>
-          </div>
-        `).join('')}
+          </div>`).join('')}
       </div>
 
       <div class="endpoint-detail">
@@ -1835,14 +1862,10 @@ function renderData() {
               ${p.type === 'select' ? `
                 <select data-param="${p.key}">
                   ${p.options.map(o => `<option value="${o}" ${o === p.default ? 'selected' : ''}>${o || '(empty)'}</option>`).join('')}
-                </select>
-              ` : p.type === 'number' ? `
-                <input type="number" data-param="${p.key}" value="${p.default || ''}" min="${p.min || ''}" max="${p.max || ''}" placeholder="${p.placeholder || ''}" />
-              ` : `
-                <input type="text" data-param="${p.key}" value="${p.default || ''}" placeholder="${p.placeholder || ''}" />
-              `}
-            </span>
-          `).join('') : '<span style="color: var(--text-3); font-size: 12px;">无参数</span>'}
+                </select>` : p.type === 'number' ? `
+                <input type="number" data-param="${p.key}" value="${p.default || ''}" min="${p.min || ''}" max="${p.max || ''}" placeholder="${p.placeholder || ''}" />` : `
+                <input type="text" data-param="${p.key}" value="${p.default || ''}" placeholder="${p.placeholder || ''}" />`}
+            </span>`).join('') : '<span style="color: var(--text-3); font-size: 12px;">无参数</span>'}
           <div class="endpoint-actions">
             <button class="btn small" id="btn-copy-curl">复制 cURL</button>
             <button class="btn primary small" id="btn-run">${ep.method === 'POST' ? 'POST' : 'GET'} ↵</button>
@@ -1856,10 +1879,8 @@ function renderData() {
         </div>
         <div class="endpoint-response-meta" id="endpoint-response-meta"></div>
       </div>
-    </div>
-  `;
+    </div>`;
 
-  // Bindings
   document.querySelectorAll('.endpoint-item').forEach(el => {
     el.addEventListener('click', () => {
       STATE.selectedEndpoint = el.dataset.endpoint;
@@ -1870,15 +1891,10 @@ function renderData() {
   });
   document.getElementById('btn-run').addEventListener('click', runEndpoint);
   document.getElementById('btn-copy-curl').addEventListener('click', copyCurl);
-  // ⌘Enter to run
   document.getElementById('endpoint-params').addEventListener('keydown', e => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
-      runEndpoint();
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runEndpoint(); }
   });
 
-  // Render existing response if any
   if (STATE.endpointError) renderEndpointError(STATE.endpointError);
   else if (STATE.endpointResponse) renderEndpointSuccess(STATE.endpointResponse, STATE.endpointElapsed);
 }
@@ -1919,10 +1935,9 @@ async function runEndpoint() {
 
 function renderEndpointSuccess(data, elapsed) {
   const json = JSON.stringify(data, null, 2);
-  document.getElementById('endpoint-response').innerHTML =
-    `<div class="json-view">${highlightJson(json)}</div>`;
+  document.getElementById('endpoint-response').innerHTML = `<div class="json-view">${highlightJson(json)}</div>`;
   const ms = elapsed || 0;
-  const msColor = ms < 200 ? 'var(--success)' : ms < 500 ? 'var(--warning)' : 'var(--danger)';
+  const msColor = ms < 200 ? 'var(--text-2)' : ms < 500 ? 'var(--warning)' : 'var(--danger)';
   document.getElementById('endpoint-response-meta').innerHTML = `
     <span>状态 <strong style="color: var(--success);">200 OK</strong></span>
     <span class="sep">·</span>
@@ -1937,11 +1952,8 @@ function renderEndpointError(err) {
     <div class="error-banner" style="margin: 0;">
       <div class="error-banner-title">⚠ 调用失败</div>
       <div class="error-banner-body">${escapeHtml(err.message || String(err))}</div>
-    </div>
-  `;
-  document.getElementById('endpoint-response-meta').innerHTML = `
-    <span>状态 <strong style="color: var(--danger);">ERROR</strong></span>
-  `;
+    </div>`;
+  document.getElementById('endpoint-response-meta').innerHTML = `<span>状态 <strong style="color: var(--danger);">ERROR</strong></span>`;
 }
 
 function copyCurl() {
@@ -1960,40 +1972,31 @@ function copyCurl() {
   navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
 }
 
-// ============================================================
-// Logs tab
-// ============================================================
 async function renderLogs() {
-  const c = document.getElementById('tab-content');
+  const c = document.getElementById('pane-logs');
   c.innerHTML = `
-    <div class="logs-wrap">
-      <div class="logs-controls">
-        <div class="field">
-          <label class="field-label">Date</label>
-          <input type="text" id="logs-date" value="${escapeHtml(STATE.logsDate)}" placeholder="today / YYYY-MM-DD" />
-        </div>
-        <div class="field">
-          <label class="field-label">Hour</label>
-          <input type="number" id="logs-hour" value="${escapeHtml(STATE.logsHour)}" placeholder="0-23" min="0" max="23" />
-        </div>
-        <div class="field">
-          <label class="field-label">Limit</label>
-          <input type="number" id="logs-limit" value="${STATE.logsLimit}" min="1" max="500" />
-        </div>
-        <button class="btn primary" id="logs-refresh">查询</button>
-        <span style="color: var(--text-3); font-size: 11px; margin-left: auto;">共 ${STATE.logs.length} 条</span>
+    <div class="logs-controls">
+      <div class="field">
+        <label class="field-label">Date</label>
+        <input type="text" id="logs-date" value="${escapeHtml(STATE.logsDate)}" placeholder="today / YYYY-MM-DD" />
       </div>
-      <div id="logs-table-wrap">
-        ${STATE.logs.length ? renderLogsTable() : '<div class="state"><div class="state-title">暂无日志</div><div class="state-desc">调整 date / hour 试试</div></div>'}
+      <div class="field">
+        <label class="field-label">Hour</label>
+        <input type="number" id="logs-hour" value="${escapeHtml(STATE.logsHour)}" placeholder="0-23" min="0" max="23" />
       </div>
+      <div class="field">
+        <label class="field-label">Limit</label>
+        <input type="number" id="logs-limit" value="${STATE.logsLimit}" min="1" max="500" />
+      </div>
+      <button class="btn primary" id="logs-refresh">查询</button>
+      <span style="color: var(--text-3); font-size: 11px; margin-left: auto;">共 ${STATE.logs.length} 条</span>
     </div>
-  `;
+    <div id="logs-table-wrap">
+      ${STATE.logs.length ? renderLogsTable() : '<div class="state"><div class="state-title">暂无日志</div><div class="state-desc">调整 date / hour 试试</div></div>'}
+    </div>`;
   document.getElementById('logs-refresh').addEventListener('click', loadLogs);
-  // Also on Enter in any input
   ['logs-date', 'logs-hour', 'logs-limit'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') loadLogs();
-    });
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadLogs(); });
   });
 }
 
@@ -2008,11 +2011,9 @@ function renderLogsTable() {
             <td>${escapeHtml(l.ts || l.created_at || '—')}</td>
             <td>${escapeHtml(l.event || l.message || '—')}</td>
             <td>${escapeHtml(typeof l.detail === 'object' ? JSON.stringify(l.detail) : (l.detail || ''))}</td>
-          </tr>
-        `).join('')}
+          </tr>`).join('')}
       </tbody>
-    </table>
-  `;
+    </table>`;
 }
 
 async function loadLogs() {
@@ -2034,148 +2035,361 @@ async function loadLogs() {
   }
 }
 
-// ============================================================
-// Health tab
-// ============================================================
 function renderHealth() {
-  const c = document.getElementById('tab-content');
+  const c = document.getElementById('pane-health');
   if (!STATE.health) {
-    c.innerHTML = `<div class="health-wrap"><div class="state"><div class="state-title">未拉取 health 数据</div><div class="state-desc">回到 Overview 拉取</div></div></div>`;
+    c.innerHTML = `<div class="state"><div class="state-title">未拉取 health 数据</div><div class="state-desc">回到 Overview 拉取</div></div>`;
     return;
   }
   const h = STATE.health;
   const checks = h.checks || {};
   c.innerHTML = `
-    <div class="health-wrap">
-      <div class="health-section">
-        <div class="health-section-title">9 维度健康检查</div>
-        <div class="health-grid">
-          ${Object.entries(checks).map(([name, c]) => `
-            <div class="check-card ${c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'down'}">
-              <div class="check-card-header">
-                <div class="check-card-name">${escapeHtml(name)}</div>
-                <span class="badge ${c.status === 'ok' ? 'badge-ok' : c.status === 'warn' ? 'badge-warn' : 'badge-down'}">${c.status}</span>
-              </div>
-              <div class="check-card-detail">${escapeHtml(c.detail || '—')}</div>
+    <div class="health-section">
+      <div class="health-section-title">9 维度健康检查</div>
+      <div class="health-grid">
+        ${Object.entries(checks).map(([name, c]) => `
+          <div class="check-card ${c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'down'}">
+            <div class="check-card-header">
+              <div class="check-card-name">${escapeHtml(name)}</div>
+              <span class="badge ${c.status === 'ok' ? 'badge-ok' : c.status === 'warn' ? 'badge-warn' : 'badge-down'}">${c.status}</span>
             </div>
-          `).join('')}
-        </div>
+            <div class="check-card-detail">${escapeHtml(c.detail || '—')}</div>
+          </div>`).join('')}
       </div>
+    </div>
 
-      <div class="health-section">
-        <div class="health-section-title">Supabase</div>
-        <div class="panel">
-          <div class="panel-body">
-            <table class="stat-table">
-              <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
-              <tbody>${Object.entries(h.supabase_counts || {}).map(([k, v]) => `
-                <tr><td>${escapeHtml(k)}</td><td class="num ${v === 0 ? 'zero' : ''}">${fmtNumber(v)}</td></tr>
-              `).join('')}</tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="health-section">
-        <div class="health-section-title">R2 Bucket</div>
-        <div class="panel">
-          <div class="panel-body">
-            <table class="stat-table">
-              <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
-              <tbody>${Object.entries(h.r2_prefix_counts || {}).map(([k, v]) => `
-                <tr><td>${escapeHtml(k)}</td><td class="num ${v === 0 ? 'zero' : ''}">${fmtNumber(v)}</td></tr>
-              `).join('')}</tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div class="health-section">
-        <div class="health-section-title">AI Budget (今日)</div>
-        <div class="panel">
-          <div class="panel-body">
-            <table class="stat-table">
-              <tbody>
-                <tr><td>tier</td><td style="text-align:right;"><span class="badge badge-tier-${h.ai_budget_today?.tier || 'normal'}">${(h.ai_budget_today?.tier || 'normal').toUpperCase()}</span></td></tr>
-                <tr><td>used</td><td class="num">${fmtNumber(h.ai_budget_today?.used || 0)}</td></tr>
-                <tr><td>quota</td><td class="num">${fmtNumber(h.ai_budget_today?.quota || 0)}</td></tr>
-                <tr><td>remaining</td><td class="num">${fmtNumber(h.ai_budget_today?.remaining || 0)}</td></tr>
-              </tbody>
-            </table>
-          </div>
+    <div class="health-section">
+      <div class="health-section-title">Supabase</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
+            <tbody>${Object.entries(h.supabase_counts || {}).map(([k, v]) => `
+              <tr><td>${escapeHtml(k)}</td><td class="num ${v === 0 ? 'zero' : ''}">${fmtNumber(v)}</td></tr>
+            `).join('')}</tbody>
+          </table>
         </div>
       </div>
     </div>
-  `;
+
+    <div class="health-section">
+      <div class="health-section-title">R2 Bucket</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
+            <tbody>${Object.entries(h.r2_prefix_counts || {}).map(([k, v]) => `
+              <tr><td>${escapeHtml(k)}</td><td class="num ${v === 0 ? 'zero' : ''}">${fmtNumber(v)}</td></tr>
+            `).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="health-section">
+      <div class="health-section-title">AI Budget (今日)</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <tbody>
+              <tr><td>tier</td><td style="text-align:right;"><span class="badge badge-tier-${h.ai_budget_today?.tier || 'normal'}">${(h.ai_budget_today?.tier || 'normal').toUpperCase()}</span></td></tr>
+              <tr><td>used</td><td class="num">${fmtNumber(h.ai_budget_today?.used || 0)}</td></tr>
+              <tr><td>quota</td><td class="num">${fmtNumber(h.ai_budget_today?.quota || 0)}</td></tr>
+              <tr><td>remaining</td><td class="num">${fmtNumber(h.ai_budget_today?.remaining || 0)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
 }
 
-// ============================================================
-// Tab routing
-// ============================================================
-function renderTab() {
-  document.querySelectorAll('.tab').forEach(el => {
-    el.classList.toggle('active', el.dataset.tab === STATE.tab);
-  });
-  if (STATE.tab === 'overview') renderOverview();
-  else if (STATE.tab === 'data') renderData();
-  else if (STATE.tab === 'logs') renderLogs();
-  else if (STATE.tab === 'health') renderHealth();
+function renderDashTab() {
+  document.querySelectorAll('.dash-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === STATE.dashTab));
+  document.querySelectorAll('.dash-pane-inner').forEach(el => el.classList.toggle('active', el.id === 'pane-' + STATE.dashTab));
+  if (STATE.dashTab === 'overview') renderOverview();
+  else if (STATE.dashTab === 'data') renderData();
+  else if (STATE.dashTab === 'logs') renderLogs();
+  else if (STATE.dashTab === 'health') renderHealth();
 }
 
-// ============================================================
-// Main refresh
-// ============================================================
-async function refresh() {
+document.querySelectorAll('.dash-tab').forEach(el => {
+  el.addEventListener('click', () => { STATE.dashTab = el.dataset.tab; renderDashTab(); });
+});
+
+async function refreshDashboard() {
   if (!isConfigured()) { openSettings(); return; }
   STATE.loading = true;
-  STATE.healthErr = null;
-  STATE.news7dErr = null;
-  STATE.entityErr = null;
-  STATE.eventErr = null;
-  if (STATE.tab === 'overview') renderOverview();
+  STATE.healthErr = null; STATE.news7dErr = null;
+  STATE.entityErr = null; STATE.eventErr = null;
+  if (STATE.dashTab === 'overview') renderOverview();
   updateStatus();
-
   try {
     STATE.health = await fetchHealth();
-    document.getElementById('tab-count-overview').textContent = STATE.health.worker_version || '✓';
+    document.getElementById('dash-count').textContent = STATE.health.worker_version || '✓';
   } catch (e) {
     STATE.healthErr = { message: e.message || String(e) };
-    document.getElementById('tab-count-overview').textContent = '!';
+    document.getElementById('dash-count').textContent = '!';
   }
-
-  try {
-    STATE.news7d = await fetchNews7d();
-  } catch (e) {
-    STATE.news7dErr = { message: e.message || String(e) };
-    STATE.news7d = [];
-  }
-
-  try {
-    STATE.entity = await fetchEntity();
-  } catch (e) {
-    STATE.entityErr = { message: e.message || String(e) };
-    STATE.entity = null;
-  }
-
-  try {
-    STATE.event = await fetchEvent();
-  } catch (e) {
-    STATE.eventErr = { message: e.message || String(e) };
-    STATE.event = null;
-  }
-
+  try { STATE.news7d = await fetchNews7d(); }
+  catch (e) { STATE.news7dErr = { message: e.message || String(e) }; STATE.news7d = []; }
+  try { STATE.entity = await fetchEntity(); }
+  catch (e) { STATE.entityErr = { message: e.message || String(e) }; STATE.entity = null; }
+  try { STATE.event = await fetchEvent(); }
+  catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
   STATE.loading = false;
   updateStatus();
-  renderTab();
+  renderDashTab();
   toast('已刷新', 'success');
 }
 
-// ============================================================
-// Settings modal
-// ============================================================
+/* ============================================================
+ * READER module
+ * ============================================================ */
+async function fetchReaderNews() {
+  const cfg = getConfig();
+  const params = new URLSearchParams({
+    action: 'pull', type: 'news', format: 'full',
+    limit: String(STATE.filters.limit),
+    order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
+    order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
+  });
+  if (STATE.filters.level) params.set('level', STATE.filters.level);
+  if (STATE.filters.category) params.set('category', STATE.filters.category);
+  if (STATE.filters.since) params.set('since', STATE.filters.since);
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
+  const start = performance.now();
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  const elapsed = Math.round(performance.now() - start);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return { items: data.items || [], total: data.total, truncated: data.truncated, elapsed };
+}
+
+async function fetchReaderContent(id) {
+  if (STATE.contentCache.has(id)) return STATE.contentCache.get(id);
+  const cfg = getConfig();
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=content&id=${encodeURIComponent(id)}&format=text`;
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  const text = data.content || data.text || data.full || '';
+  STATE.contentCache.set(id, text);
+  return text;
+}
+
+function renderCategoryList(items) {
+  const catCount = {};
+  items.forEach(it => {
+    const c = it.category || '未分类';
+    catCount[c] = (catCount[c] || 0) + 1;
+  });
+  const sorted = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
+  const list = document.getElementById('category-list');
+  list.innerHTML = `
+    <li class="sidebar-item ${STATE.filters.category === '' ? 'active' : ''}" data-category="">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>全部分类</span>
+      <span class="count">${items.length}</span>
+    </li>
+  ` + sorted.map(([c, n]) => `
+    <li class="sidebar-item ${STATE.filters.category === c ? 'active' : ''}" data-category="${escapeHtml(c)}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
+      <span>${escapeHtml(c)}</span>
+      <span class="count">${n}</span>
+    </li>`).join('');
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.filters.category = el.dataset.category || '';
+      renderCategoryList(STATE.items);
+      refreshReader();
+    });
+  });
+}
+
+function renderLevelCounts(items) {
+  const total = items.length;
+  const c = { explosive: 0, important: 0, follow: 0 };
+  items.forEach(it => { if (it.level && c[it.level] !== undefined) c[it.level]++; });
+  document.getElementById('level-all-count').textContent = total;
+  document.getElementById('level-explosive-count').textContent = c.explosive;
+  document.getElementById('level-important-count').textContent = c.important;
+  document.getElementById('level-follow-count').textContent = c.follow;
+}
+
+function renderFeedSkeleton() {
+  document.getElementById('feed').innerHTML = Array(4).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skeleton sk-meta">
+        <div class="skeleton sk-tag"></div>
+        <div class="skeleton sk-dot"></div>
+      </div>
+      <div class="skeleton sk-line sk-title"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line" style="width: 60%;"></div>
+    </div>`).join('');
+}
+
+function renderFeed() {
+  const feed = document.getElementById('feed');
+  const items = STATE.items;
+  document.getElementById('result-meta').textContent = `${items.length} 条${STATE.readerLastError ? ' · 错误' : ''}`;
+  if (STATE.readerLastError) {
+    feed.innerHTML = `
+      <div class="error-banner">
+        <div class="error-banner-title">⚠ 拉取失败</div>
+        <div class="error-banner-body">${escapeHtml(STATE.readerLastError.message || String(STATE.readerLastError))}</div>
+      </div>` + (items.length ? renderCardList(items) : `
+      <div class="state">
+        <div class="state-title">暂时拉不到数据</div>
+        <div class="state-desc">检查网络 / Token / Worker 状态,按 <code>⌘R</code> 重试</div>
+      </div>`);
+    bindCardClicks();
+    return;
+  }
+  if (!items.length) {
+    feed.innerHTML = `
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        <div class="state-title">没有匹配的新闻</div>
+        <div class="state-desc">换个等级或分类试试,或者按 <code>⌘R</code> 重新拉取</div>
+      </div>`;
+    return;
+  }
+  feed.innerHTML = renderCardList(items);
+  bindCardClicks();
+}
+
+function renderCardList(items) {
+  return items.map((it, idx) => {
+    const level = it.level || 'follow';
+    const levelLabel = { explosive: '爆炸', important: '重要', follow: '关注' }[level] || level;
+    const isExpanded = STATE.expandedId === it.id;
+    const hot = it.hot_score != null ? Number(it.hot_score).toFixed(1) : null;
+    const title = escapeHtml(it.title);
+    const summary = escapeHtml(it.summary || '');
+    const category = escapeHtml(it.category || '');
+    const source = escapeHtml(it.source || '');
+    const url = escapeHtml(it.url || '');
+    const published = fmtTimeZh(it.published_at || it.created_at);
+    return `
+      <article class="card ${isExpanded ? 'expanded' : ''}" data-idx="${idx}" data-id="${escapeHtml(it.id)}">
+        <div class="card-body">
+          <div class="card-meta">
+            <span class="meta-source">${source}</span>
+            <span class="badge badge-${level}">${levelLabel}</span>
+            ${category ? `<span class="badge badge-category">${category}</span>` : ''}
+            <span class="meta-dot"></span>
+            <span class="meta-time">${published}</span>
+          </div>
+          <h2 class="card-title">${title}</h2>
+          ${summary ? `<div class="card-summary">${summary}</div>` : ''}
+          <div class="card-footer">
+            ${hot ? `<span class="card-hot ${Number(it.hot_score) < 3 ? 'cool' : ''}">🔥 ${hot}</span>` : ''}
+            <span class="card-action">${isExpanded ? '收起' : '展开 →'}</span>
+          </div>
+        </div>
+        <div class="card-popup">
+          <div class="popup-content" data-content-for="${escapeHtml(it.id)}">加载全文中…</div>
+          <div class="popup-actions">
+            ${url ? `<a class="btn" href="${url}" target="_blank" rel="noopener noreferrer">原文 ↗</a>` : ''}
+            <button class="btn ghost" data-copy-curl="${escapeHtml(it.id)}">复制 cURL</button>
+          </div>
+        </div>
+      </article>`;
+  }).join('');
+}
+
+function bindCardClicks() {
+  document.querySelectorAll('.card').forEach(card => {
+    const id = card.dataset.id;
+    const body = card.querySelector('.card-body');
+    body.addEventListener('click', () => toggleExpand(id));
+    body.addEventListener('dblclick', () => {
+      const item = STATE.items.find(x => x.id === id);
+      if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
+    });
+  });
+  document.querySelectorAll('[data-copy-curl]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.copyCurl;
+      const item = STATE.items.find(x => x.id === id);
+      if (!item) return;
+      const cfg = getConfig();
+      const masked = cfg.token.length > 6 ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6) : '***';
+      const curl = `curl -s "${cfg.baseUrl}/?action=pull&type=news&format=full&limit=1" \\\n  -H "Authorization: Bearer ${masked}"`;
+      navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
+    });
+  });
+}
+
+async function toggleExpand(id) {
+  if (STATE.expandedId === id) { STATE.expandedId = null; renderFeed(); return; }
+  STATE.expandedId = id;
+  renderFeed();
+  const el = document.querySelector(`[data-content-for="${CSS.escape(id)}"]`);
+  if (!el) return;
+  if (STATE.contentCache.has(id)) { el.innerHTML = formatContent(STATE.contentCache.get(id)); return; }
+  try {
+    const text = await fetchReaderContent(id);
+    el.innerHTML = formatContent(text);
+  } catch (e) {
+    el.innerHTML = `<span style="color: var(--danger);">全文加载失败: ${escapeHtml(e.message || String(e))}</span>`;
+  }
+}
+
+function formatContent(text) {
+  if (!text) return '<span style="color: var(--text-3);">暂无全文</span>';
+  const paras = text.split(/\n\n+/).map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`);
+  return paras.join('');
+}
+
+async function refreshReader() {
+  if (!isConfigured()) { openSettings(); return; }
+  STATE.readerLoading = true;
+  STATE.readerLastError = null;
+  renderFeedSkeleton();
+  updateStatus();
+  try {
+    const { items, total, truncated, elapsed } = await fetchReaderNews();
+    STATE.items = items;
+    document.getElementById('result-meta').textContent =
+      `${items.length} 条${truncated ? ` (总 ${total})` : ''} · ${elapsed}ms`;
+    renderLevelCounts(items);
+    renderCategoryList(items);
+    renderFeed();
+    toast(`已刷新 ${items.length} 条`, 'success');
+  } catch (e) {
+    STATE.readerLastError = { message: e.message || String(e) };
+    renderFeed();
+    toast(`拉取失败: ${e.message}`, 'error');
+  } finally {
+    STATE.readerLoading = false;
+    updateStatus();
+  }
+}
+
+/* ============================================================
+ * Reader bindings
+ * ============================================================ */
+document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    STATE.filters.level = el.dataset.level || '';
+    refreshReader();
+  });
+});
+document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
+document.getElementById('since-select').addEventListener('change', e => { STATE.filters.since = e.target.value; refreshReader(); });
+
+/* ============================================================
+ * Settings modal (shared)
+ * ============================================================ */
 function openSettings() {
-  document.getElementById('cfg-url').value = STATE.config.baseUrl || '';
-  document.getElementById('cfg-token').value = STATE.config.token || '';
+  const cfg = getConfig();
+  document.getElementById('cfg-url').value = cfg.baseUrl || '';
+  document.getElementById('cfg-token').value = cfg.token || '';
   document.getElementById('settings-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('cfg-url').focus(), 50);
 }
@@ -2188,69 +2402,69 @@ function saveSettings() {
   STORAGE.set('config', STATE.config);
   closeSettings();
   toast('已保存', 'success');
-  refresh();
+  if (STATE.view === 'dashboard') refreshDashboard();
+  else if (STATE.view === 'reader') refreshReader();
 }
 
-// ============================================================
-// Help modal (⌘K)
-// ============================================================
+/* ============================================================
+ * Help modal
+ * ============================================================ */
 const HELP_GROUPS = [
+  { title: '视图', items: [
+    { keys: ['Dashboard'], desc: 'Overview / Data / Logs / Health 子 tab 验收后端' },
+    { keys: ['Reader'], desc: '新闻时间线 + 全文展开 (sidebar 按等级/分类过滤)' },
+  ]},
   { title: '导航', items: [
-    { keys: ['1-4'], desc: 'Overview / Data / Logs / Health' },
-    { keys: ['⌘', 'R'], desc: '刷新拉取最新' },
+    { keys: ['⌘', 'R'], desc: '刷新当前视图' },
     { keys: ['⌘', 'K'], desc: '打开 / 关闭快捷键帮助' },
     { keys: ['⌘', '?'], desc: '同上 (Windows 友好)' },
     { keys: ['⌘', ','], desc: '打开设置' },
-    { keys: ['Esc'], desc: '关闭弹窗' },
+    { keys: ['Esc'], desc: '关闭弹窗 / 收起展开卡片' },
   ]},
-  { title: 'Data Tab', items: [
-    { keys: ['Click'], desc: '左侧选 endpoint,右侧填参数' },
-    { keys: ['⌘', 'Enter'], desc: '在参数输入框里触发调用' },
-    { keys: ['cURL'], desc: '复制当前 endpoint 的 cURL (含脱敏 token)' },
-  ]},
-  { title: '验收后端', items: [
-    { keys: ['Overview'], desc: '4 个 KPI 卡 + 趋势图 + 最近活动,一眼看出后端跑得好不好' },
+  { title: 'Dashboard', items: [
+    { keys: ['Overview'], desc: '4 KPI 卡 + 趋势图 + 最近活动,一眼看出后端跑得好不好' },
+    { keys: ['Data'], desc: '22 个 endpoint 可直接调用,填参数 → ↵ 触发' },
+    { keys: ['Logs'], desc: '按 date/hour 查 R2 持久化日志' },
     { keys: ['Health'], desc: '9 维度健康检查 + Supabase + R2 + AI Budget 详细' },
-    { keys: ['Logs'], desc: '按 date/hour 查 R2 持久化日志,排查 cron 异常' },
+  ]},
+  { title: 'Reader', items: [
+    { keys: ['Click'], desc: '展开 / 收起卡片全文' },
+    { keys: ['Double'], desc: '在原文链接打开' },
+    { keys: ['Sidebar'], desc: '点击等级 / 分类切换过滤' },
   ]},
 ];
+
 function openHelp() {
-  document.getElementById('help-body').innerHTML = `
+  const body = document.getElementById('help-body');
+  body.innerHTML = `
     <div style="color: var(--text-2); font-size: 12.5px; margin-bottom: 14px;">
-      Console <code style="font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">100% 本地</code> · 跟 <code style="font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">news-reader</code> 共用 Kinpaku tokens · Token 不离开浏览器
+      本工具 <code style="font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">100% 本地</code>,Token 不离开浏览器。
     </div>
     ${HELP_GROUPS.map(g => `
-      <div class="health-section-title" style="margin: 14px 0 6px; padding-left: 0;">${g.title}</div>
-      <div>
-        ${g.items.map(it => `
-          <div style="display:flex; align-items:center; gap:14px; padding:8px 0;">
-            <div style="display:flex; gap:4px; min-width:120px;">${it.keys.map(k => `<span class="kbd">${k}</span>`).join('<span style="color:var(--text-3); font-size:11px;">+</span>')}</div>
-            <div style="font-size:12.5px; color:var(--text-2); flex:1;">${it.desc}</div>
-          </div>
-        `).join('')}
-      </div>
-    `).join('')}
-  `;
+      <div class="help-section-title">${g.title}</div>
+      ${g.items.map(it => `
+        <div class="help-row">
+          <div class="help-keys">${it.keys.map(k => `<span class="kbd">${k}</span>`).join('<span style="color:var(--text-3); font-size:11px;">+</span>')}</div>
+          <div class="help-desc">${it.desc}</div>
+        </div>`).join('')}
+    `).join('')}`;
   document.getElementById('help-modal').style.display = 'flex';
 }
 function closeHelp() { document.getElementById('help-modal').style.display = 'none'; }
 
-// ============================================================
-// Bindings
-// ============================================================
-document.querySelectorAll('.tab').forEach(el => {
-  el.addEventListener('click', () => {
-    STATE.tab = el.dataset.tab;
-    renderTab();
-  });
-});
+/* ============================================================
+ * Bindings
+ * ============================================================ */
 document.getElementById('settings-btn').addEventListener('click', openSettings);
 document.getElementById('settings-close').addEventListener('click', closeSettings);
 document.getElementById('settings-cancel').addEventListener('click', closeSettings);
 document.getElementById('settings-save').addEventListener('click', saveSettings);
 document.getElementById('help-btn').addEventListener('click', openHelp);
 document.getElementById('help-close').addEventListener('click', closeHelp);
-document.getElementById('refresh-btn').addEventListener('click', refresh);
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  if (STATE.view === 'dashboard') refreshDashboard();
+  else if (STATE.view === 'reader') refreshReader();
+});
 
 ['settings-modal', 'help-modal'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
@@ -2259,47 +2473,39 @@ document.getElementById('refresh-btn').addEventListener('click', refresh);
 });
 
 document.addEventListener('keydown', e => {
-  // ⌘K / ⌘? — Help
   if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '?')) {
     e.preventDefault();
     const hm = document.getElementById('help-modal');
     hm.style.display === 'flex' ? closeHelp() : openHelp();
     return;
   }
-  // ⌘R — Refresh
   if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
     e.preventDefault();
-    refresh();
+    if (STATE.view === 'dashboard') refreshDashboard();
+    else refreshReader();
     return;
   }
-  // ⌘, — Settings
-  if ((e.metaKey || e.ctrlKey) && e.key === ',') {
-    e.preventDefault();
-    openSettings();
-    return;
-  }
-  // 1-4 — Switch tab (when not in input)
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); return; }
+  // 1/2 — Dashboard / Reader view switch (when not in input)
   if (!(e.metaKey || e.ctrlKey || e.altKey) && !['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
-    if (e.key === '1') { STATE.tab = 'overview'; renderTab(); }
-    else if (e.key === '2') { STATE.tab = 'data'; renderTab(); }
-    else if (e.key === '3') { STATE.tab = 'logs'; renderTab(); }
-    else if (e.key === '4') { STATE.tab = 'health'; renderTab(); }
+    if (e.key === '1') switchView('dashboard');
+    else if (e.key === '2') switchView('reader');
   }
-  // Esc — Close modals
   if (e.key === 'Escape') {
     const hm = document.getElementById('help-modal');
     const sm = document.getElementById('settings-modal');
     if (hm.style.display === 'flex') { closeHelp(); return; }
     if (sm.style.display === 'flex') { closeSettings(); return; }
+    if (STATE.view === 'reader' && STATE.expandedId) { STATE.expandedId = null; renderFeed(); }
   }
 });
 
-// ============================================================
-// Boot
-// ============================================================
+/* ============================================================
+ * Boot
+ * ============================================================ */
 updateStatus();
 if (isConfigured()) {
-  refresh();
+  refreshDashboard();
 } else {
   setTimeout(openSettings, 400);
 }
