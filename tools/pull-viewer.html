@@ -1783,7 +1783,7 @@ function renderOverview() {
         </div>
         <div class="panel-body">
           <ul class="activity-list">
-            ${STATE.entity && STATE.entity.candidates ? STATE.entity.candidates.slice(0, 5).map(c => `
+            ${STATE.entity && STATE.entity.candidates ? (STATE.entity.candidates.slice(0, 5).map(c => `
               <li class="activity-item">
                 <span class="activity-dot ok"></span>
                 <div class="activity-content">
@@ -1794,8 +1794,8 @@ function renderOverview() {
                     <span>${c.source || '—'}</span>
                   </div>
                 </div>
-              </li>`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 entity 数据</div></div></li>'}
-            ${STATE.event && STATE.event.clusters ? STATE.event.clusters.slice(0, 3).map(c => `
+              </li>`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 entity 数据</div></div></li>') : ''}
+            ${STATE.event && STATE.event.clusters ? (STATE.event.clusters.slice(0, 3).map(c => `
               <li class="activity-item">
                 <span class="activity-dot warn"></span>
                 <div class="activity-content">
@@ -1805,7 +1805,7 @@ function renderOverview() {
                     <span>${escapeHtml(c.reviewed || 'pending')}</span>
                   </div>
                 </div>
-              </li>`).join('') : ''}
+              </li>`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 event 数据</div></div></li>') : ''}
           </ul>
         </div>
       </div>
