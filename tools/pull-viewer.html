@@ -7,6 +7,13 @@
 <meta name="color-scheme" content="dark light">
 <title>CSNEWS Pull Viewer</title>
 <style>
+  /* ===================== Design tokens =====================
+   * Color strategy: Restrained (1 accent ≤ 10% surface area)
+   * Accent: Tailwind amber-500 → OKLCH for perceptual uniformity
+   * Fallback chain: hex first → OKLCH for browsers with color() support
+   * Chrome 112+ / Firefox 121+ / Safari 17.4+ → oklch()生效
+   * 旧浏览器 → 静默回退到 hex(Restrained 策略下视觉差异极小)
+   * ============================================================ */
   :root {
     color-scheme: dark;
     --bg: #0a0a0b;
@@ -30,9 +37,22 @@
     --radius-lg: 12px;
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
     --shadow: 0 4px 16px rgba(0,0,0,0.5);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3);
     --font-mono: ui-monospace, 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
     --transition: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  @supports (color: oklch(0% 0 0)) {
+    :root {
+      /* Accent OKLCH: #f59e0b = oklch(76.86% 0.1647 70.08) — perceptual uniform */
+      --accent: oklch(76.86% 0.1647 70.08);
+      --accent-2: oklch(83.69% 0.1644 84.43);
+      --warning: oklch(76.86% 0.1647 70.08);
+      --accent-bg: oklch(76.86% 0.1647 70.08 / 12%);
+      --success: oklch(69.59% 0.1491 162.48);
+      --danger: oklch(63.68% 0.2078 25.33);
+      --info: oklch(62.31% 0.1880 259.81);
+    }
   }
   [data-theme="light"] {
     color-scheme: light;
@@ -48,6 +68,12 @@
     --accent-bg: rgba(245, 158, 11, 0.12);
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
     --shadow: 0 4px 16px rgba(0,0,0,0.08);
+    --shadow-hover: 0 4px 12px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+  }
+  @supports (color: oklch(0% 0 0)) {
+    [data-theme="light"] {
+      --accent-bg: oklch(76.86% 0.1647 70.08 / 14%);
+    }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -306,10 +332,16 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     margin-bottom: 8px;
-    transition: all var(--transition);
+    transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
     overflow: hidden;
+    will-change: transform;
   }
-  .card:hover { border-color: var(--border-strong); }
+  .card:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+  }
+  .card:active { transform: translateY(0); }
   .card-body { padding: 14px 18px; cursor: pointer; }
   .card-title {
     font-size: 14px;
@@ -317,6 +349,8 @@
     color: var(--text);
     line-height: 1.45;
     margin-bottom: 6px;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
   }
   .card-title-link { color: var(--text); text-decoration: none; }
   .card-title-link:hover { color: var(--accent-2); }
@@ -478,15 +512,77 @@
     word-break: break-word;
   }
 
-  /* Skeleton */
+  /* Skeleton — 真实卡片形状 (title bar + 2 行 summary + meta line) */
   .skeleton {
-    background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
+    background: linear-gradient(90deg, var(--bg-2) 0%, var(--bg-hover) 50%, var(--bg-2) 100%);
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
     border-radius: var(--radius-sm);
   }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-  .skeleton-card { height: 100px; margin-bottom: 8px; border-radius: var(--radius); }
+  .skeleton-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    padding: 14px 18px;
+    transition: border-color var(--transition);
+  }
+  .skeleton-card .sk-line {
+    height: 10px;
+    margin-bottom: 8px;
+  }
+  .skeleton-card .sk-line-title { height: 14px; width: 78%; }
+  .skeleton-card .sk-line-1 { width: 100%; }
+  .skeleton-card .sk-line-2 { width: 65%; margin-bottom: 14px; }
+  .skeleton-card .sk-meta { display: flex; gap: 8px; align-items: center; }
+  .skeleton-card .sk-tag { width: 50px; height: 16px; border-radius: 100px; }
+  .skeleton-card .sk-dot { width: 40px; height: 8px; }
+  .skeleton-card .sk-dot-2 { width: 60px; height: 8px; }
+  .skeleton-card .sk-dot-end { width: 50px; height: 8px; margin-left: auto; }
+
+  /* Loading indicator — spinner + 文字 */
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    color: var(--text-2);
+    font-size: 12.5px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--text-2); }
+  .loading-dots::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    text-align: left;
+    animation: dots 1.4s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0% { content: ''; }
+    25% { content: '.'; }
+    50% { content: '..'; }
+    75% { content: '...'; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; }
+    .spinner { animation-duration: 2s; }
+    .loading-dots::after { animation: none; content: '...'; }
+  }
 
   /* Modal */
   .modal-backdrop {
@@ -574,6 +670,76 @@
   .toast.error { border-left: 3px solid var(--danger); }
   .toast.info { border-left: 3px solid var(--info); }
 
+  /* JSON 语法高亮 — 纯 CSS class (JS 在 render 时加) */
+  .json-view {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--text-2);
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+  }
+  .json-view .j-key { color: var(--accent-2); }
+  .json-view .j-string { color: #34d399; }
+  .json-view .j-number { color: #60a5fa; }
+  .json-view .j-bool { color: #f87171; font-weight: 500; }
+  .json-view .j-null { color: var(--text-3); font-style: italic; }
+  .json-view .j-punct { color: var(--text-3); }
+  [data-theme="light"] .json-view .j-string { color: #059669; }
+  [data-theme="light"] .json-view .j-number { color: #2563eb; }
+  [data-theme="light"] .json-view .j-bool { color: #dc2626; }
+
+  /* 请求耗时 color coding */
+  .response-meta .latency-fast { color: var(--success); }
+  .response-meta .latency-mid  { color: var(--warning); }
+  .response-meta .latency-slow { color: var(--danger); font-weight: 500; }
+  .response-meta .latency { font-family: var(--font-mono); font-weight: 500; }
+
+  /* 字体层级 — heading letter-spacing + text-wrap balance */
+  .modal-title, .logo-text, .detail-title, .card-title, .topic-key {
+    text-wrap: balance;
+  }
+
+  /* ⌘K 帮助面板 — 列表 */
+  .help-list { display: flex; flex-direction: column; gap: 2px; }
+  .help-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition);
+  }
+  .help-row:hover { background: var(--bg-2); }
+  .help-row .help-keys { display: flex; gap: 4px; min-width: 100px; }
+  .help-row .help-desc { font-size: 12.5px; color: var(--text-2); flex: 1; line-height: 1.5; }
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text);
+    box-shadow: 0 1px 0 var(--border-strong);
+  }
+  .help-section-title {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+    margin: 14px 0 6px;
+    padding: 0 10px;
+  }
+  .help-section-title:first-child { margin-top: 0; }
+
   /* Detail drawer */
   .detail {
     position: fixed;
@@ -623,6 +789,15 @@
     .app { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
     .sidebar { display: none; }
     .detail { width: 100%; }
+    .modal { max-width: calc(100vw - 32px); margin: 16px; }
+    .help-row { gap: 10px; }
+    .help-row .help-keys { min-width: 84px; flex-wrap: wrap; }
+    .help-row .help-desc { font-size: 12px; }
+    .json-view { font-size: 11px; }
+    .skeleton-card { padding: 12px 14px; }
+    .skeleton-card .sk-line-title { width: 70%; }
+    .header > .btn span { display: none; }  /* 隐藏按钮文字,只留图标/快捷键 */
+    .header > #help-btn span:last-child { display: inline; font-size: 11px; }  /* 帮助按钮文字保留 */
   }
 </style>
 </head>
@@ -640,6 +815,10 @@
       <span id="status-text">未配置</span>
     </div>
     <div class="header-spacer"></div>
+    <button class="btn" id="help-btn" title="快捷键 (⌘K)">
+      <span style="font-size: 11px; color: var(--text-3); font-family: var(--font-mono);">⌘K</span>
+      <span style="margin-left: 2px;">帮助</span>
+    </button>
     <button class="btn ghost btn-icon" id="theme-toggle" title="切换主题">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M0.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M0 12h2m16 0h2M0.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>
     </button>
@@ -827,19 +1006,23 @@ function updateStatus() {
   status.className = 'status';
   if (!isConfigured()) {
     status.classList.add('config');
-    text.textContent = '未配置';
+    text.innerHTML = '未配置';
   } else if (state.loading) {
     status.classList.add('online');
-    text.textContent = '请求中…';
+    text.innerHTML = '<span class="spinner" style="width:10px; height:10px; border-width:1.5px;"></span> 请求中';
   } else if (state.lastError) {
     status.classList.add('offline');
-    text.textContent = '错误';
+    text.innerHTML = '错误';
   } else if (state.lastResult) {
     status.classList.add('online');
-    text.textContent = '就绪';
+    const ms = state.lastResult.elapsed;
+    let cls = 'latency-fast';
+    if (ms > 500) cls = 'latency-slow';
+    else if (ms > 200) cls = 'latency-mid';
+    text.innerHTML = `<span class="${cls}">${ms}ms</span>`;
   } else {
     status.classList.add('config');
-    text.textContent = '已配置';
+    text.innerHTML = '已配置';
   }
 }
 
@@ -1101,7 +1284,33 @@ function addFavorite() {
 
 function renderResponseLoading() {
   const r = document.getElementById('response');
-  r.innerHTML = '<div class="skeleton skeleton-card"></div>'.repeat(5);
+  const schema = TYPE_SCHEMAS[state.type];
+  const actionLabel = schema.action === 'logs' ? 'Worker 日志' : `${schema.label} (${state.type})`;
+  const loadingText = state.type === 'logs' ? '拉取日志中' : `拉取${schema.label}中`;
+
+  // 5 个真实卡片形状骨架 + 顶部 loading indicator
+  const skeleton = Array(5).fill(0).map(() => `
+    <div class="skeleton-card">
+      <div class="skeleton sk-line sk-line-title"></div>
+      <div class="skeleton sk-line sk-line-1"></div>
+      <div class="skeleton sk-line sk-line-2"></div>
+      <div class="sk-meta">
+        <div class="skeleton sk-tag"></div>
+        <div class="skeleton sk-dot"></div>
+        <div class="skeleton sk-dot-2"></div>
+        <div class="skeleton sk-dot-end"></div>
+      </div>
+    </div>
+  `).join('');
+
+  r.innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <span class="loading-text">${loadingText}<span class="loading-dots"></span></span>
+      <span style="margin-left:auto; font-size: 11px; color: var(--text-3); font-family: var(--font-mono);">${actionLabel}</span>
+    </div>
+    ${skeleton}
+  `;
 }
 
 function renderResponseError() {
@@ -1142,6 +1351,12 @@ function renderResponseSuccess() {
     levelDist = { counts, order };
   }
 
+  // 耗时 color coding — 状态栏风格保持一致
+  const ms = elapsed;
+  let latencyCls = 'latency-fast';
+  if (ms > 1000) latencyCls = 'latency-slow';
+  else if (ms > 500) latencyCls = 'latency-mid';
+
   const meta = `
     <div class="response-meta">
       <span>type <strong>${type}</strong></span>
@@ -1150,7 +1365,7 @@ function renderResponseSuccess() {
       <span class="sep">·</span>
       <span>total <strong>${data.total ?? items.length}</strong></span>
       <span class="sep">·</span>
-      <span>${elapsed}ms</span>
+      <span class="latency ${latencyCls}">${ms}ms</span>
       <div class="response-actions">
         <button class="btn ghost" id="copy-json" title="复制 JSON">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
@@ -1170,13 +1385,7 @@ function renderResponseSuccess() {
   `;
 
   if (items.length === 0) {
-    r.innerHTML = meta + `
-      <div class="state">
-        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M0 3v18M19 17v4M0 17v4M19 3v14M12 7v14M12 7V3"/></svg>
-        <div class="state-title">没拉到数据</div>
-        <div class="state-desc">这个查询返回了 0 条 — 可能是当前没符合条件的条目，或者 filter 太严了</div>
-      </div>
-    `;
+    r.innerHTML = meta + renderEmptyState(type);
     bindResponseActions(data);
     return;
   }
@@ -1219,7 +1428,69 @@ function bindCardClicks(items) {
   });
 }
 
-/* ===================== 卡片模板 ===================== */
+/* ===================== 空状态 (按 type 细化) ===================== */
+
+const EMPTY_STATES = {
+  news: {
+    icon: '<path d="M0 3v18M19 17v4M0 17v4M19 3v14M12 7v14M12 7V3"/>',
+    title: '没有符合条件的新闻',
+    desc: '试试放宽筛选条件：去掉 level 过滤、调大 limit，或换一个 since 时间窗。',
+  },
+  topics: {
+    icon: '<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/><path d="M0 3l18 18" stroke-dasharray="2 2"/>',
+    title: '话题暂无',
+    desc: '当前窗口没聚合出活跃话题。热点需要新闻源持续输入才能形成 — 过段时间再来看看。',
+  },
+  warnings: {
+    icon: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+    title: '无警告记录',
+    desc: '太好了 — 当前没有需要处理的警告。系统状态正常运转。',
+  },
+  'fission-pending': {
+    icon: '<path d="M12 2v4M12 18v4M0.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M0 12h4M18 12h4M0.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>',
+    title: '裂变队列为空',
+    desc: '没有待人工处理的话题升级项。AI 自评当前很稳定 — 无需手动介入。',
+  },
+  logs: {
+    icon: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+    title: '指定时间窗无日志',
+    desc: '试试切换 date 到 today，或检查 hour 是否太偏。如果一直空，可能是该时段 Worker 没被触发。',
+  },
+};
+
+function renderEmptyState(type) {
+  const cfg = EMPTY_STATES[type] || {
+    icon: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+    title: '没拉到数据',
+    desc: '这个查询返回了 0 条 — 可能是当前没符合条件的条目，或者 filter 太严了',
+  };
+  return `
+    <div class="state">
+      <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${cfg.icon}</svg>
+      <div class="state-title">${cfg.title}</div>
+      <div class="state-desc">${cfg.desc}</div>
+    </div>
+  `;
+}
+
+/* ===================== JSON 语法高亮 ===================== */
+// 纯 regex,无依赖。覆盖 string/number/bool/null/key/punct 6 类。
+// 顺序: 先 tokenize(无 escape),再 escape 每段 + 加 span,避免 escapeHtml 把 `"` 改成 &quot; 让 regex 失效
+// 注意: key 捕获组只 match 引号内容 (不带尾随 `:`),`: ` 留给 punctuation 着色
+function highlightJson(json) {
+  const re = /("(?:[^"\\]|\\.)*")(\s*:)?|(\b(?:true|false)\b)|(\bnull\b)|(-?\d+\.?\d*(?:[eE][+\-]?\d+)?)|([{}\[\],])/g;
+  return json.replace(re, (m, str, colon, b, n, num, p) => {
+    if (str) {
+      const cls = colon ? 'j-key' : 'j-string';
+      return `<span class="${cls}">${escapeHtml(str)}</span>${colon ? `<span class="j-punct">${escapeHtml(colon)}</span>` : ''}`;
+    }
+    if (b) return `<span class="j-bool">${escapeHtml(b)}</span>`;
+    if (n) return `<span class="j-null">${escapeHtml(n)}</span>`;
+    if (num) return `<span class="j-number">${escapeHtml(num)}</span>`;
+    if (p) return `<span class="j-punct">${escapeHtml(p)}</span>`;
+    return escapeHtml(m);
+  });
+}
 
 function escapeHtml(s) {
   if (s == null) return '';
@@ -1344,7 +1615,7 @@ function rawCard(x, idx) {
   return `
     <div class="card" data-idx="${idx}">
       <div class="card-body">
-        <pre style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2); white-space: pre-wrap; word-break: break-all;">${escapeHtml(JSON.stringify(x, null, 2))}</pre>
+        <pre class="json-view">${highlightJson(JSON.stringify(x, null, 2))}</pre>
       </div>
     </div>
   `;
@@ -1360,12 +1631,18 @@ function openDetail(item, idx) {
   body.innerHTML = Object.entries(item).map(([k, v]) => {
     let val = v;
     let wrap = false;
+    let json = false;
     if (typeof v === 'string' && v.length > 100) { wrap = true; }
-    if (typeof v === 'object' && v !== null) { val = JSON.stringify(v, null, 2); wrap = true; }
+    if (typeof v === 'object' && v !== null) {
+      val = JSON.stringify(v, null, 2);
+      wrap = true;
+      json = true;
+    }
+    const rendered = json ? highlightJson(val) : escapeHtml(val);
     return `
       <div class="detail-field">
         <div class="detail-field-label">${escapeHtml(k)}</div>
-        <div class="detail-field-value ${wrap ? 'wrap' : ''}">${escapeHtml(val)}</div>
+        <div class="detail-field-value ${wrap ? 'wrap' : ''} ${json ? 'json-view' : ''}">${rendered}</div>
       </div>
     `;
   }).join('');
@@ -1430,6 +1707,80 @@ function openSettings() {
 
 document.getElementById('settings-btn').addEventListener('click', openSettings);
 
+/* ===================== 帮助 (⌘K) ===================== */
+
+const HELP_GROUPS = [
+  {
+    title: '运行',
+    items: [
+      { keys: ['⌘', 'Enter'], desc: '运行当前查询 — 拉取数据' },
+      { keys: ['Esc'], desc: '关闭详情抽屉 / 弹窗 / 帮助' },
+    ],
+  },
+  {
+    title: '导航',
+    items: [
+      { keys: ['⌘', 'K'], desc: '打开 / 关闭快捷键帮助' },
+      { keys: ['⌘', '?'], desc: '同上 (Windows 友好)' },
+      { keys: ['Click'], desc: '打开卡片详情抽屉' },
+      { keys: ['→', 'Click title'], desc: '点标题新窗口打开原文' },
+    ],
+  },
+  {
+    title: '数据',
+    items: [
+      { keys: ['cURL'], desc: '复制当前查询为 cURL (含脱敏 token)' },
+      { keys: ['★'], desc: '收藏当前查询' },
+      { keys: ['Right-click ★'], desc: '删除收藏' },
+      { keys: ['Copy'], desc: '复制响应 JSON' },
+      { keys: ['Download'], desc: '下载 JSON 文件' },
+    ],
+  },
+  {
+    title: '主题',
+    items: [
+      { keys: ['☀/☾'], desc: '右上角切换 dark / light' },
+    ],
+  },
+];
+
+function openHelp() {
+  // 已有则关闭
+  const existing = document.getElementById('help-modal');
+  if (existing) { existing.remove(); return; }
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.id = 'help-modal';
+  backdrop.innerHTML = `
+    <div class="modal" style="max-width: 540px;">
+      <div class="modal-title">快捷键 & 功能</div>
+      <div class="modal-desc">常用操作的快速参考。本工具 <code style="font-family: var(--font-mono);">100% 本地</code>，Token 不离开浏览器。</div>
+      ${HELP_GROUPS.map(g => `
+        <div class="help-section-title">${g.title}</div>
+        <div class="help-list">
+          ${g.items.map(it => `
+            <div class="help-row">
+              <div class="help-keys">${it.keys.map(k => `<span class="kbd">${k}</span>`).join('<span style="color:var(--text-3); font-size:11px;">+</span>')}</div>
+              <div class="help-desc">${it.desc}</div>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+      <div class="modal-actions">
+        <button class="btn primary" id="help-close">知道了</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+
+  const close = () => backdrop.remove();
+  backdrop.querySelector('#help-close').addEventListener('click', close);
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+}
+
+document.getElementById('help-btn').addEventListener('click', openHelp);
+
 /* ===================== 主题 ===================== */
 
 const savedTheme = STORAGE.get('theme', 'dark');
@@ -1464,9 +1815,22 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
     e.preventDefault();
     run();
+    return;
+  }
+  // ⌘K / ⌘? — 打开或关闭帮助
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K' || e.key === '?')) {
+    e.preventDefault();
+    openHelp();
+    return;
   }
   if (e.key === 'Escape') {
+    // 优先级: help modal > detail drawer
+    const help = document.getElementById('help-modal');
+    if (help) { help.remove(); return; }
     document.getElementById('detail').classList.remove('show');
+    // 任意设置 modal 打开也关掉
+    const settings = document.querySelector('.modal-backdrop:not(#help-modal)');
+    if (settings) settings.remove();
   }
 });
 
