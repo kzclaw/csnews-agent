@@ -20,6 +20,7 @@ import { countAnomalySignals, Z_THRESHOLD, ZSCORE_REASON_PREFIX } from './zscore
 import { getBudgetStatus } from './ai-budget';
 import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
+import { ENTITY_NOISE_ANCHORS_R2_KEY, loadNoiseAnchors, NOISE_THRESHOLD_DEFAULT } from './entity-noise-filter';
 import { runEventProcess, EVENT_CLUSTERS_R2_KEY, EVENT_CLUSTERS_INDEX_R2_KEY } from './event-process';
 import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event-threshold';
 import { runEventClustering, type EventCluster } from './event-cluster';
@@ -1585,7 +1586,7 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
 export async function handleEntityAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
   // 1. 输入校验
   const type = url.searchParams.get('type') || 'candidates';
-  const validTypes = ['candidates', 'selflearn', 'process', 'finalized'];
+  const validTypes = ['candidates', 'selflearn', 'process', 'finalized', 'noise-anchors', 'noise'];
   if (!validTypes.includes(type)) {
     return new Response(JSON.stringify({
       error: 'invalid_type',
@@ -1646,14 +1647,16 @@ export async function handleEntityAction(request: Request, env: Env, url: URL, c
   }
 
   if (type === 'selflearn') {
-    // 触发 runEntitySelfLearn (n-gram + bge-m3)
+    // 触发 runEntitySelfLearn (n-gram + bge-m3 + noise filter)
     const result = await runEntitySelfLearn(env);
     return new Response(JSON.stringify({
       type: 'selflearn',
-      description: '跑 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type)',
+      description: '跑 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type + semantic noise filter kzclaw 18:22 确定)',
       total_news: result.total,
       embedded: result.embedded,
       candidates: result.candidates.length,
+      noise_filtered: result.noise_filtered,
+      noise_anchors_count: result.noise_anchors_count,
       top_candidates: result.candidates.slice(0, 10),
     }), {
       headers: { 'Content-Type': 'application/json', ...cors },
@@ -1695,6 +1698,61 @@ export async function handleEntityAction(request: Request, env: Env, url: URL, c
         generated_at: json.generated_at,
         total: json.entities?.length || 0,
         entities: json.entities || [],
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'noise-anchors') {
+    // 读 R2 entity-noise-anchors.json (kzclaw 5h 配额期外 review 增删 · 0 硬编码)
+    try {
+      const data = await loadNoiseAnchors(env);
+      return new Response(JSON.stringify({
+        type: 'noise-anchors',
+        description: 'kzclaw review anchors 增删入口 (R2 entity-noise-anchors.json · 0 硬编码 const)',
+        anchors: data.anchors,
+        threshold: data.threshold,
+        total: data.anchors.length,
+        updated_at: data.updated_at,
+      }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'noise') {
+    // 读 R2 entity-candidates.json 的 noise 分组 (kzclaw 18:22 确定 #3 review 工作流)
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(JSON.stringify({
+          type: 'noise',
+          description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn)',
+          noise: [],
+          total: 0,
+        }), {
+          headers: { 'Content-Type': 'application/json', ...cors },
+        });
+      }
+      const json = await obj.json<{ noise: any[]; noise_threshold: number; noise_anchors_count: number; noise_scores: any[]; generated_at: string }>();
+      return new Response(JSON.stringify({
+        type: 'noise',
+        description: 'kzclaw 18:22 确定 #3 noise 分组 (review 入口) — review 工作流从打错变成确认正确',
+        generated_at: json.generated_at,
+        noise_threshold: json.noise_threshold,
+        noise_anchors_count: json.noise_anchors_count,
+        total: json.noise?.length || 0,
+        noise: json.noise || [],
+        noise_scores: json.noise_scores || [],
       }), {
         headers: { 'Content-Type': 'application/json', ...cors },
       });

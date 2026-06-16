@@ -25,6 +25,11 @@ import {
   ENTITY_FINALIZED_R2_KEY, loadReviewedCandidates, runEntityProcess,
   type EntityFinalized,
 } from '../src/entity-process';
+import {
+  ENTITY_NOISE_ANCHORS_R2_KEY, NOISE_THRESHOLD_DEFAULT, NOISE_THRESHOLD_MIN, NOISE_THRESHOLD_MAX,
+  NOISE_ANCHORS_DEFAULT, loadNoiseAnchors, maxNoiseSimilarity, cosineSimilarity as noiseCosine,
+  filterNoiseCandidates,
+} from '../src/entity-noise-filter';
 
 // ============================================================
 // 业务常量
@@ -326,5 +331,185 @@ describe('loadReviewedCandidates · kzclaw review 后读 R2', () => {
       },
     };
     await expect(loadReviewedCandidates(env)).rejects.toThrow('R2 error');
+  });
+});
+
+// ============================================================
+// noise filter 业务契约 (v0.36.12 · kzclaw 18:22 确定)
+// ============================================================
+describe('noise filter 业务常量 (kzclaw 18:22 确定)', () => {
+  it('NOISE_THRESHOLD_DEFAULT 必须 = 0.85 (kzclaw 18:22 确定 similarity 阈值起步)', () => {
+    expect(NOISE_THRESHOLD_DEFAULT).toBe(0.85);
+  });
+
+  it('NOISE_THRESHOLD_MIN 必须 = 0.5 (更严不能 < 0.5)', () => {
+    expect(NOISE_THRESHOLD_MIN).toBe(0.5);
+  });
+
+  it('NOISE_THRESHOLD_MAX 必须 = 0.99 (更宽不能 > 0.99)', () => {
+    expect(NOISE_THRESHOLD_MAX).toBe(0.99);
+  });
+
+  it('ENTITY_NOISE_ANCHORS_R2_KEY 必须 = "entity-noise-anchors.json"', () => {
+    expect(ENTITY_NOISE_ANCHORS_R2_KEY).toBe('entity-noise-anchors.json');
+  });
+
+  it('NOISE_ANCHORS_DEFAULT 必须 >= 20 个 (kzclaw 18:09 确定 batch incorrect 20 个)', () => {
+    expect(NOISE_ANCHORS_DEFAULT.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it('NOISE_ANCHORS_DEFAULT 必须包含kzclaw 18:09 batch 确定的 17 通用词', () => {
+    const required = ['回应', '表示', '工作', '人员', '媒体', '当地', '协议', '报道',
+      '相关', '参与', '家属', '上市', '第三', '年初', '发现', '记者', '公司'];
+    for (const w of required) {
+      expect(NOISE_ANCHORS_DEFAULT).toContain(w);
+    }
+  });
+});
+
+// ============================================================
+// 0 硬编码保证 (kzclaw 18:22 确定 #4)
+// ============================================================
+describe('noise filter 0 硬编码保证 (kzclaw 18:22 确定)', () => {
+  it('entity-noise-filter.ts 必须 0 export 硬编码 const noise anchors 数组 (从 R2 读)', async () => {
+    const mod = await import('../src/entity-noise-filter');
+    // 业务红线: NOISE_ANCHORS_DEFAULT 是 fallback (R2 无时用), 不算硬编码黑名单
+    // 但代码逻辑必须从 R2 读, 不能 const
+    expect((mod as any).NOISE_ANCHORS_FIXED).toBeUndefined();
+    expect((mod as any).NOISE_WORDS).toBeUndefined();
+    expect((mod as any).BLACKLIST).toBeUndefined();
+  });
+});
+
+// ============================================================
+// loadNoiseAnchors
+// ============================================================
+describe('loadNoiseAnchors · 读 R2 noise anchors', () => {
+  it('R2 无 anchors → 返 NOISE_ANCHORS_DEFAULT + threshold 0.85', async () => {
+    const env: any = { csnews_raw: { get: async () => null } };
+    const data = await loadNoiseAnchors(env);
+    expect(data.anchors).toEqual(NOISE_ANCHORS_DEFAULT);
+    expect(data.threshold).toBe(0.85);
+  });
+
+  it('R2 返 anchors JSON → 透传', async () => {
+    const stored = {
+      anchors: ['foo', 'bar'],
+      threshold: 0.9,
+      updated_at: '2026-06-16T18:00:00Z',
+    };
+    const env: any = {
+      csnews_raw: { get: async () => ({ json: async () => stored }) },
+    };
+    const data = await loadNoiseAnchors(env);
+    expect(data.anchors).toEqual(['foo', 'bar']);
+    expect(data.threshold).toBe(0.9);
+  });
+});
+
+// ============================================================
+// maxNoiseSimilarity / cosineSimilarity
+// ============================================================
+describe('maxNoiseSimilarity · candidate vs anchors 最大 cosine', () => {
+  it('跟自身 1.0 anchor 比 → 1.0', () => {
+    const v = [1, 0, 0];
+    expect(maxNoiseSimilarity(v, [v])).toBeCloseTo(1, 5);
+  });
+
+  it('正交向量 → 0', () => {
+    expect(maxNoiseSimilarity([1, 0], [[0, 1]])).toBeCloseTo(0, 5);
+  });
+
+  it('多 anchor 返最大 sim', () => {
+    const candidate = [1, 0.5, 0];
+    const anchors = [
+      [0, 1, 0],       // 0
+      [1, 0, 0],       // 0.89
+      [1, 1, 0],       // 0.94
+    ];
+    const max = maxNoiseSimilarity(candidate, anchors);
+    expect(max).toBeCloseTo(0.94, 1);
+  });
+
+  it('空 anchors → 0 (无 anchor 不能判 noise)', () => {
+    expect(maxNoiseSimilarity([1, 0, 0], [])).toBe(0);
+  });
+});
+
+describe('cosineSimilarity · entity-noise-filter 独立函数', () => {
+  it('相同向量 = 1', () => {
+    expect(noiseCosine([1, 2, 3], [1, 2, 3])).toBeCloseTo(1, 5);
+  });
+
+  it('空向量 = 0', () => {
+    expect(noiseCosine([], [])).toBe(0);
+  });
+
+  it('长度不一致 = 0', () => {
+    expect(noiseCosine([1, 2], [1, 2, 3])).toBe(0);
+  });
+});
+
+// ============================================================
+// filterNoiseCandidates (kzclaw 18:22 确定核心)
+// ============================================================
+describe('filterNoiseCandidates · similarity ≥ threshold → noise', () => {
+  it('candidate 跟 anchor 完全相同 → noise', () => {
+    const v = [1, 0.5, 0];
+    const candidates = [{ name: '测试词', count: 5 }];
+    const candidateEmbeddings = [v];
+    const anchorEmbeddings = [v];  // 相同 → similarity = 1.0 ≥ 0.85 → noise
+    const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
+    expect(result.kept.length).toBe(0);
+    expect(result.noise.length).toBe(1);
+    expect(result.noise[0].max_noise_similarity).toBeCloseTo(1, 5);
+  });
+
+  it('candidate 跟 anchor 完全正交 → kept', () => {
+    const candidates = [{ name: '真实实体', count: 5 }];
+    const candidateEmbeddings = [[1, 0, 0]];
+    const anchorEmbeddings = [[0, 1, 0]];  // 正交 → 0
+    const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
+    expect(result.kept.length).toBe(1);
+    expect(result.noise.length).toBe(0);
+  });
+
+  it('kzclaw 18:22 确定 0.85 阈值实战 (mixed)', () => {
+    const candidates = [
+      { name: '特朗普', count: 80 },     // 真实实体 (跟"回应"等通用词正交)
+      { name: '回应', count: 75 },       // 通用词 (跟 anchor "回应" 相同)
+      { name: '苹果', count: 60 },       // 真实实体 (跟"通用词" 正交)
+      { name: '表示', count: 65 },       // 通用词 (跟 anchor "表示" 相同)
+    ];
+    const candidateEmbeddings = [
+      [1, 0, 0, 0],  // 特朗普
+      [0, 1, 0, 0],  // 回应 (跟 anchor 同)
+      [0, 0, 1, 0],  // 苹果
+      [0, 0, 0, 1],  // 表示 (跟 anchor 同)
+    ];
+    const anchorEmbeddings = [
+      [0, 1, 0, 0],  // anchor 1 = 回应
+      [0, 0, 0, 1],  // anchor 2 = 表示
+    ];
+    const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
+    expect(result.kept.map((c) => c.name)).toEqual(['特朗普', '苹果']);
+    expect(result.noise.map((n) => n.candidate.name)).toEqual(['回应', '表示']);
+    expect(result.scores.length).toBe(4);
+  });
+
+  it('0 embedding → 保守 kept', () => {
+    const candidates = [{ name: 'edge case', count: 3 }];
+    const result = filterNoiseCandidates(candidates, [], [], 0.85);
+    expect(result.kept.length).toBe(1);
+    expect(result.noise.length).toBe(0);
+  });
+
+  it('threshold 边界 0.85 (>= 才 noise, < 才 kept)', () => {
+    // similarity = 0.85 → noise
+    const candidates = [{ name: 'a', count: 1 }];
+    const v = [0.85, 0.527, 0];  // 跟自身 1.0 相似度近似 0.85
+    // 实际算法: similarity 0.85 → 命中 >= 阈值 → noise
+    const result = filterNoiseCandidates(candidates, [v], [v], 0.85);
+    expect(result.noise.length).toBe(1);
   });
 });

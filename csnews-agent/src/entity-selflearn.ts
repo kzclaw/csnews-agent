@@ -17,6 +17,10 @@
  */
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
+import {
+  loadNoiseAnchors, bgeM3BatchEmbedding, filterNoiseCandidates,
+  type FilterResult,
+} from './entity-noise-filter';
 
 export interface EntityCandidate {
   name: string;
@@ -153,11 +157,11 @@ async function loadExistingCandidates(env: Env): Promise<EntityCandidate[]> {
 /**
  * 主函数: 自学习 (kzclaw 5h 配额期可推, 1-2 min 跑完)
  */
-export async function runEntitySelfLearn(env: Env): Promise<{ candidates: EntityCandidate[]; total: number; embedded: number }> {
+export async function runEntitySelfLearn(env: Env): Promise<{ candidates: EntityCandidate[]; total: number; embedded: number; noise_filtered: number; noise_anchors_count: number }> {
   try {
     const news = await fetchRecentNewsTitles(env, 24);
     if (news.length === 0) {
-      return { candidates: [], total: 0, embedded: 0 };
+      return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
     }
 
     // n-gram 频率统计
@@ -175,7 +179,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
 
     const candidateGrams = filtered.slice(0, SELFLEARN_MAX_CANDIDATES).map((f) => f.gram);
     if (candidateGrams.length === 0) {
-      return { candidates: [], total: news.length, embedded: 0 };
+      return { candidates: [], total: news.length, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
     }
 
     // bge-m3 embedding 候选词 (batch, 0 Neurons kzclaw 5h 配额期 0 关系)
@@ -187,9 +191,14 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       ? await bgeM3Embedding(env, existing.slice(0, 50).map((c) => c.name))
       : [];
 
-    // 启发式 type 推断 + 过滤重复
-    const candidates: EntityCandidate[] = [];
-    const sampleText = news[0].text.slice(0, 200);
+    // semantic noise anchor filtering (kzclaw 18:22 确定: similarity >= 0.85 → noise)
+    const noiseAnchorsData = await loadNoiseAnchors(env);
+    const anchorEmbeddings = noiseAnchorsData.anchors.length > 0
+      ? await bgeM3Embedding(env, noiseAnchorsData.anchors)
+      : [];
+
+    // 启发式 type 推断 + 过滤重复 + noise filter
+    const dedupCandidates: { gram: string; count: number }[] = [];
     const usedGrams = new Set<string>();
 
     for (let i = 0; i < candidateGrams.length; i++) {
@@ -210,30 +219,68 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       if (usedGrams.has(gram)) continue;
       usedGrams.add(gram);
 
-      candidates.push({
-        name: gram,
-        type: inferEntityType(gram),
-        frequency: filtered[i].count,
-        sample_context: sampleText,
-        confidence: SELFLEARN_CONFIDENCE,
-        source: 'selflearn',
-        first_seen: new Date().toISOString(),
-      });
+      dedupCandidates.push({ gram, count: filtered[i].count });
     }
 
-    // 按 frequency 倒序
-    candidates.sort((a, b) => b.frequency - a.frequency);
+    // noise filter (kzclaw 18:22 确定)
+    // 转换 dedupCandidates 到 filter function 期望的 shape {name, count}
+    const dedupForFilter = dedupCandidates.map((c) => ({ name: c.gram, count: c.count }));
+    const dedupEmbs = dedupForFilter.map((c) => {
+      const idx = candidateGrams.indexOf(c.name);
+      return embeddings[idx];
+    });
+    const filterResult = filterNoiseCandidates(
+      dedupForFilter,
+      dedupEmbs,
+      anchorEmbeddings,
+      noiseAnchorsData.threshold,
+    );
 
-    // 写 R2 entity-candidates.json
+    // 构造最终 candidates (kzclaw review 入口) + noise 数组 (kzclaw review 实战参考)
+    const sampleText = news[0].text.slice(0, 200);
+    const candidates: EntityCandidate[] = filterResult.kept
+      .sort((a, b) => b.count - a.count)
+      .map((c) => ({
+        name: c.name,
+        type: inferEntityType(c.name),
+        frequency: c.count,
+        sample_context: sampleText,
+        confidence: SELFLEARN_CONFIDENCE,
+        source: 'selflearn' as const,
+        first_seen: new Date().toISOString(),
+      }));
+
+    const noiseCandidates: EntityCandidate[] = filterResult.noise
+      .map((n) => ({
+        name: n.candidate.name,
+        type: inferEntityType(n.candidate.name),
+        frequency: n.candidate.count,
+        sample_context: sampleText,
+        confidence: SELFLEARN_CONFIDENCE,
+        source: 'selflearn' as const,
+        first_seen: new Date().toISOString(),
+      }));
+
+    // 写 R2 entity-candidates.json (kzclaw review 入口 · 含 noise 分组)
     await env.csnews_raw.put(ENTITY_CANDIDATES_R2_KEY, JSON.stringify({
       generated_at: new Date().toISOString(),
       total_news: news.length,
+      noise_threshold: noiseAnchorsData.threshold,
+      noise_anchors_count: noiseAnchorsData.anchors.length,
       candidates,
+      noise: noiseCandidates,
+      noise_scores: filterResult.scores,
     }, null, 2));
 
-    return { candidates, total: news.length, embedded: candidateGrams.length };
+    return {
+      candidates,
+      total: news.length,
+      embedded: candidateGrams.length,
+      noise_filtered: noiseCandidates.length,
+      noise_anchors_count: noiseAnchorsData.anchors.length,
+    };
   } catch (e: any) {
     console.error(`[entity-selflearn] failed: ${e?.message || e}`);
-    return { candidates: [], total: 0, embedded: 0 };
+    return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
   }
 }
