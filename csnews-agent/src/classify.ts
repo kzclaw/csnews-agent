@@ -1,14 +1,16 @@
 // ============================================================
-//规则引擎分类（v0.33+sweep·FT-KR0 · Phase0 · T000）
+// 自分类 (v0.36.13 · 候选 A · bge-m3 embedding 自分类)
 // ============================================================
-//用途：新闻标题分类（关键词兜底 + AI兜底 + 综合保底）
-//详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-// specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
+// kzclaw 18:43 确定候选 A: 用 bge-m3 embedding 替换 250+ 词硬编码
+// kzclaw 16:28 确定 #40 条 0 硬编码哲学: 类别和 seeds 都从 R2 读
+// kzclaw 18:43 确定自进化闭环: 分类错 review → seeds 自动更新
 //
-// 注意:Workers AI分类(classifyByAI)在 Free Tier 下响应慢(15s+)已暂时禁用
-//启用条件:Workers AI 加 timeout /异步批处理 /拆独立 Worker 后再开启 AI分类
-// (项目硬约束:Free Tier,不准写"升级 Paid 版"暗示)
+// 历史: v0.33+sweep·FT-KR0 关键词兜底 (kzclaw 16:00 之前确定) · 16:28 哲学违规最严重源
+// v0.36.13 起: 主路径走 bge-m3 embedding 自分类 · 旧 classifyRule 降级兜底
+//
+// 详见：tasks/csnews-agent-okr.md v0.36.13 候选 A
 import { Env } from './shared';
+import { classifyBySemantic } from './category-classify';
 
 const CATEGORY_KW: Record<string, string[]> = {
  '科技': [
@@ -74,7 +76,8 @@ const CATEGORY_KW: Record<string, string[]> = {
  ],
 };
 
-//关键词兜底分类(无命名品牌,纯抽象信号词)
+// legacy 关键词兜底 (kzclaw 16:00 确定 · kzclaw 16:28 哲学违规但兜底保留)
+// v0.36.13 起不在主路径, 仅作 legacy fallback
 export function classifyRule(title: string): string {
  for (const [cat, kws] of Object.entries(CATEGORY_KW)) {
  if (kws.some(k => title.includes(k))) return cat;
@@ -82,13 +85,21 @@ export function classifyRule(title: string): string {
  return '综合';
 }
 
-// Workers AI分类(主分类,优先于关键词兜底)
-// 注意:kimi-k2.5 在 Free Worker 内响应太慢(15s+ 受 Free10ms CPU限制),暂时改用关键词兜底
+// Workers AI分类 (主分类, 优先于关键词兜底)
+// v0.36.13: 已替换为 bge-m3 semantic embedding 自分类 (候选 A)
+// Workers AI 响应慢 (15s+ 受 Free 10ms CPU 限制) 仍禁用, 改走 CF Workers AI bge-m3 独立池 (0 Neurons)
 export async function classifyByAI(title: string, env: Env): Promise<string> {
- return classifyRule(title); //暂时禁用 AI,降级为纯关键词
+ const result = await classifyBySemantic(title, env);
+ return result.category;
 }
 
-// 双保险分类:AI优先,关键词兜底,综合保底
+// 双保险分类: 主路径 bge-m3 semantic 自分类, 关键词兜底, 综合保底
+// v0.36.13 主路径 = bge-m3 (kzclaw 16:28 0 硬编码哲学一致)
 export async function classify(title: string, env: Env): Promise<string> {
+ const result = await classifyBySemantic(title, env);
+ // confidence < 0.3 时 fallback 到 keywords (跟kzclaw 18:43 确定兜底一致)
+ if (result.confidence < 0.3 && result.top_scores.length === 0) {
  return classifyRule(title);
+ }
+ return result.category;
 }

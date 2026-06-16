@@ -10,6 +10,11 @@ import { NewsItem } from './types';
 import { handlePull } from './pull';
 import { corsHeaders } from './auth';
 import { classify, classifyByAI, classifyRule } from './classify';
+import { classifyBySemantic } from './category-classify';
+import {
+  loadCategorySeeds, addSeedToCategory, removeSeedFromCategory,
+  CATEGORY_SEEDS_R2_KEY, DEFAULT_CATEGORY_SEEDS,
+} from './category-seeds';
 import { scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD, hashStr } from './score';
 import { cleanupStaleTopics, findSimilarNews, updateTopicScore, recordTrendSnapshot, createTopic, insertNewsHotspot, saveToR2, joinTopicMember } from './news-process';
 import { logEvent } from './log';
@@ -163,19 +168,130 @@ export async function handleScoreAction(request: Request, env: Env, url: URL, co
  });
 }
 
-// ===================== classify =====================
+// ===================== classify (v0.36.13 · 候选 A · bge-m3 semantic 自分类) =====================
+// kzclaw 18:43 确定: bge-m3 embedding 自分类 · 复用 KR0+1 noise filter 80% 模式
+// kzclaw 16:28 确定 #40 条 0 硬编码哲学: 类别和 seeds 都从 R2 读
+// kzclaw 18:43 确定自进化闭环: 分类错 review → seeds 自动更新
+//
+// 5 档 type:
+//   - default (无 type) 或 type=classify: 跑 bge-m3 自分类 (kzclaw主路径)
+//   - type=seeds: 读 R2 category-seeds.json (kzclaw review 增删入口)
+//   - type=add-seed: kzclaw review 加 seed (?category=科技&seed=词)
+//   - type=remove-seed: kzclaw review 删 seed (?category=科技&seed=词)
+//   - type=review: kzclaw 18:43 确定自进化闭环 (?title=...&correct_category=科技 → 自动加 seed)
 export async function handleClassifyAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
- const title = url.searchParams.get('title');
- if (!title) {
- return new Response(JSON.stringify({ error: 'missing title param' }), {
- status:400, headers: { 'Content-Type': 'application/json', ...cors }
- });
- }
- const aiCat = await classifyByAI(title, env);
- const kwCat = classifyRule(title);
- return new Response(JSON.stringify({ title, aiCat, kwCat }), {
- headers: { 'Content-Type': 'application/json', ...cors }
- });
+  const type = url.searchParams.get('type') || 'classify';
+
+  if (type === 'classify') {
+    const title = url.searchParams.get('title');
+    if (!title) {
+      return new Response(JSON.stringify({ error: 'missing title param' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+    // kzclaw 18:43 确定主路径: bge-m3 embedding 自分类
+    const result = await classifyBySemantic(title, env);
+    const kwCat = classifyRule(title);
+    return new Response(JSON.stringify({
+      title,
+      type: 'classify',
+      description: 'kzclaw 18:43 确定主路径 · bge-m3 semantic 自分类',
+      category: result.category,
+      confidence: result.confidence,
+      top_scores: result.top_scores,
+      legacy_keyword_category: kwCat,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'seeds') {
+    // kzclaw 18:43 确定: R2 持久化 category-seeds.json · kzclaw review 增删入口
+    const data = await loadCategorySeeds(env);
+    return new Response(JSON.stringify({
+      type: 'seeds',
+      description: 'kzclaw review 增删入口 (R2 category-seeds.json · 0 硬编码 const)',
+      categories: data.categories,
+      updated_at: data.updated_at,
+      updated_count: data.updated_count,
+      total_categories: Object.keys(data.categories).length,
+      total_seeds: Object.values(data.categories).reduce((sum, seeds) => sum + seeds.length, 0),
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'add-seed') {
+    const category = url.searchParams.get('category');
+    const seed = url.searchParams.get('seed');
+    if (!category || !seed) {
+      return new Response(JSON.stringify({ error: 'missing category or seed param' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+    const data = await addSeedToCategory(env, category, seed);
+    return new Response(JSON.stringify({
+      type: 'add-seed',
+      description: 'kzclaw review 加 seed (R2 持久化)',
+      category,
+      seed,
+      updated_count: data.updated_count,
+      updated_at: data.updated_at,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'remove-seed') {
+    const category = url.searchParams.get('category');
+    const seed = url.searchParams.get('seed');
+    if (!category || !seed) {
+      return new Response(JSON.stringify({ error: 'missing category or seed param' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+    const data = await removeSeedFromCategory(env, category, seed);
+    return new Response(JSON.stringify({
+      type: 'remove-seed',
+      description: 'kzclaw review 删 seed (R2 持久化)',
+      category,
+      seed,
+      updated_count: data.updated_count,
+      updated_at: data.updated_at,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  if (type === 'review') {
+    // kzclaw 18:43 确定自进化闭环: 分类错 review → seeds 自动更新
+    const title = url.searchParams.get('title');
+    const correctCategory = url.searchParams.get('correct_category');
+    if (!title || !correctCategory) {
+      return new Response(JSON.stringify({ error: 'missing title or correct_category param' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+    // 用 title 作为 seed (kzclaw review 实战: 错的新闻标题加到正确类别)
+    const data = await addSeedToCategory(env, correctCategory, title);
+    return new Response(JSON.stringify({
+      type: 'review',
+      description: 'kzclaw 18:43 确定自进化闭环: 分类错 review → seeds 自动更新 (0 Neurons)',
+      title,
+      correct_category: correctCategory,
+      updated_count: data.updated_count,
+      updated_at: data.updated_at,
+    }), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  return new Response(JSON.stringify({
+    error: 'invalid_type',
+    reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}`,
+  }), {
+    status: 400, headers: { 'Content-Type': 'application/json', ...cors },
+  });
 }
 
 // ===================== batch-score =====================
