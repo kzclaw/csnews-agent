@@ -4,8 +4,6 @@ node_modules/
 # Wrangler (local cache per worker)
 */.wrangler/
 
-# Wrangler config (binding names only, no credentials)
-
 # Environment secrets
 .env
 .env.local
@@ -28,27 +26,22 @@ Thumbs.db
 # Test / dev workers
 csnews-h1-test/
 
-# Supabase CLI temp files (local project metadata)
-supabase/.temp/run-csnews.sh
+# Supabase CLI temp files
 supabase/.temp/
 
-# Local planning docs may contain private tokens and machine paths
-# (kzclaw 2026-06-09 确定 v0.33+sweep：规划文档 = 隐私文档 · 跟 OKR 同性质 · 不上 git)
+# Local-only directories · never push (planning docs, hooks, scripts)
 tasks/
 specs/
+.githooks/
+scripts/
 
-# Wrangler local cache
+# Wrangler local cache + build outputs
 .wrangler/
 csnews-agent/.wrangler/
-
-# Wrangler dry-run output (deploy --dry-run --outdir=dist)
 csnews-agent/dist/
-
-# vitest coverage report (npm run validate:coverage)
 csnews-agent/coverage/
 
-# Local Spec Kit scaffolding and agent instructions
+# Spec Kit standard context 文档 — 入库
 .agents/
 .specify/
-# AGENTS.md: Spec Kit standard context 文档 (v0.36.9 KR0 实施 · 戴大确定) - 入库
-# (原 v0.33 确定 ignore, v0.36.9 确定入库 - 戴大确定)
+AGENTS.md
