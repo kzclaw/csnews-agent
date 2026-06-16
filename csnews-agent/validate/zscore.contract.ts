@@ -6,7 +6,7 @@
  * 业务红线:
  *   - z-score 公式: z = (x - μ) / σ (蓝图 2.5 确定)
  *   - 异常阈值: z > 3 (3σ 准则, 99.7% 置信度)
- *   - 7 天 history 窗口 (kzclaw OKR KR0+1 确定)
+ *   - 7 天 history 窗口 (OKR KR0+1 确定)
  *   - 空数组 / 单元素 / NaN / σ=0 边界全部返 NaN
  *   - 过滤 historyValues 里的 NaN / Infinity
  *
@@ -135,10 +135,10 @@ describe('isAnomaly · 蓝图 2.5 阈值 z > 3', () => {
     expect(isAnomaly(5)).toBe(true);
   });
 
-  it('z=-3.5 必须 true (负值也异常, kzclaw OKR 确定双向 |z| > 3)', () => {
+  it('z=-3.5 必须 true (负值也异常, OKR 确定双向 |z| > 3)', () => {
     // 蓝图 2.5 原写 "if z > 3 → anomaly signal" 是单向
-    // v0.36.8 kzclaw OKR 确定 KR0+1 业务语义: 偏离均值 = 双向异常 (|z| > 3)
-    // 理由: kzclaw早晨日报金句场景 = topic news_count 突增/突减都是异常
+    // v0.36.8 OKR 确定 KR0+1 业务语义: 偏离均值 = 双向异常 (|z| > 3)
+    // 理由: 早晨日报金句场景 = topic news_count 突增/突减都是异常
     expect(isAnomaly(-3.5)).toBe(true);
   });
 
@@ -158,7 +158,7 @@ describe('isAnomaly · 蓝图 2.5 阈值 z > 3', () => {
     expect(isAnomaly(Infinity)).toBe(true);
   });
 
-  it('z=-Infinity 必须 true (负无穷也异常, kzclaw OKR 确定双向 |z| > 3)', () => {
+  it('z=-Infinity 必须 true (负无穷也异常, OKR 确定双向 |z| > 3)', () => {
     expect(isAnomaly(-Infinity)).toBe(true);
   });
 });

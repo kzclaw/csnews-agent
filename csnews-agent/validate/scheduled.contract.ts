@@ -92,7 +92,7 @@ describe('scheduledProcess · KR0 累积 job 集成契约 (mock 验证)', () => 
     expect(typeof endpoints.runKnowledgeAccumulation).toBe('function');
   });
 
-  it('scheduledProcess 必须用 try/catch 包 process + knowledge (kzclaw v0.36.5 mini + v0.36.7 确定)', () => {
+  it('scheduledProcess 必须用 try/catch 包 process + knowledge (v0.36.5 mini + v0.36.7 确定)', () => {
     // 用 vi.mock 替换, 不直接读源文件
     // 验证 scheduledProcess 函数内部结构 (从运行行为推断)
     // 实际测试: 调用时 process 抛错 → 不向上抛

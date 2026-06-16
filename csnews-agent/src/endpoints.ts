@@ -775,9 +775,9 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
 
   // ========== 10. zscore_signals_today (KR0+1 · 蓝图 2.5 公式 · v0.36.8) ==========
   // 0 DDL: 从 trend_snapshots 拉 last 7d 算 z-score > 3 的 topic 数
-  // kzclaw OKR KR0+1 确定: "z-score 异常信号 30 天内累计 ≥ 5 条" 指标
-  // kzclaw 5h 配额期"快赢" v2 修订: 推迟到下个 5h 配额期kzclaw起床拍 schema migration 时集成到 record_trend_snapshot RPC
-  // kzclaw 5h 配额期 04:39 确定"0 确定点, 蓝图公式已定, 直接推"
+  // OKR KR0+1 确定: "z-score 异常信号 30 天内累计 ≥ 5 条" 指标
+  // 5h 配额期"快赢" v2 修订: 推迟到下个 5h 配额期起床后拍 schema migration 时集成到 record_trend_snapshot RPC
+  // 5h 配额期 04:39 确定"0 确定点, 蓝图公式已定, 直接推"
   try {
     const sevenDaysAgo = new Date(ts - 7 * 24 * 3600 * 1000).toISOString();
     const snapshotsRes = await supabaseFetch(env, `/rest/v1/trend_snapshots?select=id,topic_id,score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`);
@@ -813,7 +813,7 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
       status: "ok",  // 0 = 正常 (新功能, 没异常是 expected)
       detail: totalAnomalies > 0
         ? `${totalAnomalies} z-score anomalies in last 7d (${JSON.stringify(anomaliesByField)})`
-        : `0 anomalies in last 7d (algorithm ready, kzclaw起床 review)`,
+        : `0 anomalies in last 7d (algorithm ready, 起床后 review)`,
     };
   } catch (e: any) {
     result.zscore_signals_today = { error: e?.message || "zscore calc failed" };

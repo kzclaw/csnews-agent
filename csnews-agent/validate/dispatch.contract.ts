@@ -20,7 +20,7 @@ import { ALLOWED_ACTIONS, DEFAULT_ACTION, handleCorsPreflight, dispatchAction } 
 // 业务常量
 // ============================================================
 describe('业务常量', () => {
-  it('DEFAULT_ACTION 必须 = "ping" (kzclaw v0.33 确定空 action fallback)', () => {
+  it('DEFAULT_ACTION 必须 = "ping" (v0.33 确定空 action fallback)', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
