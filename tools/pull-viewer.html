@@ -2739,7 +2739,7 @@ document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
     document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
     el.classList.add('active');
     STATE.filters.level = el.dataset.level || '';
-    refreshReader();
+    applyFilterAndRender();  // 客户端 filter · 不重拉 API (戴舒柯 21:23 反馈)
   });
 });
 document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
