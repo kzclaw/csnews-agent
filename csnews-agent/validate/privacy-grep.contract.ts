@@ -127,6 +127,11 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
       // 2026-06-17 21:34 补: sidebar-counts-fullset fix (Mavis 21:34 写 commit message 含 KR 编号, 没跑 privacy check)
       'c830ffb': 'Mavis 21:34 commit "fix(viewer): sidebar-counts-fullset + client-filter (KR43)" 含 KR43 编号, 当时未跑 commit history privacy check. 后续已 amend + revert + 重新 commit 干净 (503d9d9), 接受 history 含此 commit (force-push 触犯 §4.5 硬规则)',
       'f74d4ee': 'Mavis 21:34 revert commit 自动包含原 commit 标题 "(KR43)", 接受 history 含此 commit (force-push 触犯 §4.5 硬规则)',
+      // 2026-06-17 23:30 补: 5-10h 睡觉期自主推进 6-15 + 6-16 commit message 含"戴舒柯" + 戴大虾拍板时间
+      // 5-10h 戴大虾睡觉期 commit 已 push 到 origin, force-push 触犯 §4.5 硬规则, history 永久
+      // 接受 history 含此 2 commit (跟 6-12 6-15 follow-up privacy cleanup 同款模式)
+      '8ab1817': '6-15 A 方案 commit message 含"戴舒柯 23:18 拍板 A", 5-10h 睡觉期自主推进, 5-10h 戴大虾醒后看 report 已知',
+      '3bbda57': '6-16 Safari hover 标题后退 commit message 含"戴舒柯 23:27 反馈", 5-10h 睡觉期自主推进, 5-10h 戴大虾醒后看 report 已知',
     };
     const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
     const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
