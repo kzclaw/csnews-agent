@@ -205,7 +205,7 @@ body {
 .ticker-track span { padding: 0 24px; }
 .ticker-track span a { color: inherit; text-decoration: none; transition: color 0.2s; }
 .ticker-track span a:hover { color: var(--gold); }
-.ticker-track span::before { content: ''; }  /* fix 6-15 (戴舒柯 23:18 拍板): 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
+.ticker-track span::before { content: ''; }  /* fix 6-15: 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
 /* fix 6-12: hover 改"指向标题才停" (用户 22:20 反馈"进入区域就停太敏感")
    - CSS :has() 选中 a:hover 暂停父级 animation · 鼠标在 ticker 空白处不停
    - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
@@ -1632,7 +1632,7 @@ async function fetchNews7d() {
 // fix 5-3: 拉 7 天 important/explosive 新闻 · 加 url 给点击跳转
 // fix 6-11: 同一 title 可能 explosive + important 同时命中 (Worker 评分时一条新闻被打了两个 level) · 用 Set 去重 · explosive 优先 (循环在前)
 async function fetchTickerNews() {
-  // fix 6-15 (戴舒柯 23:18 拍板 A): 改 important 先 + 交叉排 (★/◆ 交替) · 走马灯 30-40s 一圈里就能看到 ★/◆ 交替 · 不再单调
+  // fix 6-15: 改 important 先 + 交叉排 (★/◆ 交替) · 走马灯 30-40s 一圈里就能看到 ★/◆ 交替 · 不再单调
   // 旧: 循环 [explosive, important] → items 顺序 = [★ × 10, ◆ × 9] · 30-40s 内全 ★
   // 新: 循环 [important, explosive] → 交叉排: i0=重要 i1=爆炸 i2=重要 i3=爆炸 ...
   const importantItems = [];
