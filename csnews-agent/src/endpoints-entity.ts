@@ -18,6 +18,7 @@ import { ENTITY_NOISE_ANCHORS_R2_KEY, loadNoiseAnchors, NOISE_THRESHOLD_DEFAULT 
 import { runEventProcess, EVENT_CLUSTERS_R2_KEY, EVENT_CLUSTERS_INDEX_R2_KEY } from './event-process';
 import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event-threshold';
 import { runEventClustering, type EventCluster } from './event-cluster';
+import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
 
 // ===================== entity (Entity Engine) =====================
 // 6 档 type:
@@ -42,20 +43,8 @@ export async function handleEntityAction(request: Request, env: Env, url: URL, c
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const rateKey = `entity_rate:${ip}`;
-  if (env.PROCESS_STATE) {
-    try {
-      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
-      if (cur >= 60) {
-        return new Response(JSON.stringify({ error: 'rate_limited', reason: '单 IP 60 req/min 上限, 请稍后重试' }), {
-          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-        });
-      }
-      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
-    } catch {
-      // 限流失败不阻塞
-    }
-  }
+  const { exceeded: entityExceeded } = await checkRateLimit(env, ctx, `entity_rate:${ip}`, 60);
+  if (entityExceeded) return rateLimitResponse(cors, 60);
 
   // 3. 根据 type 查数据
   if (type === 'candidates') {
@@ -235,20 +224,8 @@ export async function handleEventAction(request: Request, env: Env, url: URL, co
 
   // 2. 反爬限流 (单 IP 60 req/min)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const rateKey = `event_rate:${ip}`;
-  if (env.PROCESS_STATE) {
-    try {
-      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
-      if (cur >= 60) {
-        return new Response(JSON.stringify({ error: 'rate_limited', reason: '单 IP 60 req/min 上限, 请稍后重试' }), {
-          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-        });
-      }
-      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
-    } catch {
-      // 限流失败不阻塞
-    }
-  }
+  const { exceeded: eventExceeded } = await checkRateLimit(env, ctx, `event_rate:${ip}`, 60);
+  if (eventExceeded) return rateLimitResponse(cors, 60);
 
   // 3. 根据 type 处理
   if (type === 'clusters') {
