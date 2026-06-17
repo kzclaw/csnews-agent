@@ -35,6 +35,7 @@ import {
   PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES,
   knowledgeR2Key, KNOWLEDGE_INDEX_KEY,
 } from './knowledge-validation';
+import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
 
 // ===================== content (R2 全文内容读取端点) =====================
 // 用途: 消费者 (推送 / 第三方 IM 转发) 从 R2 拿 news_hotspots 关联的摘要 + 原始 URL
@@ -64,20 +65,8 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
 
   // 2. 反爬限流 (单 IP 60 req/min, 复用 PROCESS_STATE KV)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const rateKey = rateKeyForIp(ip);
-  if (env.PROCESS_STATE) {
-    try {
-      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
-      if (cur >= RATE_LIMIT_PER_MIN) {
-        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
-          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-        });
-      }
-      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
-    } catch {
-      // 限流检查失败不阻塞主流程 (KV 临时不可用降级为不限流)
-    }
-  }
+  const { exceeded } = await checkRateLimit(env, ctx, rateKeyForIp(ip), RATE_LIMIT_PER_MIN);
+  if (exceeded) return rateLimitResponse(cors, RATE_LIMIT_PER_MIN);
 
   // 3. Supabase 查 news_hotspots (拿 url + r2_key + 基础摘要)
   const newsRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${id}&select=id,title,url,source,category,hot_score,score,level,topic_id,r2_key,created_at&limit=1`);
@@ -234,20 +223,8 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const rateKey = trendRateKeyForIp(ip);
-  if (env.PROCESS_STATE) {
-    try {
-      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
-      if (cur >= TREND_RATE_LIMIT_PER_MIN) {
-        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${TREND_RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
-          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-        });
-      }
-      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
-    } catch {
-      // 限流失败不阻塞
-    }
-  }
+  const { exceeded: trendExceeded } = await checkRateLimit(env, ctx, trendRateKeyForIp(ip), TREND_RATE_LIMIT_PER_MIN);
+  if (trendExceeded) return rateLimitResponse(cors, TREND_RATE_LIMIT_PER_MIN);
 
   // 3. 计算时间窗边界
   const sinceTime = new Date(sinceIso);
@@ -404,37 +381,15 @@ export async function handleKnowledgeAction(request: Request, env: Env, url: URL
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const rateKey = knowledgeRateKeyForIp(ip);
-  if (env.PROCESS_STATE) {
-    try {
-      const cur = parseInt((await env.PROCESS_STATE.get(rateKey)) || '0', 10);
-      if (cur >= KNOWLEDGE_RATE_LIMIT_PER_MIN) {
-        return new Response(JSON.stringify({ error: 'rate_limited', reason: `单 IP ${KNOWLEDGE_RATE_LIMIT_PER_MIN} req/min 上限, 请稍后重试` }), {
-          status: 429, headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-        });
-      }
-      ctx.waitUntil(env.PROCESS_STATE.put(rateKey, String(cur + 1), { expirationTtl: 60 }));
-    } catch {
-      // 限流失败不阻塞
-    }
-  }
+  const { exceeded: knowledgeExceeded } = await checkRateLimit(env, ctx, knowledgeRateKeyForIp(ip), KNOWLEDGE_RATE_LIMIT_PER_MIN);
+  if (knowledgeExceeded) return rateLimitResponse(cors, KNOWLEDGE_RATE_LIMIT_PER_MIN);
 
   // 3. 根据 type 查数据
   let items: any[] = [];
   let description = '';
 
   if (type === 'daily') {
-    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
-    let allIndex: any[] = [];
-    if (indexObj) {
-      const text = await indexObj.text();
-      try {
-        allIndex = JSON.parse(text);
-        if (!Array.isArray(allIndex)) allIndex = [];
-      } catch {
-        allIndex = [];
-      }
-    }
+    const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
     const sinceMs = new Date(sinceIso).getTime();
     items = allIndex
       .filter((k) => k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
@@ -447,17 +402,7 @@ export async function handleKnowledgeAction(request: Request, env: Env, url: URL
         status: 500, headers: { 'Content-Type': 'application/json', ...cors },
       });
     }
-    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
-    let allIndex: any[] = [];
-    if (indexObj) {
-      const text = await indexObj.text();
-      try {
-        allIndex = JSON.parse(text);
-        if (!Array.isArray(allIndex)) allIndex = [];
-      } catch {
-        allIndex = [];
-      }
-    }
+    const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
     const sinceMs = new Date(sinceIso).getTime();
     items = allIndex
       .filter((k) => k?.topic_id === topicId)
@@ -520,17 +465,7 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
     const twoHourAgo = new Date(Date.now() - 7200 * 1000).toISOString();
 
     // 3. 读 R2 索引 (累积分页查询用)
-    const indexObj = await env.csnews_raw.get(KNOWLEDGE_INDEX_KEY);
-    let allIndex: any[] = [];
-    if (indexObj) {
-      const text = await indexObj.text();
-      try {
-        allIndex = JSON.parse(text);
-        if (!Array.isArray(allIndex)) allIndex = [];
-      } catch {
-        allIndex = [];
-      }
-    }
+    let allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
 
     // 4. 累积每个 topic
     for (const t of topics) {
