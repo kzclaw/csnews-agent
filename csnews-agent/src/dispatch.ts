@@ -21,7 +21,7 @@ import { Env } from './shared';
 import { corsHeaders } from './auth';
 import { logEvent } from './log';
 import {
-  handlePullAction, handleDiagAction, handlePingAction,
+  handlePullAction, handlePingAction,
   handleModelTestAction, handleAiTestAction,
   handleScoreAction, handleClassifyAction, handleBatchScoreAction,
   handleFissionAction, handleSaveAction, handleListAction,
@@ -37,7 +37,7 @@ import {
  * 详见：tasks/csnews-agent-okr.md KR0
  */
 export const ALLOWED_ACTIONS = [
-  'pull', 'diag', 'ping', 'model-test', 'ai-test',
+  'pull', 'ping', 'model-test', 'ai-test',
   'score', 'classify', 'batch-score',
   'fission', 'save', 'list', 'embed', 'zaker-hot',
   'process', 'health', 'logs',
@@ -83,7 +83,6 @@ export async function dispatchAction(
 
   // 16 action dispatch
   if (action === 'pull') return await handlePullAction(request, env, url, cors);
-  if (action === 'diag') return await handleDiagAction(request, env, url, cors);
   if (action === 'ping') return await handlePingAction(request, env, url, cors);
   if (action === 'model-test') return await handleModelTestAction(request, env, url, cors);
   if (action === 'ai-test') return await handleAiTestAction(request, env, url, cors);

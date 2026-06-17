@@ -113,7 +113,6 @@ open tools/pull-viewer.html
 | `?action=pull&type=fission-pending` | 拉待处理种子 |
 | `?action=process` | 完整流水线（评分→嵌入→查重→入库）|
 | `?action=ping` | 健康检查 |
-| `?action=diag` | Supabase 联调诊断 |
 
 ---
 

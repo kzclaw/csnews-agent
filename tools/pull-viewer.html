@@ -1551,7 +1551,6 @@ const ENDPOINTS = [
     params: [{ key: 'type', label: 'type', type: 'select', options: ['topics', 'velocity', 'acceleration'], default: 'topics' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
   { name: 'Entity', action: 'entity', group: 'daily', method: 'GET', desc: '自学习 entity candidates', params: [{ key: 'text', label: 'text', type: 'text' }] },
   { name: 'Event', action: 'event', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster', params: [{ key: 'text', label: 'text', type: 'text' }] },
-  { name: 'Diag', action: 'diag', group: 'debug', method: 'GET', desc: '环境变量诊断', params: [] },
   { name: 'Model Test', action: 'model-test', group: 'debug', method: 'GET', desc: '测试 Workers AI 模型', params: [] },
   { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
     params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
@@ -1567,7 +1566,7 @@ const ENDPOINTS = [
 ];
 const GROUPS = {
   daily: { name: '日常检查', desc: 'pull × 5 + logs + ping + health + content + trend + entity + event' },
-  debug: { name: '内部调试', desc: 'diag / score / classify / batch-score / save / list / embed / zaker-hot / process / knowledge / model-test / ai-test' }
+  debug: { name: '内部调试', desc: 'score / classify / batch-score / save / list / embed / zaker-hot / process / knowledge / model-test / ai-test' }
 };
 
 function highlightJson(json) {
