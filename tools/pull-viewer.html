@@ -207,12 +207,18 @@ body {
 .ticker-track span a:hover { color: var(--gold); }
 .ticker-track span::before { content: ''; }  /* fix 6-15: 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
 /* fix 6-12: hover 改"指向标题才停" (用户 22:20 反馈"进入区域就停太敏感")
-   - CSS :has() 选中 a:hover 暂停父级 animation · 鼠标在 ticker 空白处不停
    - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
      → 标题之间的 padding 空白不会触发暂停
-   - cursor 容器 default · 标题 pointer (暗示"可点") */
-.ticker:has(.ticker-track a:hover) .ticker-track { animation-play-state: paused; }
-.ticker { cursor: default; }
+   - cursor 容器 default · 标题 pointer (暗示"可点")
+   - fix 6-16 (戴舒柯 23:27 反馈 Safari hover 标题后退):
+     · Safari WebKit animation-play-state: paused 触发瞬间会重置 transform 到 0% (CSDN/PHP中文网确认)
+     · Chrome/Firefox 正确 (保留当前动画帧)
+     · 修法: 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结
+       (即使 Safari 重置, inline style.transform 立刻覆盖回去)
+     · will-change: transform 强制 GPU 加速 (Safari 兼容)
+     · -webkit- 前缀给 Safari 旧版 (虽然动画本就在跑, 但 inline style 覆盖时一致) */
+.ticker { cursor: default; will-change: transform; }
+.ticker-track { will-change: transform; }
 .ticker-track a { cursor: pointer; }
 @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }  /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
 
@@ -1618,6 +1624,39 @@ function switchView(view) {
 document.querySelectorAll('.view-tab').forEach(el => {
   el.addEventListener('click', () => switchView(el.dataset.view));
 });
+
+/* fix 6-16 (戴舒柯 23:27 反馈): Safari WebKit animation-play-state: paused 触发的瞬间会重置 transform 到 0% (跳回起点)
+   - 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结当前位置
+   - 核心思路: 鼠标进入 A 链接时, 读当前 computed transform matrix → 设 inline style.transform + animation-play-state: paused
+   - 鼠标离开 A 链接时, 清 inline style + animation-play-state 恢复
+   - 即使 Safari 重置了 transform, 我们设的 inline style.transform 立即覆盖回去
+   - mouseover/mouseout 配对用 relatedTarget 排除内部移动 (避免 spans 间移动闪烁) */
+(function initTickerHoverFreeze() {
+  const ticker = document.getElementById('ticker');
+  const track = document.getElementById('ticker-track');
+  if (!ticker || !track) return;
+  let tickerHovering = false;
+  ticker.addEventListener('mouseover', (e) => {
+    if (!e.target.closest || !e.target.closest('.ticker-track a')) return;
+    if (tickerHovering) return;
+    tickerHovering = true;
+    // 读当前 computed transform (matrix 形式) + 强制冻结
+    const matrix = getComputedStyle(track).transform;
+    track.style.transform = matrix;
+    track.style.animationPlayState = 'paused';
+    track.style.webkitAnimationPlayState = 'paused';
+  });
+  ticker.addEventListener('mouseout', (e) => {
+    // 内部移动 (a → a): 不算离开
+    if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.ticker-track a')) return;
+    if (!tickerHovering) return;
+    tickerHovering = false;
+    // 清 inline style · CSS animation 恢复
+    track.style.transform = '';
+    track.style.animationPlayState = '';
+    track.style.webkitAnimationPlayState = '';
+  });
+})();
 
 /* ============================================================
  * DASHBOARD module
