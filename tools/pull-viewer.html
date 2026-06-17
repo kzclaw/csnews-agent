@@ -190,16 +190,18 @@ body {
 .ticker {
   overflow: hidden; white-space: nowrap;
   background: var(--bg-1); border-bottom: 1px solid var(--hairline);
-  padding: 6px 0; font-family: var(--font-mono); font-size: 11px;
+  padding: 6px 0;   font-family: var(--font-mono); font-size: 13px;  /* fix 5-4: 字体 11→13 */
   color: var(--text-2); position: relative;
 }
 .ticker-track {
   display: inline-block; white-space: nowrap;
   padding-left: 100%;
-  animation: tickerScroll 40s linear infinite;
+  animation: tickerScroll 60s linear infinite;  /* fix 5-3: 速度 40s→60s 慢 50% */
   font-variant-numeric: tabular-nums;
 }
 .ticker-track span { padding: 0 24px; }
+.ticker-track span a { color: inherit; text-decoration: none; transition: color 0.2s; }
+.ticker-track span a:hover { color: var(--gold); }
 .ticker-track span::before { content: '◆'; color: var(--accent-blue); margin-right: 6px; font-size: 8px; }
 @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
@@ -284,6 +286,7 @@ body {
   display: none;
   overflow: hidden;
   overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
+  max-height: calc(100vh - 60px);  /* fix 5-1: 加 viewport 高度限制 */
 }
 .view.active { display: flex; flex-direction: column; }
 
@@ -722,7 +725,20 @@ body {
   border-right: 1px solid var(--hairline);
   overflow-y: auto;
   padding: 20px 0 28px;
+  transition: transform 0.3s ease, width 0.3s ease;
 }
+.sidebar-toggle {
+  position: absolute; left: 12px; top: 12px;
+  background: var(--bg-2); border: 1px solid var(--hairline);
+  border-radius: 4px; padding: 6px 8px; cursor: pointer;
+  color: var(--text-2); z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-toggle:hover { color: var(--gold); border-color: var(--gold); }
+.sidebar-toggle .icon { width: 16px; height: 16px; }
+/* fix 5-6: sidebar 默认显示 · 点击按钮 toggle 折叠/展开 */
+.reader-body.sidebar-hidden .sidebar { display: none; }
+.reader-body.sidebar-hidden .reader-main { padding-left: 0; }
 .sidebar-section { margin-bottom: 24px; }
 .sidebar-title {
   display: flex; align-items: center; justify-content: space-between;
@@ -1255,6 +1271,9 @@ body::before {
 
     <!-- ============ READER VIEW ============ -->
     <section class="view" id="view-reader">
+      <div class="ticker">
+        <div class="ticker-track"></div>
+      </div>
       <div class="reader-body">
         <aside class="sidebar">
           <div class="sidebar-section">
@@ -1292,12 +1311,15 @@ body::before {
               </li>
             </ul>
           </div>
-          <div class="sidebar-divider"></div>
-          <div class="sidebar-footer">
-            本地工具 · 数据仅在你的浏览器<br>
-            Token 存于 <code>localStorage</code>
-          </div>
-        </aside>
+           <div class="sidebar-divider"></div>
+           <div class="sidebar-footer">
+             本地工具 · 数据仅在你的浏览器<br>
+             Token 存于 <code>localStorage</code>
+           </div>
+         </aside>
+         <button class="sidebar-toggle" id="sidebar-toggle" title="折叠/展开侧边栏">
+           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+         </button>
 
         <div class="reader-main">
           <div class="filter-bar">
@@ -1400,7 +1422,7 @@ const STATE = {
   loading: false,
   // reader
   items: [], readerLastError: null, readerLoading: false,
-  filters: { level: '', category: '', sort: 'desc', since: '7d', limit: 30 },
+  filters: { level: '', category: '', sort: 'desc', since: '7d', limit: 200 },
   expandedId: null,
   contentCache: new Map(),
 };
@@ -1519,22 +1541,33 @@ async function fetchNews7d() {
   return r.items || [];
 }
 
-// fix 4-3: 拉最近 10 条新闻标题给 ticker 滚动
+// fix 5-3: 拉 7 天 important/explosive 新闻 · 加 url 给点击跳转
 async function fetchTickerNews() {
-  const r = await apiGet('/', { action: 'pull', type: 'news', limit: '10', order: 'desc' });
-  return (r.items || []).map(it => it.title).filter(Boolean);
+  const items = [];
+  for (const level of ['explosive', 'important']) {
+    const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', level, limit: '10', order: 'desc', format: 'full' });
+    items.push(...((r.items || []).map(it => ({ title: it.title, url: it.url, level }))));
+  }
+  return items;
 }
 
-function updateTicker(titles) {
-  const track = document.getElementById('ticker-track');
-  if (!track) return;
-  if (!titles || !titles.length) {
-    track.innerHTML = '<span>暂无最新新闻 · 等待下次 cron 抓取</span>';
+function updateTicker(items) {
+  const tracks = document.querySelectorAll('.ticker-track');
+  if (!tracks.length) return;
+  if (!items || !items.length) {
+    tracks.forEach(track => track.innerHTML = '<span>暂无最新重要新闻 · 等待下次 cron 抓取</span>');
     return;
   }
   // 重复 2 次以实现无缝循环滚动 (CSS animation 关键)
-  const spans = titles.map(t => `<span>${escapeHtml(t)}</span>`).join('');
-  track.innerHTML = spans + spans;
+  // fix 5-3: 加 url 链接 + 等级前缀 (★/◆) 区分
+  const spans = items.map(it => {
+    const prefix = it.level === 'explosive' ? '★ ' : '◆ ';
+    const content = it.url
+      ? `<a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(prefix + it.title)}</a>`
+      : escapeHtml(prefix + it.title);
+    return `<span>${content}</span>`;
+  }).join('');
+  tracks.forEach(track => track.innerHTML = spans + spans);
 }
 async function fetchEntity() { return apiGet('/?action=entity&text=__latest__'); }
 async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
@@ -2653,6 +2686,10 @@ document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
 });
 document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
 document.getElementById('since-select').addEventListener('change', e => { STATE.filters.since = e.target.value; refreshReader(); });
+// fix 5-6: sidebar 折叠/展开 toggle
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  document.querySelector('.reader-body').classList.toggle('sidebar-hidden');
+});
 
 /* ============================================================
  * Settings modal (shared)
