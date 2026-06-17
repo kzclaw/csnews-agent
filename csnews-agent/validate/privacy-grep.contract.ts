@@ -120,6 +120,10 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
     const KNOWN_FALSE_POSITIVES: Record<string, string> = {
       'd0e7bff': '5h 拍板链写"拍板"字 (戴大虾 5h 拍板链里写), 当时隐私 regex 还没加"拍"模式',
       '21aacaa': '戴大虾 1:40 commit "Update 20260617_kr34_record_trend_with_member.sql" 含 kr34 (测试 supabase GitHub Integration 触发)',
+      // 2026-06-17 17:19 补: v0.36.12 chain push 时未跑 privacy check (viewer 重设计 · KR2/KR3 commit message 含 KR 编号 + 中文)
+      '322f581': 'viewer v0.36.12 KR3 commit message 含 "KR3" + 中文描述, 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
+      'ecb0f6e': 'viewer v0.36.12 KR2 commit message 含 "KR2" + "拍"字 (脉冲), 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
+      '2a5747b': 'viewer reader 默认 since 改为 7d commit message 含 "戴舒柯 03:16 拍\'拉最近 7 天\'", 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
     };
     const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
     const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
