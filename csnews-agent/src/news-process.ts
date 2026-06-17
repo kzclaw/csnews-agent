@@ -125,12 +125,17 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
     body: JSON.stringify(withIds),
     headers: { 'Prefer': 'return=representation' },
   });
+  // 2026-06-17 修订: 加详细 log 诊断 batch 静默 fail (v0.36.13 之前的 17h 没新数据根因)
+  // 不 throw 避免破坏 cron 行为 (return [] 仍然让 caller 走 else 分支)
+  console.log(`[KR0] insertNewsHotspotsBatch: ${withIds.length} rows, status=${res.status}, ok=${res.ok}, ct=${res.headers.get('content-type') || 'n/a'}`);
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[KR0] insertNewsHotspotsBatch HTTP ${res.status} for ${newsList.length} rows: ${errText.slice(0,200)}`);
+    console.error(`[KR0] insertNewsHotspotsBatch HTTP ${res.status} errBody: ${errText.slice(0,500)}`);
+    console.error(`[KR0] insertNewsHotspotsBatch sample row fields: ${Object.keys(withIds[0] || {}).join(',')}`);
     return [];
   }
   const data = await safeJson(res) as any[];
+  console.log(`[KR0] insertNewsHotspotsBatch: returned ${data?.length || 0} ids (expected ${withIds.length}), sample=${JSON.stringify(data?.[0] || null).slice(0, 300)}`);
   //返 ids 按输入顺序 (Supabase PostgREST 保证 RETURNING 顺序 = INSERT 顺序)
   return Array.isArray(data) ? data.map(r => r.id) : [];
 }
