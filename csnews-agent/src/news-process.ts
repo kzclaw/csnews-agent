@@ -121,9 +121,20 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
     id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     ...n,
   }));
+  // 2026-06-17 18:48 fix: union 所有 row keys + 缺 key 补 null
+  // 修 PGRST102 "All object keys must match" bug:
+  //   之前 undefined JSON.stringify 整 key 消失 → 有/无 embedding row keys 数不一致
+  //   现在补 null → JSON.stringify 保留 key → 所有 row 14 keys 一致
+  //   pgvector embedding 列 schema 允许 NULL (无 NOT NULL 约束) 所以 null 安全
+  const allKeys = Array.from(new Set(withIds.flatMap(r => Object.keys(r))));
+  const normalizedRows = withIds.map(r => {
+    const out: Record<string, any> = {};
+    for (const k of allKeys) out[k] = (r as any)[k] !== undefined ? (r as any)[k] : null;
+    return out;
+  });
   const res = await supabaseFetch(env, '/rest/v1/news_hotspots', {
     method: 'POST',
-    body: JSON.stringify(withIds),
+    body: JSON.stringify(normalizedRows),
     headers: { 'Prefer': 'return=representation' },
   });
   // 2026-06-17 修订: 用 logEvent (fire-and-forget R2) 诊断 batch 静默 fail
