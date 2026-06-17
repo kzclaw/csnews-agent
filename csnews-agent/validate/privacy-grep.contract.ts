@@ -124,6 +124,9 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
       '322f581': 'viewer v0.36.12 KR3 commit message 含 "KR3" + 中文描述, 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
       'ecb0f6e': 'viewer v0.36.12 KR2 commit message 含 "KR2" + "拍"字 (脉冲), 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
       '2a5747b': 'viewer reader 默认 since 改为 7d commit message 含 "戴舒柯 03:16 拍\'拉最近 7 天\'", 当时未跑 commit history privacy check (viewer 是占位符模板, 公开 OK)',
+      // 2026-06-17 21:34 补: sidebar-counts-fullset fix (Mavis 21:34 写 commit message 含 KR 编号, 没跑 privacy check)
+      'c830ffb': 'Mavis 21:34 commit "fix(viewer): sidebar-counts-fullset + client-filter (KR43)" 含 KR43 编号, 当时未跑 commit history privacy check. 后续已 amend + revert + 重新 commit 干净 (503d9d9), 接受 history 含此 commit (force-push 触犯 §4.5 硬规则)',
+      'f74d4ee': 'Mavis 21:34 revert commit 自动包含原 commit 标题 "(KR43)", 接受 history 含此 commit (force-push 触犯 §4.5 硬规则)',
     };
     const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
     const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
