@@ -111,7 +111,7 @@ body {
 /* ============================================================
  * Top header — logo + view tabs + actions
  * ============================================================ */
-.app { display: grid; grid-template-rows: 52px 28px 1fr; height: 100vh; }  /* fix 6-5: header (52) + global-ticker (28) + main (1fr) */
+.app { display: grid; grid-template-rows: 52px 30px 1fr; height: 100vh; }  /* fix 6-5: header (52) + global-ticker (30) + main (1fr) · fix 6-12: 28→30 (ticker 字号 13→15.5) */
 .header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -190,12 +190,12 @@ body {
 .ticker {
   overflow: hidden; white-space: nowrap;
   background: var(--bg-1); border-bottom: 1px solid var(--hairline);
-  padding: 6px 0;   font-family: var(--font-mono); font-size: 13px;  /* fix 5-4: 字体 11→13 */
+  padding: 5px 0;   font-family: var(--font-mono); font-size: 15.5px;  /* fix 5-4: 11→13 · fix 6-12: 13→15.5 (用户 22:20 反馈"再放大一点") */
   color: var(--text-2); position: relative;
   z-index: 5;  /* fix 6-5: ticker 在 header 之下 main 之上的 global 位置 */
 }
 /* fix 6-5: global-ticker 不在 view 内 · 切 view 不重置 */
-.global-ticker { height: 28px; flex-shrink: 0; }
+.global-ticker { height: 30px; flex-shrink: 0; }  /* fix 6-12: 28→30 (字号 15.5px 视觉居中) */
 .ticker-track {
   display: inline-block; white-space: nowrap;
   padding-left: 100%;
@@ -205,10 +205,15 @@ body {
 .ticker-track span { padding: 0 24px; }
 .ticker-track span a { color: inherit; text-decoration: none; transition: color 0.2s; }
 .ticker-track span a:hover { color: var(--gold); }
-.ticker-track span::before { content: '◆'; color: var(--accent-blue); margin-right: 6px; font-size: 8px; }
-/* fix 6-3: 走马灯 hover 暂停 */
-.ticker:hover .ticker-track { animation-play-state: paused; }
-.ticker:hover { cursor: pointer; }
+.ticker-track span::before { content: '◆'; color: var(--accent-blue); margin-right: 6px; font-size: 9px; }  /* fix 6-12: 8→9 (字号 15.5 配 ◆ 9px) */
+/* fix 6-12: hover 改"指向标题才停" (用户 22:20 反馈"进入区域就停太敏感")
+   - CSS :has() 选中 a:hover 暂停父级 animation · 鼠标在 ticker 空白处不停
+   - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
+     → 标题之间的 padding 空白不会触发暂停
+   - cursor 容器 default · 标题 pointer (暗示"可点") */
+.ticker:has(.ticker-track a:hover) .ticker-track { animation-play-state: paused; }
+.ticker { cursor: default; }
+.ticker-track a { cursor: pointer; }
 @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }  /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
 
 /* v0.36.12 KR3 ("World Engine" (user)Dashboard 网格线扫描 — NASA Mission Control 背景) */
@@ -292,7 +297,7 @@ body {
   display: none;
   overflow: hidden;
   overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
-  max-height: calc(100vh - 88px);  /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 */
+  max-height: calc(100vh - 90px);  /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 · fix 6-12: 28→30 = 82 + 8 buffer = 90 */
 }
 .view.active { display: flex; flex-direction: column; }
 
@@ -1556,11 +1561,17 @@ async function fetchNews7d() {
 }
 
 // fix 5-3: 拉 7 天 important/explosive 新闻 · 加 url 给点击跳转
+// fix 6-11: 同一 title 可能 explosive + important 同时命中 (Worker 评分时一条新闻被打了两个 level) · 用 Set 去重 · explosive 优先 (循环在前)
 async function fetchTickerNews() {
   const items = [];
+  const seen = new Set();
   for (const level of ['explosive', 'important']) {
     const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', level, limit: '15', order: 'desc', format: 'full' });
-    items.push(...((r.items || []).map(it => ({ title: it.title, url: it.url, level }))));
+    for (const it of (r.items || [])) {
+      if (!it.title || seen.has(it.title)) continue;
+      seen.add(it.title);
+      items.push({ title: it.title, url: it.url, level });
+    }
   }
   return items;
 }
