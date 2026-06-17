@@ -5,6 +5,7 @@
 //详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
 // specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
 import { Env, supabaseFetch, safeJson } from './shared';
+import { logEvent } from './log';
 
 //清理过期话题簇(跟进7天/重要14天/爆炸28天)
 export async function cleanupStaleTopics(env: Env) {
@@ -125,17 +126,30 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
     body: JSON.stringify(withIds),
     headers: { 'Prefer': 'return=representation' },
   });
-  // 2026-06-17 修订: 加详细 log 诊断 batch 静默 fail (v0.36.13 之前的 17h 没新数据根因)
+  // 2026-06-17 修订: 用 logEvent (fire-and-forget R2) 诊断 batch 静默 fail
   // 不 throw 避免破坏 cron 行为 (return [] 仍然让 caller 走 else 分支)
-  console.log(`[KR0] insertNewsHotspotsBatch: ${withIds.length} rows, status=${res.status}, ok=${res.ok}, ct=${res.headers.get('content-type') || 'n/a'}`);
+  // 上一版 console.log 错: console.log 只到 CF Workers Tail Logs, 不自动写 R2 csnews_raw
+  await logEvent(env, "info", "[KR0] insertNewsHotspotsBatch: response", {
+    rows: withIds.length,
+    status: res.status,
+    ok: res.ok,
+    content_type: res.headers.get('content-type') || 'n/a',
+  }, "process");
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[KR0] insertNewsHotspotsBatch HTTP ${res.status} errBody: ${errText.slice(0,500)}`);
-    console.error(`[KR0] insertNewsHotspotsBatch sample row fields: ${Object.keys(withIds[0] || {}).join(',')}`);
+    await logEvent(env, "error", "[KR0] insertNewsHotspotsBatch: HTTP errBody", {
+      status: res.status,
+      err_body: errText.slice(0, 500),
+      sample_row_fields: Object.keys(withIds[0] || {}).join(','),
+    }, "process");
     return [];
   }
   const data = await safeJson(res) as any[];
-  console.log(`[KR0] insertNewsHotspotsBatch: returned ${data?.length || 0} ids (expected ${withIds.length}), sample=${JSON.stringify(data?.[0] || null).slice(0, 300)}`);
+  await logEvent(env, "info", "[KR0] insertNewsHotspotsBatch: result", {
+    returned_ids: data?.length || 0,
+    expected_ids: withIds.length,
+    sample_returned: JSON.stringify(data?.[0] || null).slice(0, 300),
+  }, "process");
   //返 ids 按输入顺序 (Supabase PostgREST 保证 RETURNING 顺序 = INSERT 顺序)
   return Array.isArray(data) ? data.map(r => r.id) : [];
 }
