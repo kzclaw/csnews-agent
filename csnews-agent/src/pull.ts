@@ -355,8 +355,9 @@ function buildPostgRestQuery(filters: ParsedFilters): string {
     params.push(`fission_triggered=eq.${filters.fissionTriggered}`);
   }
   if (filters.titleLike) {
-    // ilike = case-insensitive like; * 是通配符(已 encode)
-    params.push(`title=ilike.${encodeURIComponent('*' + filters.titleLike + '*')}`);
+    // PostgREST ilike 用 % 通配符 (不用 *), 修复 audit 4.4 bug
+    // ilike = case-insensitive like; % 是通配符(已 encode)
+    params.push(`title=ilike.${encodeURIComponent('%' + filters.titleLike + '%')}`);
   }
 
   return params.join('&');
