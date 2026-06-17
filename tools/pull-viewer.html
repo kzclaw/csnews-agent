@@ -283,6 +283,7 @@ body {
   position: absolute; inset: 0;
   display: none;
   overflow: hidden;
+  overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
 }
 .view.active { display: flex; flex-direction: column; }
 
@@ -1223,13 +1224,10 @@ body::before {
 
     <!-- ============ DASHBOARD VIEW ============ -->
     <section class="view active" id="view-dashboard">
-      <!-- v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 滚动 ticker — 横向新闻条 NASA HUD 感) -->
+      <!-- fix 4-3: 滚动 ticker 改真实新闻标题 -->
       <div class="ticker" id="ticker">
         <div class="ticker-track" id="ticker-track">
-          <span>CSNEWS · AGENT · 趋势引擎已启动</span>
-          <span>NASA MISSION CONTROL · WORLD ENGINE · 2026</span>
-          <span>TIE-LITE · NEWS SELF GROWTH · 7 层信息模型</span>
-          <span>R2 + SUPABASE + CF WORKERS · 三栈联动</span>
+          <span>加载最新新闻中…</span>
         </div>
       </div>
       <nav class="dash-tabs" id="dash-tabs">
@@ -1309,10 +1307,9 @@ body::before {
               <option value="hot">最热</option>
             </select>
             <select class="select" id="since-select" title="时间范围">
-              <option value="">全部时间</option>
               <option value="1h">最近 1 小时</option>
               <option value="24h">最近 24 小时</option>
-              <option value="7d">最近 7 天</option>
+              <option value="7d" selected>最近 7 天</option>
             </select>
             <div class="filter-spacer"></div>
             <span class="filter-meta" id="result-meta">— 条</span>
@@ -1517,8 +1514,27 @@ document.querySelectorAll('.view-tab').forEach(el => {
  * ============================================================ */
 async function fetchHealth() { return apiGet('/?action=health'); }
 async function fetchNews7d() {
-  const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '500', format: 'full' });
+  // fix 4-2: Worker hard cap limit=200 (line 167 src/pull.ts) · 之前 500 抛错被静默 catch
+  const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '200', format: 'full' });
   return r.items || [];
+}
+
+// fix 4-3: 拉最近 10 条新闻标题给 ticker 滚动
+async function fetchTickerNews() {
+  const r = await apiGet('/', { action: 'pull', type: 'news', limit: '10', order: 'desc' });
+  return (r.items || []).map(it => it.title).filter(Boolean);
+}
+
+function updateTicker(titles) {
+  const track = document.getElementById('ticker-track');
+  if (!track) return;
+  if (!titles || !titles.length) {
+    track.innerHTML = '<span>暂无最新新闻 · 等待下次 cron 抓取</span>';
+    return;
+  }
+  // 重复 2 次以实现无缝循环滚动 (CSS animation 关键)
+  const spans = titles.map(t => `<span>${escapeHtml(t)}</span>`).join('');
+  track.innerHTML = spans + spans;
 }
 async function fetchEntity() { return apiGet('/?action=entity&text=__latest__'); }
 async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
@@ -2293,11 +2309,14 @@ async function refreshDashboard() {
     document.getElementById('dash-count').textContent = '!';
   }
   try { STATE.news7d = await fetchNews7d(); }
-  catch (e) { STATE.news7dErr = { message: e.message || String(e) }; STATE.news7d = []; }
+  catch (e) { STATE.news7dErr = { message: e.message || String(e) }; STATE.news7d = []; console.error('[fix 4-2] fetchNews7d 失败:', e.message); }
   try { STATE.entity = await fetchEntity(); }
   catch (e) { STATE.entityErr = { message: e.message || String(e) }; STATE.entity = null; }
   try { STATE.event = await fetchEvent(); }
   catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
+  // fix 4-3: ticker 拉真实新闻标题
+  try { updateTicker(await fetchTickerNews()); }
+  catch (e) { console.error('[fix 4-3] fetchTickerNews 失败:', e.message); }
   STATE.loading = false;
   updateStatus();
   renderDashTab();
