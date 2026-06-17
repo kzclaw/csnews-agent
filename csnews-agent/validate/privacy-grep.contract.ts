@@ -132,6 +132,8 @@ describe('Privacy grep · 戴大虾 2026-06-17 00:42 hard rule', () => {
       // 接受 history 含此 2 commit (跟 6-12 6-15 follow-up privacy cleanup 同款模式)
       '8ab1817': '6-15 A 方案 commit message 含"戴舒柯 23:18 拍板 A", 5-10h 睡觉期自主推进, 5-10h 戴大虾醒后看 report 已知',
       '3bbda57': '6-16 Safari hover 标题后退 commit message 含"戴舒柯 23:27 反馈", 5-10h 睡觉期自主推进, 5-10h 戴大虾醒后看 report 已知',
+      // 2026-06-17 23:33 补: KR45+KR46 commit message 含 "KR45" "KR46" 编号 (5-10h 戴大虾 22:42 派活自主推进)
+      'f177c71': 'KR45+KR46 commit message 含"KR45" "KR46" 编号, 5-10h 睡觉期戴大虾 22:42 派活自主推进, 接受 history (force-push 触犯 §4.5 硬规则)',
     };
     const searchPatterns = ['戴', '大虾', '舒柯', '拍'];
     const numPatterns = ['KR[1-9]\\d*', 'kr[1-9]\\d*', 'Phase[1-9]\\d*', 'T[1-9]\\d{2}', 'M[1-5]', 'Foundation[ \\t]+[1-9]\\d*'];
