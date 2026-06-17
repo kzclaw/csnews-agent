@@ -713,17 +713,20 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 // ?action=health 端点
 // kzclaw 2026-06-12 20:38 确定: health 端点要真的做到能全面检查 health
 //
-// 8 大维度检查 (每个独立 try/catch, 失败降级但记录到 health_checks 数组):
-//  1. last_process_at    - 最近 process 跑时间 (KV 持久化)
-//  2. cron_health        - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
-//  3. secret_resolved    - WORKER_SELF_URL secret 是不是占位符 DO_NOT_USE
-//  4. supabase_counts    - 6 张表精确行数 (schema-aware query)
-//  5. supabase_reachable - Supabase 6 张表是否全部可查 (用 parallel fetch + ok count)
-//  6. r2_latest_write    - R2 news/zaker/ 最新写入 (按 R2 obj uploaded 字段, 不用 content.created_at)
-//  7. r2_prefix_counts   - R2 各 prefix 行数 (news/embeddings/fission/trends/warnings/logs)
-//  8. cron_history       - R2 logs/ 上一小时 [scheduler] log 数量 (判断 cron 跑没跑)
+// 11 大维度检查 (每个独立 try/catch, 失败降级但记录到 health_checks 数组):
+//  1. last_process_at              - 最近 process 跑时间 (KV 持久化)
+//  2. cron_health                  - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
+//  3. secret_resolved              - WORKER_SELF_URL secret 是不是占位符 DO_NOT_USE
+//  4. supabase_counts              - 6 张表精确行数 (schema-aware query)
+//  5. supabase_reachable           - Supabase 6 张表是否全部可查 (用 parallel fetch + ok count)
+//  6. r2_latest_write              - R2 news/zaker/ 最新写入 (informational only, 详见下方注释)
+//  7. r2_latest_supabase_write     - Supabase news_hotspots 最新 created_at (真实 process 状态, 阈值 1.5h/3h)
+//  8. r2_prefix_counts             - R2 各 prefix 行数 (news/embeddings/fission/trends/warnings/logs)
+//  9. cron_history                 - R2 logs/ 上一小时 [scheduler] log 数量 (判断 cron 跑没跑)
+// 10. zscore_signals_today         - 7d z-score 异常数 (z-score 异常检测, 双向 |z|>3)
+// 11. ai_budget_today              - 当日 AI 配额用量 (蓝图 2.9)
 //
-// 返回 status 字段 (ok / degraded / down) + 8 维度详情
+// 返回 status 字段 (ok / degraded / down) + 11 维度详情
 // 2026-06-17 删 worker_version 字段 (v0.36.10.6 拍板 B: health 端点不再返 commit 标识, 真 commit hash 查 `git log origin/main -1 --format='%h'`)
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const ts = Date.now();
@@ -828,13 +831,14 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
     detail: `${supabaseOkCount}/${supabaseTables.length} tables OK`
   };
 
-  // ========== 7. r2_latest_write（按 created_at 排序的真正最新 news）==========
+  // ========== 7. r2_latest_write（informational only · process 不再写 R2 news/zaker/）==========
   // 旧实现 bug: list 默认升序, limit 50 全是老 obj, sort 倒序取到 5-29 范围内最大
   // 修: list 拿 1000 条 (R2 单次 list 上限) + 按 R2 key 倒序 + get obj content
   // 修: 改用 R2 obj `uploaded` 字段 (CF R2 binding Date 类型, 反映 R2 上次 PUT 时间) 替代 content.created_at
   //   旧 bug: ZAKER fetch 的 R2 obj 没 created_at 字段, 或 created_at 写入后不再更新, 83 天前写的 obj 永远显示 83 天
   //   新实现: 用 R2 list 返回的 obj.uploaded (CF R2 binding 类型自带 Date)
-  //   备注: process 不再写 R2 news/zaker/, 只写 Supabase. 此字段反映 R2 历史最后写入时间, 不代表现在 process 状态
+  // 备注: process 不再写 R2 news/zaker/, 只写 Supabase. 此字段反映 R2 历史最后写入时间, 不代表现在 process 状态
+  // 2026-06-17 修订: 改为 informational only · status 永为 ok · detail 标注 "historical" · 真实 process 状态见 r2_latest_supabase_write
   try {
     const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1000 });
     if (list.objects && list.objects.length > 0) {
@@ -866,21 +870,63 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
         uploaded: latestObj.uploaded ? latestObj.uploaded.toISOString() : null,
         source: lastWriteSource,
       };
-      if (lastWriteTs) {
-        const writeAgeMs = ts - lastWriteTs;
-        if (writeAgeMs < 2 * 3600_000) checks.r2_latest_write = { status: "ok", detail: `last write ${Math.round(writeAgeMs / 60000)} min ago` };
-        else if (writeAgeMs < 6 * 3600_000) checks.r2_latest_write = { status: "degraded", detail: `last write ${Math.round(writeAgeMs / 60)} min ago (> 2h)` };
-        else checks.r2_latest_write = { status: "down", detail: `last write ${Math.round(writeAgeMs / 3600_000)}h ago (> 6h)` };
-      } else {
-        checks.r2_latest_write = { status: "unknown", detail: "no uploaded or content.created_at" };
-      }
+      // 2026-06-17 修订: informational only, 永为 ok
+      const ageLabel = lastWriteTs
+        ? `historical: last R2 news/zaker/ write ${Math.round((ts - lastWriteTs) / 3600_000)}h ago (process no longer writes R2 news/zaker/, see r2_latest_supabase_write for current process status)`
+        : "no uploaded or content.created_at (historical data)";
+      checks.r2_latest_write = { status: "ok", detail: ageLabel };
     } else {
       result.r2_latest_write = null;
-      checks.r2_latest_write = { status: "down", detail: "no objects in news/zaker/" };
+      checks.r2_latest_write = { status: "ok", detail: "no objects in news/zaker/ (historical prefix, informational only)" };
     }
   } catch (e: any) {
     result.r2_latest_write = { error: e?.message || "r2 unavailable" };
-    checks.r2_latest_write = { status: "down", detail: e?.message };
+    // 2026-06-17 修订: R2 失败不影响整体 status (informational only)
+    checks.r2_latest_write = { status: "ok", detail: `r2 list failed: ${e?.message} (informational, does not impact process status)` };
+  }
+
+  // ========== 7b. r2_latest_supabase_write（2026-06-17 新增 · 真实 process 状态）==========
+  // 修: process 写 Supabase news_hotspots 为主, R2 写入为辅. 真实"process 跑了有数据写入"看 supabase news_hotspots 最新 created_at
+  // 阈值: 跟 cron_health 一致 (1.5h = degraded / 3h = down), 都反映"process 1h cron 应每 1h 跑一次"
+  // 失败兜底: supabase 不可达 = down (跟 cron_health 同款)
+  try {
+    const res = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=created_at&order=created_at.desc&limit=1`, {
+      headers: {
+        "apikey": env.SUPABASE_SERVICE_KEY,
+        "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status} ${errText.slice(0, 200)}`);
+    }
+    const arr = await res.json() as Array<{ created_at: string }>;
+    if (arr && arr.length > 0 && arr[0].created_at) {
+      const lastWriteMs = Date.parse(arr[0].created_at);
+      if (Number.isFinite(lastWriteMs)) {
+        const ageMs = ts - lastWriteMs;
+        result.r2_latest_supabase_write = {
+          last_write: arr[0].created_at,
+          source: "supabase_news_hotspots",
+        };
+        if (ageMs < 1.5 * 3600_000) {
+          checks.r2_latest_supabase_write = { status: "ok", detail: `last news_hotspots write ${Math.round(ageMs / 60000)} min ago` };
+        } else if (ageMs < 3 * 3600_000) {
+          checks.r2_latest_supabase_write = { status: "degraded", detail: `last news_hotspots write ${Math.round(ageMs / 60)} min ago (> 1.5h, expected every 1h)` };
+        } else {
+          checks.r2_latest_supabase_write = { status: "down", detail: `last news_hotspots write ${Math.round(ageMs / 3600_000)}h ago (> 3h, process stale)` };
+        }
+      } else {
+        result.r2_latest_supabase_write = { last_write: arr[0].created_at, source: "supabase_news_hotspots" };
+        checks.r2_latest_supabase_write = { status: "unknown", detail: "created_at unparseable" };
+      }
+    } else {
+      result.r2_latest_supabase_write = null;
+      checks.r2_latest_supabase_write = { status: "down", detail: "news_hotspots table empty (no data ever)" };
+    }
+  } catch (e: any) {
+    result.r2_latest_supabase_write = { error: e?.message || "supabase query failed" };
+    checks.r2_latest_supabase_write = { status: "down", detail: e?.message };
   }
 
   // ========== 8. r2_prefix_counts（各 prefix 行数）==========
