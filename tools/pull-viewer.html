@@ -111,7 +111,7 @@ body {
 /* ============================================================
  * Top header — logo + view tabs + actions
  * ============================================================ */
-.app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+.app { display: grid; grid-template-rows: 52px 28px 1fr; height: 100vh; }  /* fix 6-5: header (52) + global-ticker (28) + main (1fr) */
 .header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -192,7 +192,10 @@ body {
   background: var(--bg-1); border-bottom: 1px solid var(--hairline);
   padding: 6px 0;   font-family: var(--font-mono); font-size: 13px;  /* fix 5-4: 字体 11→13 */
   color: var(--text-2); position: relative;
+  z-index: 5;  /* fix 6-5: ticker 在 header 之下 main 之上的 global 位置 */
 }
+/* fix 6-5: global-ticker 不在 view 内 · 切 view 不重置 */
+.global-ticker { height: 28px; flex-shrink: 0; }
 .ticker-track {
   display: inline-block; white-space: nowrap;
   padding-left: 100%;
@@ -289,7 +292,7 @@ body {
   display: none;
   overflow: hidden;
   overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
-  max-height: calc(100vh - 60px);  /* fix 5-1: 加 viewport 高度限制 */
+  max-height: calc(100vh - 88px);  /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 */
 }
 .view.active { display: flex; flex-direction: column; }
 
@@ -943,6 +946,8 @@ body::before {
 .card.expanded {
   border-color: var(--hairline-strong);
   background: var(--bg-1);
+  /* fix 6-6: 展开后跨整行 · 避免 grid 同行其他 card 位置错乱 (戴舒柯 21:05 反馈"旁边卡片也变大") */
+  grid-column: 1 / -1;
 }
 .card.expanded::before {
   content: ''; position: absolute;
@@ -1247,16 +1252,17 @@ body::before {
     </div>
   </header>
 
+  <!-- fix 6-5: 走马灯移出 view · 独立 global ticker · 跨 dashboard/reader 共享 · 切 view 不重置动画 (戴舒柯 21:05 反馈"dashboard 切到 reader 跑马灯重置") -->
+  <div class="ticker global-ticker" id="ticker">
+    <div class="ticker-track" id="ticker-track">
+      <span>加载最新新闻中…</span>
+    </div>
+  </div>
+
   <main class="main">
 
     <!-- ============ DASHBOARD VIEW ============ -->
     <section class="view active" id="view-dashboard">
-      <!-- fix 4-3: 滚动 ticker 改真实新闻标题 -->
-      <div class="ticker" id="ticker">
-        <div class="ticker-track" id="ticker-track">
-          <span>加载最新新闻中…</span>
-        </div>
-      </div>
       <nav class="dash-tabs" id="dash-tabs">
         <button class="dash-tab active" data-tab="overview">
           <span>Overview</span>
@@ -1282,9 +1288,6 @@ body::before {
 
     <!-- ============ READER VIEW ============ -->
     <section class="view" id="view-reader">
-      <div class="ticker">
-        <div class="ticker-track"></div>
-      </div>
       <div class="reader-body">
         <aside class="sidebar">
           <div class="sidebar-section">
@@ -1563,7 +1566,8 @@ async function fetchTickerNews() {
 }
 
 function updateTicker(items) {
-  const tracks = document.querySelectorAll('.ticker-track');
+  // fix 6-5: 改为精确选择 #ticker-track (global-ticker) · 不再 querySelectorAll (避免重复)
+  const tracks = document.querySelectorAll('#ticker-track');
   if (!tracks.length) return;
   if (!items || !items.length) {
     tracks.forEach(track => track.innerHTML = '<span>暂无最新重要新闻 · 等待下次 cron 抓取</span>');
@@ -2362,7 +2366,7 @@ async function refreshDashboard() {
   catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
   // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
   // 戴舒柯 20:47 反馈: 切 tab 走马灯不刷新
-  if (!document.querySelector('.ticker-track')?.innerHTML || document.querySelector('.ticker-track').children.length < 10) {
+  if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
     try { updateTicker(await fetchTickerNews()); }
     catch (e) { console.error('[fix 4-3] fetchTickerNews 失败:', e.message); }
   }
@@ -2641,6 +2645,11 @@ async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
   STATE.readerLoading = true;
   STATE.readerLastError = null;
+  // fix 6-7: 加载时清 sidebar counts · 避免 race condition 残留旧值 (戴舒柯 21:05 反馈"点击分类/等级数字不对")
+  document.getElementById('level-all-count').textContent = '…';
+  document.getElementById('level-explosive-count').textContent = '…';
+  document.getElementById('level-important-count').textContent = '…';
+  document.getElementById('level-follow-count').textContent = '…';
   renderFeedSkeleton();
   updateStatus();
   // 进度回调: 实时显示拉取进度
