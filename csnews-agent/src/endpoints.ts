@@ -47,62 +47,89 @@ export async function handlePullAction(request: Request, env: Env, url: URL, cor
 }
 
 // ===================== diag =====================
+// 2026-06-17 18:23 fix: 修 diag 端点不再留假数据
+// 历史 bug: handleDiagAction 真插 3 条假数据 (1 topic + 1 news + 1 join member)
+//   没 cleanup → 5 天前留了 'diag-1781267399339' 假数据占 viewer 列表 1 个位置
+// 修法: try/finally 包裹, finally 块 DELETE 3 个 ID 清理
+//   即使中间 throw 也清 (跟 subrequest 优化 try/finally 范式一致)
 export async function handleDiagAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
- const results = [];
+  const results = [];
+  // key = table name (plural, 跟 Supabase schema 对齐) · value = inserted id (null = 没插成功)
+  const cleanupIds: Record<string, string | null> = { topics: null, news_hotspots: null, news_topic_members: null };
 
- //1. Insert topic
- const tr = await fetch(`${getSupabaseHost(env)}/rest/v1/topics`, {
- method: 'POST',
- body: JSON.stringify({ topic_key: 'diag-' + Date.now(), level: 'follow' }),
- headers: {
- 'apikey': env.SUPABASE_SERVICE_KEY,
- 'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
- 'Content-Type': 'application/json',
- 'Prefer': 'return=representation',
- }
- });
- const t0t = await tr.text();
- let t0id = null;
- try { const d = JSON.parse(t0t); t0id = d?.[0]?.id || d?.id; } catch {}
- results.push({ step: 'topic_insert', status: tr.status, id: t0id, body: t0t.slice(0,100) });
+  try {
+  //1. Insert topic
+  const tr = await fetch(`${getSupabaseHost(env)}/rest/v1/topics`, {
+  method: 'POST',
+  body: JSON.stringify({ topic_key: 'diag-' + Date.now(), level: 'follow' }),
+  headers: {
+  'apikey': env.SUPABASE_SERVICE_KEY,
+  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+  }
+  });
+  const t0t = await tr.text();
+  try { const d = JSON.parse(t0t); cleanupIds.topics = d?.[0]?.id || d?.id || null; } catch {}
+  results.push({ step: 'topic_insert', status: tr.status, id: cleanupIds.topics, body: t0t.slice(0,100) });
 
- //2. Insert news
- const nr = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots`, {
- method: 'POST',
- body: JSON.stringify({ title: 'diag-' + Date.now(), source: 'zaker', category: '测试' }),
- headers: {
- 'apikey': env.SUPABASE_SERVICE_KEY,
- 'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
- 'Content-Type': 'application/json',
- 'Prefer': 'return=representation',
- }
- });
- const t1t = await nr.text();
- let t1id = null;
- try { const d = JSON.parse(t1t); t1id = d?.[0]?.id || d?.id; } catch {}
- results.push({ step: 'news_insert', status: nr.status, id: t1id, body: t1t.slice(0,100) });
+  //2. Insert news
+  const nr = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots`, {
+  method: 'POST',
+  body: JSON.stringify({ title: 'diag-' + Date.now(), source: 'zaker', category: '测试' }),
+  headers: {
+  'apikey': env.SUPABASE_SERVICE_KEY,
+  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+  }
+  });
+  const t1t = await nr.text();
+  try { const d = JSON.parse(t1t); cleanupIds.news_hotspots = d?.[0]?.id || d?.id || null; } catch {}
+  results.push({ step: 'news_insert', status: nr.status, id: cleanupIds.news_hotspots, body: t1t.slice(0,100) });
 
- //3. Join (if both IDs exist)
- if (t0id && t1id) {
- const jr = await fetch(`${getSupabaseHost(env)}/rest/v1/news_topic_members`, {
- method: 'POST',
- body: JSON.stringify({ news_id: t1id, topic_id: t0id, role: 'seed' }),
- headers: {
- 'apikey': env.SUPABASE_SERVICE_KEY,
- 'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
- 'Content-Type': 'application/json',
- 'Prefer': 'return=representation',
- }
- });
- const t2t = await jr.text();
- results.push({ step: 'join', status: jr.status, body: t2t.slice(0,200) });
- } else {
- results.push({ step: 'join', status: -1, reason: 'missing IDs', tid: t0id, nid: t1id });
- }
+  //3. Join (if both IDs exist)
+  if (cleanupIds.topics && cleanupIds.news_hotspots) {
+  const jr = await fetch(`${getSupabaseHost(env)}/rest/v1/news_topic_members`, {
+  method: 'POST',
+  body: JSON.stringify({ news_id: cleanupIds.news_hotspots, topic_id: cleanupIds.topics, role: 'seed' }),
+  headers: {
+  'apikey': env.SUPABASE_SERVICE_KEY,
+  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation',
+  }
+  });
+  const t2t = await jr.text();
+  try { const d = JSON.parse(t2t); cleanupIds.news_topic_members = d?.[0]?.id || d?.id || null; } catch {}
+  results.push({ step: 'join', status: jr.status, body: t2t.slice(0,200) });
+  } else {
+  results.push({ step: 'join', status: -1, reason: 'missing IDs', tid: cleanupIds.topics, nid: cleanupIds.news_hotspots });
+  }
+  } finally {
+  // 清理假数据 (即使 throw 也清理, 跟 subrequest 优化 try/finally 范式一致)
+  // delete 失败不抛 (try/catch 单独包) - 防止 cleanup 错掩盖 diag 真实结果
+  const deleteIds = Object.entries(cleanupIds).filter(([_, id]) => id).map(([table, id]) => ({ table, id }));
+  const cleanupResults = await Promise.all(deleteIds.map(async ({ table, id }) => {
+  try {
+  const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${table}?id=eq.${id}`, {
+  method: 'DELETE',
+  headers: {
+  'apikey': env.SUPABASE_SERVICE_KEY,
+  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  }
+  });
+  return { table, id, status: r.status, ok: r.ok };
+  } catch (e: any) {
+  return { table, id, status: -1, error: e?.message || String(e) };
+  }
+  }));
+  results.push({ step: 'cleanup', deleted: cleanupResults });
+  }
 
- return new Response(JSON.stringify({ ts: Date.now(), results }), {
- headers: { 'Content-Type': 'application/json', ...cors }
- });
+  return new Response(JSON.stringify({ ts: Date.now(), results }), {
+  headers: { 'Content-Type': 'application/json', ...cors }
+  });
 }
 
 // ===================== ping =====================
