@@ -210,7 +210,7 @@ body {
    - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
      → 标题之间的 padding 空白不会触发暂停
    - cursor 容器 default · 标题 pointer (暗示"可点")
-   - fix 6-16 (戴舒柯 23:27 反馈 Safari hover 标题后退):
+   - fix 6-16 (Safari hover 标题后退):
      · Safari WebKit animation-play-state: paused 触发瞬间会重置 transform 到 0% (CSDN/PHP中文网确认)
      · Chrome/Firefox 正确 (保留当前动画帧)
      · 修法: 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结
@@ -1625,7 +1625,7 @@ document.querySelectorAll('.view-tab').forEach(el => {
   el.addEventListener('click', () => switchView(el.dataset.view));
 });
 
-/* fix 6-16 (戴舒柯 23:27 反馈): Safari WebKit animation-play-state: paused 触发的瞬间会重置 transform 到 0% (跳回起点)
+/* fix 6-16: Safari WebKit animation-play-state: paused 触发的瞬间会重置 transform 到 0% (跳回起点)
    - 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结当前位置
    - 核心思路: 鼠标进入 A 链接时, 读当前 computed transform matrix → 设 inline style.transform + animation-play-state: paused
    - 鼠标离开 A 链接时, 清 inline style + animation-play-state 恢复
