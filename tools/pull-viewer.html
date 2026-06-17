@@ -2398,9 +2398,8 @@ async function fetchReaderNews() {
       order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
       order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
     });
-    // fix 6-8: 不传 level/category filter 给 API · 拉全量 (134 条) 存 STATE.allItems
-    // 客户端按 filter 过滤 (点 important → feed 显示 32 条 · sidebar 数字仍基于全量 134)
-    // 戴舒柯 21:23 反馈 "点 important 后 全部 134 变成 32" 真根因
+    if (STATE.filters.level) params.set('level', STATE.filters.level);
+    if (STATE.filters.category) params.set('category', STATE.filters.category);
     if (STATE.filters.since) params.set('since', STATE.filters.since);
     const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
     const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
@@ -2483,7 +2482,8 @@ function renderCategoryList(items) {
   list.querySelectorAll('.sidebar-item').forEach(el => {
     el.addEventListener('click', () => {
       STATE.filters.category = el.dataset.category || '';
-      applyFilterAndRender();  // 客户端 filter · 不重拉
+      renderCategoryList(STATE.items);
+      refreshReader();
     });
   });
 }
@@ -2496,16 +2496,6 @@ function renderLevelCounts(items) {
   document.getElementById('level-explosive-count').textContent = c.explosive;
   document.getElementById('level-important-count').textContent = c.important;
   document.getElementById('level-follow-count').textContent = c.follow;
-}
-
-// fix 6-8: 客户端 filter 函数 (基于 STATE.allItems 全量)
-// 戴舒柯 21:23 反馈 "sidebar 数字应该基于全量统计, filter 只影响 feed 列表"
-function applyClientFilters(items) {
-  return items.filter(it => {
-    if (STATE.filters.level && it.level !== STATE.filters.level) return false;
-    if (STATE.filters.category && it.category !== STATE.filters.category) return false;
-    return true;
-  });
 }
 
 function renderFeedSkeleton() {
@@ -2689,17 +2679,14 @@ async function refreshReader() {
         }
       }
     }
-    // fix 6-8: 存全量到 STATE.allItems · 客户端 filter
-    STATE.allItems = deduped;
-    STATE.items = applyClientFilters(deduped);
+    STATE.items = deduped;
     const dupCount = items.length - deduped.length;
     document.getElementById('result-meta').textContent =
-      `${STATE.items.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
-    // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
-    renderLevelCounts(STATE.allItems);
-    renderCategoryList(STATE.allItems);
+      `${deduped.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
+    renderLevelCounts(deduped);
+    renderCategoryList(deduped);
     renderFeed();
-    toast(dupCount > 0 ? `已刷新 ${STATE.items.length} 条 (去重 ${dupCount} 条)` : `已刷新 ${STATE.items.length} 条`, 'success');
+    toast(dupCount > 0 ? `已刷新 ${deduped.length} 条 (去重 ${dupCount} 条)` : `已刷新 ${deduped.length} 条`, 'success');
   } catch (e) {
     STATE.readerLastError = { message: e.message || String(e) };
     renderFeed();
@@ -2714,24 +2701,12 @@ async function refreshReader() {
 /* ============================================================
  * Reader bindings
  * ============================================================ */
-// fix 6-8: sidebar 等级/分类点击 → 客户端 filter (不重拉 API · 数字基于全量)
-function applyFilterAndRender() {
-  STATE.items = applyClientFilters(STATE.allItems);
-  // 高亮 active class (level)
-  document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
-    x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
-  });
-  // 高亮 active class (category)
-  document.querySelectorAll('#category-list .sidebar-item').forEach(x => {
-    x.classList.toggle('active', (x.dataset.category || '') === STATE.filters.category);
-  });
-  document.getElementById('result-meta').textContent = `${STATE.items.length} 条`;
-  renderFeed();
-}
 document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
   el.addEventListener('click', () => {
+    document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
     STATE.filters.level = el.dataset.level || '';
-    applyFilterAndRender();  // 客户端 filter · 不重拉
+    refreshReader();
   });
 });
 document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
