@@ -95,7 +95,6 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `?action=score&title=...` | GET | 规则引擎单条评分 |
 | `?action=batch-score` | POST | 批量评分（JSON body）|
 | `?action=embed&text=...` | GET | bge-m3 1024 维向量输出 |
-| `?action=diag` | GET | Supabase 三表联调诊断 |
 | `?action=list` | GET | 列出 R2 中的新闻（`?order=desc&limit=50`）|
 | `?action=save` | POST | 手动存新闻到 R2 |
 

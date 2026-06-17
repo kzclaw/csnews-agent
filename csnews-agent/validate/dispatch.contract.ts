@@ -24,13 +24,12 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 21 个 action', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(21);
+  it('ALLOWED_ACTIONS 必须含 20 个 action', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(20);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {
     expect(ALLOWED_ACTIONS).toContain('pull');
-    expect(ALLOWED_ACTIONS).toContain('diag');
     expect(ALLOWED_ACTIONS).toContain('ping');
     expect(ALLOWED_ACTIONS).toContain('model-test');
     expect(ALLOWED_ACTIONS).toContain('ai-test');
@@ -155,7 +154,7 @@ describe('dispatchAction · 19 action 路由正确性 (mock handler 路径)', ()
   // 但若 handler 抛错, dispatch 仍会接到错误响应 (401/500), 这不是 dispatch 责任
   // 所以更安全: 只验证 action 字符串在 ALLOWED_ACTIONS 内
   const actionsToTest = [
-    'pull', 'diag', 'ping', 'model-test', 'ai-test',
+    'pull', 'ping', 'model-test', 'ai-test',
     'score', 'classify', 'batch-score',
     'fission', 'save', 'list', 'embed', 'zaker-hot',
     'process', 'health', 'logs',
