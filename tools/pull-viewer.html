@@ -58,7 +58,7 @@
     --bg-1: oklch(9% 0.006 95);
     --bg-2: oklch(12% 0.006 95);
     --bg-hover: oklch(14% 0.006 95);
-    /* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
+    /* v0.36.12 KR3 ("World Engine" (user)Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
     --accent-blue: #00D4FF;
     --accent-green: #00FF88;
     --accent-cyan: #00E5FF;
@@ -181,12 +181,12 @@ body {
 .status.offline .status-dot { background: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
 .status.config .status-dot { background: var(--text-3); }  /* 未配置 — 灰色 */
 
-/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 状态灯闪烁 NASA HUD 感) */
+/* v0.36.12 KR3 ("World Engine" (user)Dashboard 状态灯闪烁 NASA HUD 感) */
 @keyframes ledBlink { 0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; } 50% { opacity: 0.4; box-shadow: 0 0 1px currentColor; } }
 .status.online .status-dot { color: var(--success); }
 .status.offline .status-dot { color: var(--danger); }
 
-/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 滚动 ticker — 横向新闻条) */
+/* v0.36.12 KR3 ("World Engine" (user)Dashboard 滚动 ticker — 横向新闻条) */
 .ticker {
   overflow: hidden; white-space: nowrap;
   background: var(--bg-1); border-bottom: 1px solid var(--hairline);
@@ -199,7 +199,7 @@ body {
 .ticker-track {
   display: inline-block; white-space: nowrap;
   padding-left: 100%;
-  animation: tickerScroll 180s linear infinite;  /* fix 6-2 v2: 120s→180s 再慢 50% (戴舒柯 20:47 反馈) */
+  animation: tickerScroll 180s linear infinite;  /* fix 6-2 v2: 120s→180s 再慢 50% (用户 20:47 反馈) */
   font-variant-numeric: tabular-nums;
 }
 .ticker-track span { padding: 0 24px; }
@@ -209,9 +209,9 @@ body {
 /* fix 6-3: 走马灯 hover 暂停 */
 .ticker:hover .ticker-track { animation-play-state: paused; }
 .ticker:hover { cursor: pointer; }
-@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }  /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = 戴舒柯"hover 跳走"真根因) */
+@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }  /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
 
-/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard 网格线扫描 — NASA Mission Control 背景) */
+/* v0.36.12 KR3 ("World Engine" (user)Dashboard 网格线扫描 — NASA Mission Control 背景) */
 .view#view-dashboard { position: relative; }
 .view#view-dashboard::before {
   content: '';
@@ -230,7 +230,7 @@ body {
   100% { background-position: 0% 100%, 0 0, 0 0; }
 }
 
-/* v0.36.12 KR3 (戴大虾「世界引擎」Dashboard KPI 数字翻牌 + tabular-nums) */
+/* v0.36.12 KR3 ("World Engine" (user)Dashboard KPI 数字翻牌 + tabular-nums) */
 .kpi-value {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -246,7 +246,7 @@ body {
   100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
-/* v0.36.12 KR3 (戴大虾要「HUD 感」: 终端 monospace + 高对比 accent) */
+/* v0.36.12 KR3 (user wants「HUD 感」: 终端 monospace + 高对比 accent) */
 .dash-tab, .dash-section-title, .kpi-label, .activity-meta, .log-line {
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
@@ -747,7 +747,7 @@ body {
 @media (min-width: 1280px) {
   .sidebar { display: block; }
 }
-/* 小屏时手动 toggle 用 (戴舒柯 5-10h 拍板) */
+/* 小屏时手动 toggle 用 (小屏手动 toggle) */
 .sidebar-toggle { display: none; }
 @media (max-width: 1279px) {
   .sidebar-toggle { display: flex; }
@@ -850,7 +850,7 @@ body {
   padding: 20px 28px 60px;
   max-width: 920px; width: 100%; margin: 0 auto;
   display: grid;
-  /* v0.36.12 KR2: 跨栏 grid (戴大虾「世界引擎」Reader 杂志风) — 首条置顶大图 + 副条 2 列 */
+  /* v0.36.12 KR2: 跨栏 grid ("World Engine" (user)Reader 杂志风) — 首条置顶大图 + 副条 2 列 */
   grid-template-columns: 1fr 1fr;
   grid-auto-flow: row dense;
   gap: 12px;
@@ -874,7 +874,7 @@ body::before {
   50% { transform: translateX(0%) scaleX(1); opacity: 1; }
   100% { transform: translateX(100%) scaleX(0.4); opacity: 0; }
 }
-/* v0.36.12 KR2: 数据流 SVG 背景 (戴大虾「世界引擎」数据流意象) */
+/* v0.36.12 KR2: 数据流 SVG 背景 ("World Engine" (user)数据流意象) */
 .feed::before {
   content: '';
   position: absolute; inset: 0;
@@ -883,7 +883,7 @@ body::before {
   pointer-events: none; z-index: 0;
 }
 .feed > .card { position: relative; z-index: 1; }
-/* v0.36.12 KR2: 滚动 reveal (戴大虾「世界引擎」卖弄技术微交互) */
+/* v0.36.12 KR2: 滚动 reveal ("World Engine" (user)卖弄技术微交互) */
 .feed > .card { opacity: 0; transform: translateY(20px); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color var(--transition), background var(--transition); }
 .feed > .card.revealed { opacity: 1; transform: translateY(0); }
 /* v0.36.12 KR2: 卡片进场 stagger (cascade animation-delay 0/60/120/180ms) */
@@ -893,13 +893,13 @@ body::before {
 .feed > .card.revealed:nth-child(4) { transition-delay: 180ms; }
 .feed > .card.revealed:nth-child(5) { transition-delay: 240ms; }
 .feed > .card.revealed:nth-child(6) { transition-delay: 300ms; }
-/* v0.36.12 KR2: 数字 mono tabular-nums (戴大虾要「数字 mono」) */
+/* v0.36.12 KR2: 数字 mono tabular-nums (user wants「数字 mono」) */
 .card-meta, .card-hot, .meta-time, .card-action { font-variant-numeric: tabular-nums; }
-/* v0.36.12 KR2: hover lift -2px (v0.36.11 -1px 升级到 -2px 戴大虾要「卖弄技术」) */
+/* v0.36.12 KR2: hover lift -2px (v0.36.11 -1px 升级到 -2px user wants「卖弄技术」) */
 .card:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
-/* v0.36.12 KR2: Headline letter-spacing (戴大虾要「letter-spacing 大标题」) */
+/* v0.36.12 KR2: Headline letter-spacing (user wants「letter-spacing 大标题」) */
 .card-title { letter-spacing: -0.005em; font-feature-settings: "ss01", "cv11"; }
-/* v0.36.12 KR2: Kicker (eyebrow 替代, 戴大虾要「标题分级」) */
+/* v0.36.12 KR2: Kicker (eyebrow 替代, user wants「标题分级」) */
 .kicker {
   display: inline-block;
   font-family: var(--font-mono);
@@ -912,7 +912,7 @@ body::before {
   border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
   border-radius: 2px;
 }
-/* v0.36.12 KR2: Standfirst (副标题, 戴大虾要「标题分级」) */
+/* v0.36.12 KR2: Standfirst (副标题, user wants「标题分级」) */
 .standfirst {
   font-size: 14px; line-height: 1.55;
   color: var(--text-2);
@@ -920,9 +920,9 @@ body::before {
   margin-top: 4px;
   font-weight: 400;
 }
-/* v0.36.12 KR2: 衬线 class (戴大虾要「衬线+无衬线混排」) */
+/* v0.36.12 KR2: 衬线 class (user wants「衬线+无衬线混排」) */
 .serif { font-family: ui-serif, Georgia, 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', serif; }
-/* v0.36.12 KR2: 图片占主导 (戴大虾要「图片占主导」) */
+/* v0.36.12 KR2: 图片占主导 (user wants「图片占主导」) */
 .card-image {
   width: 100%;
   aspect-ratio: 16/9;
@@ -946,7 +946,7 @@ body::before {
 .card.expanded {
   border-color: var(--hairline-strong);
   background: var(--bg-1);
-  /* fix 6-6: 展开后跨整行 · 避免 grid 同行其他 card 位置错乱 (戴舒柯 21:05 反馈"旁边卡片也变大") */
+  /* fix 6-6: 展开后跨整行 · 避免 grid 同行其他 card 位置错乱 (用户 21:05 反馈"旁边卡片也变大") */
   grid-column: 1 / -1;
 }
 .card.expanded::before {
@@ -1252,7 +1252,7 @@ body::before {
     </div>
   </header>
 
-  <!-- fix 6-5: 走马灯移出 view · 独立 global ticker · 跨 dashboard/reader 共享 · 切 view 不重置动画 (戴舒柯 21:05 反馈"dashboard 切到 reader 跑马灯重置") -->
+  <!-- fix 6-5: 走马灯移出 view · 独立 global ticker · 跨 dashboard/reader 共享 · 切 view 不重置动画 (用户 21:05 反馈"dashboard 切到 reader 跑马灯重置") -->
   <div class="ticker global-ticker" id="ticker">
     <div class="ticker-track" id="ticker-track">
       <span>加载最新新闻中…</span>
@@ -1574,7 +1574,7 @@ function updateTicker(items) {
     return;
   }
   // fix 6-2 v3: spans 重复 2 次 + CSS translateX(-50%) = 滚 1 组宽 = 无缝循环
-  // (原 4 次重复 + translateX(-100%) 错配 = 边缘跳回 = 戴舒柯 20:47 反馈 hover 跳走真根因)
+  // (原 4 次重复 + translateX(-100%) 错配 = 边缘跳回 = 用户 20:47 反馈 hover 跳走真根因)
   // fix 5-3: 加 url 链接 + 等级前缀 (★/◆) 区分
   const spans = items.map(it => {
     const prefix = it.level === 'explosive' ? '★ ' : '◆ ';
@@ -2365,7 +2365,7 @@ async function refreshDashboard() {
   try { STATE.event = await fetchEvent(); }
   catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
   // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
-  // 戴舒柯 20:47 反馈: 切 tab 走马灯不刷新
+  // 切 tab 不刷新走马灯 (用户反馈)
   if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
     try { updateTicker(await fetchTickerNews()); }
     catch (e) { console.error('[fix 4-3] fetchTickerNews 失败:', e.message); }
@@ -2398,8 +2398,9 @@ async function fetchReaderNews() {
       order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
       order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
     });
-    if (STATE.filters.level) params.set('level', STATE.filters.level);
-    if (STATE.filters.category) params.set('category', STATE.filters.category);
+    // fix 6-8: 不传 level/category filter 给 API · 拉全量 (134 条) 存 STATE.allItems
+    // 客户端按 filter 过滤 (点 important → feed 显示 32 条 · sidebar 数字仍基于全量 134)
+    // 用户 21:23 反馈 "点 important 后 全部 134 变成 32" 真根因
     if (STATE.filters.since) params.set('since', STATE.filters.since);
     const url = `${cfg.baseUrl.replace(/\/+$/, '')}/?${params.toString()}`;
     const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
@@ -2460,7 +2461,7 @@ async function fetchReaderContent(id) {
 }
 
 function renderCategoryList(items) {
-  // fix 6-9: 分类 sidebar 按当前所选等级过滤 (戴舒柯 21:30 反馈"分类栏没根据等级变化")
+  // fix 6-9: 分类 sidebar 按当前所选等级过滤 (用户 21:30 反馈"分类栏没根据等级变化")
   // 等级 sidebar 永远全量 · 分类 sidebar 基于"全量 ∩ 当前 level filter"
   // 例: 点 important → 分类 sidebar 显示 4 条 important 的分类分布 (法律 2 / 体育 1 / 综合 1)
   const scopedItems = STATE.filters.level
@@ -2502,6 +2503,16 @@ function renderLevelCounts(items) {
   document.getElementById('level-explosive-count').textContent = c.explosive;
   document.getElementById('level-important-count').textContent = c.important;
   document.getElementById('level-follow-count').textContent = c.follow;
+}
+
+// fix 6-8: 客户端 filter 函数 (基于 STATE.allItems 全量)
+// 用户 21:23 反馈 "sidebar 数字应该基于全量统计, filter 只影响 feed 列表"
+function applyClientFilters(items) {
+  return items.filter(it => {
+    if (STATE.filters.level && it.level !== STATE.filters.level) return false;
+    if (STATE.filters.category && it.category !== STATE.filters.category) return false;
+    return true;
+  });
 }
 
 function renderFeedSkeleton() {
@@ -2597,7 +2608,7 @@ function bindCardClicks() {
       if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
     });
   });
-  // v0.36.12 KR2 (戴大虾「世界引擎」微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
+  // v0.36.12 KR2 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -2651,7 +2662,7 @@ async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
   STATE.readerLoading = true;
   STATE.readerLastError = null;
-  // fix 6-7: 加载时清 sidebar counts · 避免 race condition 残留旧值 (戴舒柯 21:05 反馈"点击分类/等级数字不对")
+  // fix 6-7: 加载时清 sidebar counts · 避免 race condition 残留旧值 (用户 21:05 反馈"点击分类/等级数字不对")
   document.getElementById('level-all-count').textContent = '…';
   document.getElementById('level-explosive-count').textContent = '…';
   document.getElementById('level-important-count').textContent = '…';
@@ -2685,14 +2696,17 @@ async function refreshReader() {
         }
       }
     }
-    STATE.items = deduped;
+    // fix 6-8: 存全量到 STATE.allItems · 客户端 filter
+    STATE.allItems = deduped;
+    STATE.items = applyClientFilters(deduped);
     const dupCount = items.length - deduped.length;
     document.getElementById('result-meta').textContent =
-      `${deduped.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
-    renderLevelCounts(deduped);
-    renderCategoryList(deduped);
+      `${STATE.items.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
+    // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
+    renderLevelCounts(STATE.allItems);
+    renderCategoryList(STATE.allItems);
     renderFeed();
-    toast(dupCount > 0 ? `已刷新 ${deduped.length} 条 (去重 ${dupCount} 条)` : `已刷新 ${deduped.length} 条`, 'success');
+    toast(dupCount > 0 ? `已刷新 ${STATE.items.length} 条 (去重 ${dupCount} 条)` : `已刷新 ${STATE.items.length} 条`, 'success');
   } catch (e) {
     STATE.readerLastError = { message: e.message || String(e) };
     renderFeed();
@@ -2707,10 +2721,8 @@ async function refreshReader() {
 /* ============================================================
  * Reader bindings
  * ============================================================ */
-<<<<<<< Updated upstream
-=======
 // fix 6-8: sidebar 等级/分类点击 → 客户端 filter (不重拉 API · 数字基于全量)
-// fix 6-9: 切 level 时同步重渲染 category sidebar (按 level 过滤) (戴舒柯 21:30 反馈)
+// fix 6-9: 切 level 时同步重渲染 category sidebar (按 level 过滤) (用户 21:30 反馈)
 function applyFilterAndRender() {
   STATE.items = applyClientFilters(STATE.allItems);
   // 高亮 active class (level)
@@ -2722,7 +2734,6 @@ function applyFilterAndRender() {
   renderCategoryList(STATE.allItems);
   renderFeed();
 }
->>>>>>> Stashed changes
 document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
   el.addEventListener('click', () => {
     document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
