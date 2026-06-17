@@ -1444,6 +1444,11 @@ const STATE = {
   filters: { level: '', category: '', sort: 'desc', since: '7d', limit: 200 },
   expandedId: null,
   contentCache: new Map(),
+  // fix 6-13 (KR45): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条" · 抓取时间戳
+  lastFetchedAt: null,
+  // fix 6-14 (KR46): Reader 整点过 60s 自动刷新 · 离开 reader 停
+  hourlySyncTimer: null,         // setInterval handle (60min 周期)
+  hourlySyncInitialTimer: null,  // setTimeout handle (next hour:01:00 首次)
 };
 
 function getConfig() { return STATE.config; }
@@ -1469,12 +1474,74 @@ function fmtTime(iso) {
 function fmtTimeZh(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  const diff = (Date.now() - d.getTime()) / 1000;
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  // fix 6-13 (KR45 颗粒度): 5min/今日/昨日/本周/更早/跨年
+  if (diff < 60) return '刚刚';
+  if (diff < 300) return `${Math.floor(diff / 60)} 分钟前`;  // 5 min 内
+  // 同一日历日 → 今日 (HH:MM)
+  if (isSameDay(d, now)) return `今日 ${hhmm(d)}`;
+  // 昨天
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameDay(d, yesterday)) return `昨日 ${hhmm(d)}`;
+  // 本周 (7 天内)
+  if (diff < 7 * 86400) return `${weekdayZh(d)} ${hhmm(d)}`;
+  // 同年 → MM-DD
+  if (d.getFullYear() === now.getFullYear()) return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // 跨年 → YYYY-MM-DD
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function isSameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function hhmm(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+const WEEKDAY_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+function weekdayZh(d) { return WEEKDAY_ZH[d.getDay()]; }
+
+// fix 6-13 (KR45): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+function fmtLastFetchedAgo() {
+  if (!STATE.lastFetchedAt) return '';
+  const diff = (Date.now() - STATE.lastFetchedAt) / 1000;
   if (diff < 60) return '刚刚';
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`;
-  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  return `${Math.floor(diff / 86400)} 天前`;
+}
+function updateResultMeta() {
+  const el = document.getElementById('result-meta');
+  if (!el) return;
+  const ago = fmtLastFetchedAgo();
+  el.textContent = ago ? `最后抓取于 ${ago} · 共 ${STATE.items.length} 条` : `共 ${STATE.items.length} 条`;
+}
+
+// fix 6-14 (KR46): Reader 整点过 60s 自动刷新
+// - 进 reader view 时调 scheduleHourlySync() (setTimeout 到下个 hour:01:00, 之后 setInterval 60min)
+// - 离开 reader view 时调 clearHourlySync() (clear 两个 timer)
+// - 改 sort/since/level/category refresh 时不重置 schedule (保持整点节奏)
+function scheduleHourlySync() {
+  clearHourlySync();  // 防重复 (sort/since 改 refresh 不重置, 但防止其他路径双调)
+  const now = new Date();
+  // 下个整点 = nextHour:00:00, 触发 = + 60s = nextHour:01:00
+  const next = new Date(now);
+  next.setHours(now.getHours() + 1, 1, 0, 0);
+  const delay = next - now;
+  STATE.hourlySyncInitialTimer = setTimeout(() => {
+    STATE.hourlySyncInitialTimer = null;
+    if (STATE.view !== 'reader' || !isConfigured()) return;
+    refreshReader();
+    // 之后每 60min 一次 (nextHour:01, nextHour+1:01, ...)
+    STATE.hourlySyncTimer = setInterval(() => {
+      if (STATE.view !== 'reader' || !isConfigured()) {
+        clearHourlySync();
+        return;
+      }
+      refreshReader();
+    }, 60 * 60 * 1000);
+  }, delay);
+}
+function clearHourlySync() {
+  if (STATE.hourlySyncInitialTimer) { clearTimeout(STATE.hourlySyncInitialTimer); STATE.hourlySyncInitialTimer = null; }
+  if (STATE.hourlySyncTimer) { clearInterval(STATE.hourlySyncTimer); STATE.hourlySyncTimer = null; }
 }
 
 function fmtNumber(n) { if (n == null) return '—'; return n.toLocaleString('en-US'); }
@@ -1538,12 +1605,14 @@ function toast(msg, type = 'info') {
  * View router (Dashboard / Reader)
  * ============================================================ */
 function switchView(view) {
+  // fix 6-14 (KR46): 离开 reader 时停掉整点同步 timer · 进 reader 时 schedule
+  if (STATE.view === 'reader' && view !== 'reader') clearHourlySync();
   STATE.view = view;
   document.querySelectorAll('.view-tab').forEach(el => el.classList.toggle('active', el.dataset.view === view));
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + view));
   updateStatus();
   if (view === 'dashboard') refreshDashboard();
-  else if (view === 'reader') refreshReader();
+  else if (view === 'reader') { refreshReader(); scheduleHourlySync(); }
 }
 
 document.querySelectorAll('.view-tab').forEach(el => {
@@ -2542,7 +2611,14 @@ function renderFeedSkeleton() {
 function renderFeed() {
   const feed = document.getElementById('feed');
   const items = STATE.items;
-  document.getElementById('result-meta').textContent = `${items.length} 条${STATE.readerLastError ? ' · 错误' : ''}`;
+  // fix 6-13 (KR45): 错误时 result-meta 显示 "最后抓取于 X 分钟前 · 共 N 条 · 错误" (保持 lastFetchedAt 提示, 加错误标记)
+  if (STATE.readerLastError) {
+    const ago = fmtLastFetchedAgo();
+    const agoStr = ago ? `最后抓取于 ${ago} · ` : '';
+    document.getElementById('result-meta').textContent = `${agoStr}共 ${items.length} 条 · 错误`;
+  } else {
+    updateResultMeta();
+  }
   if (STATE.readerLastError) {
     feed.innerHTML = `
       <div class="error-banner">
@@ -2711,8 +2787,9 @@ async function refreshReader() {
     STATE.allItems = deduped;
     STATE.items = applyClientFilters(deduped);
     const dupCount = items.length - deduped.length;
-    document.getElementById('result-meta').textContent =
-      `${STATE.items.length} 条${dupCount > 0 ? ` (去重 ${dupCount} 条重复)` : ''} · ${elapsed}ms · ${pageCount} 页`;
+    // fix 6-13 (KR45): 抓取时间戳 + 顶部小字"最后抓取于 X 分钟前 · 共 N 条"
+    STATE.lastFetchedAt = new Date();
+    updateResultMeta();
     // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
     renderLevelCounts(STATE.allItems);
     renderCategoryList(STATE.allItems);
@@ -2740,7 +2817,8 @@ function applyFilterAndRender() {
   document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
     x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
   });
-  document.getElementById('result-meta').textContent = `${STATE.items.length} 条`;
+  // fix 6-13 (KR45): filter 切时同步顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+  updateResultMeta();
   // 切 level 时重渲染 category sidebar (按新 level 过滤)
   renderCategoryList(STATE.allItems);
   renderFeed();
@@ -2791,7 +2869,7 @@ function saveSettings() {
   closeSettings();
   toast('已保存', 'success');
   if (STATE.view === 'dashboard') refreshDashboard();
-  else if (STATE.view === 'reader') refreshReader();
+  else if (STATE.view === 'reader') { refreshReader(); scheduleHourlySync(); }
 }
 
 /* ============================================================
