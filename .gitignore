@@ -23,6 +23,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# MiniMax Code local cache
+.mimocode/
+
 # Test / dev workers
 csnews-h1-test/
 
