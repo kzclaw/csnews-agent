@@ -20,6 +20,11 @@ import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event
 import { runEventClustering, type EventCluster } from './event-cluster';
 import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
 
+// 反爬限流配置 (跟 content/trend/knowledge handler 命名一致 · 60 req/min per IP · 独立 KV prefix)
+// 写死 60 不走 validation 常量: 实体处理器无需独立 validation 文件, 抽常量到本文件顶部即可
+const ENTITY_RATE_LIMIT_PER_MIN = 60;
+const EVENT_RATE_LIMIT_PER_MIN = 60;
+
 // ===================== entity (Entity Engine) =====================
 // 6 档 type:
 //   - candidates: 读 R2 entity-candidates.json
@@ -43,8 +48,8 @@ export async function handleEntityAction(request: Request, env: Env, url: URL, c
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { exceeded: entityExceeded } = await checkRateLimit(env, ctx, `entity_rate:${ip}`, 60);
-  if (entityExceeded) return rateLimitResponse(cors, 60);
+  const { exceeded: entityExceeded } = await checkRateLimit(env, ctx, `entity_rate:${ip}`, ENTITY_RATE_LIMIT_PER_MIN);
+  if (entityExceeded) return rateLimitResponse(cors, ENTITY_RATE_LIMIT_PER_MIN);
 
   // 3. 根据 type 查数据
   if (type === 'candidates') {
@@ -224,8 +229,8 @@ export async function handleEventAction(request: Request, env: Env, url: URL, co
 
   // 2. 反爬限流 (单 IP 60 req/min)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { exceeded: eventExceeded } = await checkRateLimit(env, ctx, `event_rate:${ip}`, 60);
-  if (eventExceeded) return rateLimitResponse(cors, 60);
+  const { exceeded: eventExceeded } = await checkRateLimit(env, ctx, `event_rate:${ip}`, EVENT_RATE_LIMIT_PER_MIN);
+  if (eventExceeded) return rateLimitResponse(cors, EVENT_RATE_LIMIT_PER_MIN);
 
   // 3. 根据 type 处理
   if (type === 'clusters') {
