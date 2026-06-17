@@ -1,10 +1,10 @@
 /**
  * CSNEWS Agent · 主 Worker 入口分派 (v0.36.10 · KR0 · Foundation 0 第 1 步)
  *
- * 唯一目标：守住"16 action dispatch 路由表就是这样"（业务契约）
+ * 唯一目标：守住"20 action dispatch 路由表就是这样"（业务契约）
  *
  * v0.33 确定 Foundation 0 第 1 步: index.ts 拆模块化
- *   - 16 个 handler 已抽到 src/endpoints.ts (v0.33+sweep)
+ *   - 20 个 handler 已抽到 src/endpoints.ts (v0.33+sweep) · v0.36.20 再拆 4 子文件
  *   - 调度逻辑 (CORS + auth + dispatch) 抽到本文件
  *   - scheduled handler 抽到 src/scheduled.ts
  *
@@ -32,7 +32,7 @@ import {
 } from './endpoints';
 
 /**
- * 16 个支持 action（白名单）
+ * 20 个支持 action（白名单）
  * 加新 action 时: ALLOWED_ACTIONS 加 + 此文件 describe 块补 1 个 it
  * 详见：tasks/csnews-agent-okr.md KR0
  */
@@ -64,7 +64,7 @@ export function handleCorsPreflight(request: Request): Response | null {
 }
 
 /**
- * 调度 16 action 到对应 handler
+ * 调度 20 action 到对应 handler
  *
  * @returns handler 返回的 Response (unknown action 返 400)
  */
@@ -81,7 +81,7 @@ export async function dispatchAction(
   // 写一条 endpoint-level log (fire-and-forget with ctx.waitUntil so R2 put completes)
   ctx.waitUntil(logEvent(env, "info", "endpoint called", { endpoint: action, method: request.method }, "dispatcher").catch(() => {}));
 
-  // 16 action dispatch
+  // 20 action dispatch
   if (action === 'pull') return await handlePullAction(request, env, url, cors);
   if (action === 'ping') return await handlePingAction(request, env, url, cors);
   if (action === 'model-test') return await handleModelTestAction(request, env, url, cors);
