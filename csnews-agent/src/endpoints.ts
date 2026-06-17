@@ -1055,8 +1055,16 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
 
   result.checks = checks;
 
+  // health endpoint 永远返 HTTP 200
+  // 原因: "API 健康" 跟 "业务健康" 是 2 件事
+  //   - API 健康 = HTTP code 表达 (200 = 通, 5xx = 挂了)
+  //   - 业务健康 = body.status 表达 (ok / degraded / down)
+  // 历史: 之前 status=down 翻译成 HTTP 503 → viewer `if (!res.ok) throw` → 整个 dashboard fail
+  //   但 pull/news/topics/entity/event 等业务端点全 200 = API 真实健康
+  //   viewer 错把"业务 stale 17h"当"后端挂了"显示
+  // 现在: 业务状态在 body.status / body.checks 各维度 detail 表达 · viewer 自己决定如何展示
   return new Response(JSON.stringify(result, null, 2), {
-    status: result.status === "down" ? 503 : 200,
+    status: 200,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
 }
