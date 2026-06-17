@@ -2460,8 +2460,14 @@ async function fetchReaderContent(id) {
 }
 
 function renderCategoryList(items) {
+  // fix 6-9: 分类 sidebar 按当前所选等级过滤 (戴舒柯 21:30 反馈"分类栏没根据等级变化")
+  // 等级 sidebar 永远全量 · 分类 sidebar 基于"全量 ∩ 当前 level filter"
+  // 例: 点 important → 分类 sidebar 显示 4 条 important 的分类分布 (法律 2 / 体育 1 / 综合 1)
+  const scopedItems = STATE.filters.level
+    ? items.filter(it => it.level === STATE.filters.level)
+    : items;
   const catCount = {};
-  items.forEach(it => {
+  scopedItems.forEach(it => {
     const c = it.category || '未分类';
     catCount[c] = (catCount[c] || 0) + 1;
   });
@@ -2470,8 +2476,8 @@ function renderCategoryList(items) {
   list.innerHTML = `
     <li class="sidebar-item ${STATE.filters.category === '' ? 'active' : ''}" data-category="">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      <span>全部分类</span>
-      <span class="count">${items.length}</span>
+      <span>${STATE.filters.level ? '该等级全部分类' : '全部分类'}</span>
+      <span class="count">${scopedItems.length}</span>
     </li>
   ` + sorted.map(([c, n]) => `
     <li class="sidebar-item ${STATE.filters.category === c ? 'active' : ''}" data-category="${escapeHtml(c)}">
@@ -2701,6 +2707,22 @@ async function refreshReader() {
 /* ============================================================
  * Reader bindings
  * ============================================================ */
+<<<<<<< Updated upstream
+=======
+// fix 6-8: sidebar 等级/分类点击 → 客户端 filter (不重拉 API · 数字基于全量)
+// fix 6-9: 切 level 时同步重渲染 category sidebar (按 level 过滤) (戴舒柯 21:30 反馈)
+function applyFilterAndRender() {
+  STATE.items = applyClientFilters(STATE.allItems);
+  // 高亮 active class (level)
+  document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
+    x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
+  });
+  document.getElementById('result-meta').textContent = `${STATE.items.length} 条`;
+  // 切 level 时重渲染 category sidebar (按新 level 过滤)
+  renderCategoryList(STATE.allItems);
+  renderFeed();
+}
+>>>>>>> Stashed changes
 document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
   el.addEventListener('click', () => {
     document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
