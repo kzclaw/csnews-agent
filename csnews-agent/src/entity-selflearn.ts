@@ -141,7 +141,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * 读 R2 已有 entity-candidates.json (kzclaw review 后的实体)
+ * 读 R2 已有 entity-candidates.json (review 后的实体)
  */
 async function loadExistingCandidates(env: Env): Promise<EntityCandidate[]> {
   try {
@@ -236,7 +236,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       noiseAnchorsData.threshold,
     );
 
-    // 构造最终 candidates (kzclaw review 入口) + noise 数组 (kzclaw review 实战参考)
+    // 构造最终 candidates (review 入口) + noise 数组 (review 实战参考)
     const sampleText = news[0].text.slice(0, 200);
     const candidates: EntityCandidate[] = filterResult.kept
       .sort((a, b) => b.count - a.count)
