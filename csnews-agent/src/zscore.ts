@@ -1,5 +1,5 @@
 /**
- * CSNEWS Agent · z-score 异常检测 utility (v0.36.8 · KR0+1 · 蓝图 2.5)
+ * CSNEWS Agent · z-score 异常检测 utility (v0.36.8 · 蓝图 2.5)
  *
  * 唯一目标：守住"z-score 异常检测算法就是这样"（业务契约）
  *
@@ -8,24 +8,22 @@
  *   if z > 3 → anomaly signal
  *
  * 业务红线:
- *   - 7 天 history 窗口 (KR0+1 OKR 确定)
- *   - z > 3 阈值 (蓝图 2.5 确定, 3σ 准则)
+ *   - 7 天 history 窗口
+ *   - z > 3 阈值 (3σ 准则)
  *   - 空数组 / 单元素 / NaN / 负值 边界全部覆盖
  *   - 跟现有 velocity/acceleration 双轨触发 (z-score 是补充, 不是替代)
  *
- * 5h 配额期"快赢"哲学 v2 修订:
- *   - 原 OKR 范围: 写 warnings 表双轨判定 (需 Supabase RPC schema migration = 手动跑 SQL)
- *   - v2 修订: utility function + KR0 health 端点字段计算 (0 DDL, 0 5h 配额期打扰)
- *   - 推迟到下个 5h 配额期: 集成到 record_trend_snapshot RPC (起床后拍 schema migration)
+ * "快赢"哲学 v2 修订:
+ *   - 原范围: 写 warnings 表双轨判定 (需 Supabase RPC schema migration = 手动跑 SQL)
+ *   - v2 修订: utility function + health 端点字段计算 (0 DDL, 0 配额期打扰)
+ *   - 推迟: 集成到 record_trend_snapshot RPC (起床后拍 schema migration)
  *
  * 加新阈值时: Z_THRESHOLD 常量改 + 此文件 describe 块补 1 个 it
- *
- * 详见：tasks/csnews-agent-okr.md KR0+1
  */
 
 /**
  * 蓝图 2.5 异常信号阈值 (3σ 准则, 99.7% 置信度)
- * KR0+1 OKR 确定: z > 3 → anomaly signal
+ * z > 3 → anomaly signal
  */
 export const Z_THRESHOLD = 3.0;
 
@@ -79,7 +77,7 @@ export function zScore(currentValue: number, historyValues: number[]): number {
 /**
  * 判定是否异常信号 (蓝图 2.5 公式: z = (x - μ) / σ)
  *
- * v0.36.8 KR0+1 OKR 确定: 业务语义是"偏离均值" = 双向异常 (|z| > 3)
+ * v0.36.8 确定: 业务语义是"偏离均值" = 双向异常 (|z| > 3)
  * 蓝图原写 "if z > 3 → anomaly signal" 是单向 (z>3), Mavis 主动放宽到 |z|>3
  * 理由: 早晨日报金句场景 = 某 topic news_count 突增/突减都是异常 (双向)
  * - NaN 永远不是异常 (无效输入)
