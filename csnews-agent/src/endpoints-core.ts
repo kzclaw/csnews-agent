@@ -11,11 +11,11 @@
 //   - 错误处理: catch → JSON { error: e.message }, status 500
 // ============================================================
 
-import { Env } from './shared';
+import { Env, getSupabaseHost } from './shared';
 import { NewsItem } from './types';
 import { handlePull } from './pull';
 import { classify, classifyRule } from './classify';
-import { classifyBySemantic } from './category-classify';
+import { classifyBySemantic, batchClassifyBySemantic } from './category-classify';
 import {
   loadCategorySeeds, addSeedToCategory, removeSeedFromCategory,
 } from './category-seeds';
@@ -435,6 +435,105 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
     }
 
     return new Response(JSON.stringify({ count: results.length, items: results }), {
+      headers: { 'Content-Type': 'application/json', ...cors }
+    });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+    });
+  }
+}
+
+// ===================== rescore =====================
+// 派活 14: 批量重跑旧新闻分类
+// 读 news_hotspots 全部 (or top N), 用 batchClassifyBySemantic 一次性算新分类,
+// PATCH 写回 Supabase. dry_run 默认 true 防误操作.
+export async function handleRescoreAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+  try {
+    // 默认 dry_run=true (返统计, 不 UPDATE), 显式 dry_run=false 才 UPDATE
+    const dryRun = url.searchParams.get('dry_run') !== 'false';
+    // 默认 limit=100 (防止超时), limit=0 表示全部 (2,394+ 条)
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+
+    // 1. 读 news_hotspots
+    const queryLimit = limit > 0 ? `&limit=${limit}` : '';
+    const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc${queryLimit}`, {
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
+    if (!newsRes.ok) {
+      const errText = await newsRes.text();
+      return new Response(JSON.stringify({ error: 'supabase_read_failed', reason: errText.slice(0, 200) }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
+    const newsList = await newsRes.json() as any[];
+    if (newsList.length === 0) {
+      return new Response(JSON.stringify({ type: 'rescore', total: 0, dry_run: dryRun, message: 'no news to rescore' }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
+
+    // 2. 准备 input texts (title + summary 混合, 跟新分类逻辑一致)
+    const inputTexts = newsList.map(n => `${n.title || ''} ${n.summary || ''}`.trim());
+    // 3. 1 次 bge-m3 batch 算所有 input + seed
+    const batchResults = await batchClassifyBySemantic(inputTexts, env);
+
+    // 4. 对比新旧分类, 统计 changed / unchanged
+    const diffs: any[] = [];
+    let changed = 0, unchanged = 0, errors = 0;
+    for (let i = 0; i < newsList.length; i++) {
+      const n = newsList[i];
+      const r = batchResults[i] || { category: '综合', confidence: 0 };
+      const oldCat = n.category || '';
+      const newCat = r.category;
+      const isChanged = oldCat !== newCat;
+      if (isChanged) changed++; else unchanged++;
+      diffs.push({
+        id: n.id,
+        title: n.title,
+        old: oldCat,
+        new: newCat,
+        confidence: r.confidence.toFixed(3),
+        changed: isChanged,
+      });
+    }
+
+    // 5. UPDATE (only if not dry_run)
+    let updated = 0, updateErrors = 0;
+    if (!dryRun) {
+      for (const d of diffs.filter(d => d.changed)) {
+        try {
+          const patchRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?id=eq.${d.id}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ category: d.new }),
+          });
+          if (patchRes.ok) updated++; else updateErrors++;
+        } catch {
+          updateErrors++;
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({
+      type: 'rescore',
+      dry_run: dryRun,
+      total: newsList.length,
+      changed,
+      unchanged,
+      errors,
+      updated: dryRun ? 0 : updated,
+      update_errors: dryRun ? 0 : updateErrors,
+      sample: diffs.slice(0, 5),
+      timestamp: new Date().toISOString(),
+    }), {
       headers: { 'Content-Type': 'application/json', ...cors }
     });
   } catch (e: any) {

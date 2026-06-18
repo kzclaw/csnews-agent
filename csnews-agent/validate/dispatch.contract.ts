@@ -24,8 +24,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 20 个 action', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(20);
+  it('ALLOWED_ACTIONS 必须含 21 个 action', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(21);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {
@@ -41,6 +41,7 @@ describe('业务常量', () => {
     expect(ALLOWED_ACTIONS).toContain('list');
     expect(ALLOWED_ACTIONS).toContain('embed');
     expect(ALLOWED_ACTIONS).toContain('zaker-hot');
+    expect(ALLOWED_ACTIONS).toContain('rescore');
     expect(ALLOWED_ACTIONS).toContain('process');
     expect(ALLOWED_ACTIONS).toContain('health');
     expect(ALLOWED_ACTIONS).toContain('logs');
@@ -156,7 +157,7 @@ describe('dispatchAction · 19 action 路由正确性 (mock handler 路径)', ()
   const actionsToTest = [
     'pull', 'ping', 'model-test', 'ai-test',
     'score', 'classify', 'batch-score',
-    'fission', 'save', 'list', 'embed', 'zaker-hot',
+    'fission', 'save', 'list', 'embed', 'zaker-hot', 'rescore',
     'process', 'health', 'logs',
     'content', 'trend', 'knowledge',
   ];

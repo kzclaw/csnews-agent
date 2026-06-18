@@ -87,3 +87,71 @@ export async function classifyBySemantic(
     top_scores: topScores.slice(0, 3),
   };
 }
+
+/**
+ * 批量自分类 (重跑旧新闻分类)
+ *
+ * 跟 classifyBySemantic 逻辑一致, 但接受 texts 数组,
+ * 1 次 Workers AI call 算所有 input + 1 次算所有 seed,
+ * 避免 N 次 API call, 适合大批量重跑 (千条级).
+ *
+ * 返回 [{category, confidence}] 数组, 顺序跟 inputTexts 一致.
+ */
+export async function batchClassifyBySemantic(
+  inputTexts: string[],
+  env: Env,
+): Promise<Array<{ category: string; confidence: number }>> {
+  if (inputTexts.length === 0) return [];
+
+  // 1. 读 R2 seeds
+  const seedsData = await loadCategorySeeds(env);
+  const allSeeds: { category: string; seed: string }[] = [];
+  for (const [cat, seeds] of Object.entries(seedsData.categories)) {
+    for (const seed of seeds) {
+      allSeeds.push({ category: cat, seed });
+    }
+  }
+  if (allSeeds.length === 0) {
+    return inputTexts.map(() => ({ category: '综合', confidence: 0 }));
+  }
+
+  // 2. Workers AI seed embeddings (1 次 API call, 全部 seeds, bge 模型走独立池 0 Neurons)
+  const seedTexts = allSeeds.map((s) => s.seed);
+  const seedEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: seedTexts })) as { data: number[][] };
+  const seedEmbeddings = seedEmbResp.data || [];
+
+  // 3. Workers AI input embeddings (1 次 API call, 全部 input)
+  const inputEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: inputTexts })) as { data: number[][] };
+  const inputEmbeddings = inputEmbResp.data || [];
+
+  // 4. 对每个 input 算 cosine 跟所有 seeds
+  const results: Array<{ category: string; confidence: number }> = [];
+  for (let i = 0; i < inputEmbeddings.length; i++) {
+    const inputEmb = inputEmbeddings[i];
+    if (!inputEmb || inputEmb.length === 0) {
+      results.push({ category: '综合', confidence: 0 });
+      continue;
+    }
+    const categoryScores = new Map<string, number>();
+    for (let j = 0; j < allSeeds.length; j++) {
+      const seedEmb = seedEmbeddings[j];
+      if (!seedEmb || seedEmb.length !== inputEmb.length) continue;
+      const sim = cosineSimilarity(inputEmb, seedEmb);
+      const cat = allSeeds[j].category;
+      const current = categoryScores.get(cat) || 0;
+      if (sim > current) categoryScores.set(cat, sim);
+    }
+    const topScores = Array.from(categoryScores.entries())
+      .map(([category, score]) => ({ category, score }))
+      .sort((a, b) => b.score - a.score);
+    if (topScores.length === 0) {
+      results.push({ category: '综合', confidence: 0 });
+      continue;
+    }
+    const top = topScores[0];
+    const confidence = top.score;
+    const category = confidence >= 0.3 ? top.category : '综合';
+    results.push({ category, confidence });
+  }
+  return results;
+}

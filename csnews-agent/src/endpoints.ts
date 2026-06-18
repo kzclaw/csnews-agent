@@ -20,7 +20,7 @@
 //   - 本文件仅 re-export, 0 业务逻辑
 // ============================================================
 
-// core (12)
+// core (13)
 export {
   handlePullAction,
   handlePingAction,
@@ -34,6 +34,7 @@ export {
   handleListAction,
   handleEmbedAction,
   handleZakerHotAction,
+  handleRescoreAction,
 } from './endpoints-core';
 
 // process (3)

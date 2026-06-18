@@ -25,7 +25,7 @@ import {
   handleModelTestAction, handleAiTestAction,
   handleScoreAction, handleClassifyAction, handleBatchScoreAction,
   handleFissionAction, handleSaveAction, handleListAction,
-  handleEmbedAction, handleZakerHotAction,
+  handleEmbedAction, handleZakerHotAction, handleRescoreAction,
   handleProcessAction, handleHealthAction, handleLogsAction,
   handleContentAction, handleTrendAction, handleKnowledgeAction,
   handleEntityAction, handleEventAction,
@@ -39,7 +39,7 @@ import {
 export const ALLOWED_ACTIONS = [
   'pull', 'ping', 'model-test', 'ai-test',
   'score', 'classify', 'batch-score',
-  'fission', 'save', 'list', 'embed', 'zaker-hot',
+  'fission', 'save', 'list', 'embed', 'zaker-hot', 'rescore',
   'process', 'health', 'logs',
   'content', 'trend', 'knowledge',
   'entity', 'event',
@@ -94,6 +94,7 @@ export async function dispatchAction(
   if (action === 'list') return await handleListAction(request, env, url, cors);
   if (action === 'embed') return await handleEmbedAction(request, env, url, cors);
   if (action === 'zaker-hot') return await handleZakerHotAction(request, env, url, cors);
+  if (action === 'rescore') return await handleRescoreAction(request, env, url, cors, ctx);
   if (action === 'process') return await handleProcessAction(request, env, url, cors, ctx);
   if (action === 'health') return await handleHealthAction(request, env, url, cors);
   if (action === 'logs') return await handleLogsAction(request, env, url, cors);
