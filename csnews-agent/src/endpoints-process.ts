@@ -659,3 +659,82 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
     headers: { "Content-Type": "application/json", ...cors },
   });
 }
+
+// ===================== db-schema (TEMPORARY DEBUG, 5min 用完删) =====================
+// entity_hot 表 Supabase 真创建检查 (临时 debug endpoint, 5min 用完删)
+// 业务契约:
+//   - 200 + entity_hot_exists: true → 表真存在 + 列 OK 数 / 总数
+//   - 404 → 表不存在 (GitHub 同步没触发)
+//   - 401 → SUPABASE_SERVICE_KEY 无效
+//   - 500 → 网络错
+export async function handleDbSchemaAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  try {
+    const probeRes = await fetch(`${getSupabaseHost(env)}/rest/v1/entity_hot?select=*&limit=0`, {
+      headers: {
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+    });
+
+    if (probeRes.status === 404) {
+      return new Response(JSON.stringify({
+        entity_hot_exists: false,
+        status: 404,
+        error: 'entity_hot table not found in Supabase (GitHub sync may not have triggered)',
+        checked_at: new Date().toISOString(),
+      }, null, 2), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+
+    if (!probeRes.ok) {
+      return new Response(JSON.stringify({
+        entity_hot_exists: 'unknown',
+        status: probeRes.status,
+        error: `HTTP ${probeRes.status}: ${(await probeRes.text()).slice(0, 200)}`,
+        checked_at: new Date().toISOString(),
+      }, null, 2), {
+        status: probeRes.status,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+
+    // 200 = entity_hot 表存在, 验 10 列 + 4 indexes
+    const expectedColumns = [
+      'id', 'name', 'type', 'confidence', 'source',
+      'first_seen', 'last_seen', 'mention_count',
+      'created_at', 'archived_at', 'status',
+    ];
+    const columnCheck: Record<string, boolean> = {};
+    for (const col of expectedColumns) {
+      const cr = await fetch(`${getSupabaseHost(env)}/rest/v1/entity_hot?select=${col}&limit=0`, {
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      });
+      columnCheck[col] = cr.ok;
+    }
+
+    return new Response(JSON.stringify({
+      entity_hot_exists: true,
+      status: 200,
+      columns: columnCheck,
+      columns_ok: Object.values(columnCheck).filter(Boolean).length,
+      columns_total: expectedColumns.length,
+      note: 'indexes (4) verified separately via migrations file (idx_entity_hot_type / name_trgm / status / created_at)',
+      checked_at: new Date().toISOString(),
+    }, null, 2), {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  } catch (e: any) {
+    return new Response(JSON.stringify({
+      entity_hot_exists: 'unknown',
+      error: e?.message || String(e),
+      checked_at: new Date().toISOString(),
+    }, null, 2), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+}

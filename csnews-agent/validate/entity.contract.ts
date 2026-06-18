@@ -14,7 +14,7 @@
  *
  * 详见：tasks/csnews-agent-okr.md (本地私密 OKR 文档, 不入库)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ENTITY_CANDIDATES_R2_KEY, SELFLEARN_MIN_FREQUENCY, SELFLEARN_NGRAM_SIZES,
   SELFLEARN_CONFIDENCE, SELFLEARN_MAX_CANDIDATES,
@@ -260,7 +260,26 @@ describe('cosineSimilarity · 余弦相似度', () => {
 // ============================================================
 // runEntityProcess · kzclaw 0 DDL = 暂存 R2
 // ============================================================
+// Mock Supabase fetch (方案 D · v0.36.21 · runEntityProcess 调 writeEntitiesHotLayer)
+// 避免真实 DNS 查询卡 5s 超时
+// 默认 mock 返 500 (Supabase 失败不阻塞 R2 写入, 业务契约稳定)
+const mockSupabaseFetch = (status: number = 500, body: string = '{"message":"mock error"}') => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = vi.fn(async (input: any) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    if (url.includes('/rest/v1/entity_hot')) {
+      return new Response(body, { status });
+    }
+    return originalFetch(input);
+  }) as any;
+  return () => { globalThis.fetch = originalFetch; };
+};
+
 describe('runEntityProcess · kzclaw 0 DDL = 暂存 R2', () => {
+  let restoreFetch: () => void;
+  beforeEach(() => { restoreFetch = mockSupabaseFetch(); });
+  afterEach(() => { restoreFetch(); });
+
   it('R2 无 candidates → finalized=0, errors=0', async () => {
     const env: any = {
       csnews_raw: {

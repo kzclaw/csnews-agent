@@ -28,7 +28,7 @@ import {
   handleEmbedAction, handleZakerHotAction,
   handleProcessAction, handleHealthAction, handleLogsAction,
   handleContentAction, handleTrendAction, handleKnowledgeAction,
-  handleEntityAction, handleEventAction,
+  handleEntityAction, handleEventAction, handleDbSchemaAction,
 } from './endpoints';
 
 /**
@@ -102,6 +102,7 @@ export async function dispatchAction(
   if (action === 'knowledge') return await handleKnowledgeAction(request, env, url, cors, ctx);
   if (action === 'entity') return await handleEntityAction(request, env, url, cors, ctx);
   if (action === 'event') return await handleEventAction(request, env, url, cors, ctx);
+  if (action === 'db-schema') return await handleDbSchemaAction(request, env, url, cors);
 
   // unknown action
   return new Response(JSON.stringify({ error: 'unknown action' }), {
