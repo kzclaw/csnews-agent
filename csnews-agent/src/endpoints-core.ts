@@ -47,7 +47,7 @@ export async function handlePingAction(request: Request, env: Env, url: URL, cor
 }
 
 // ===================== model-test =====================
-// 注: extractText + maybeFissionReport 已抽到 utils.ts (T000 helper, 避免循环依赖)
+// 注: extractText + maybeFissionReport 已抽到 utils.ts (避免循环依赖)
 export async function handleModelTestAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const r = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
     messages: [{ role: 'user', content: '说一段话介绍自己' }],
