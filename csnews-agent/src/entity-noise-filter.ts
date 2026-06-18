@@ -1,17 +1,17 @@
 /**
  * CSNEWS Agent · Entity 噪音自动过滤 (v0.36.12)
  *
- * kzclaw 18:22 确定:
+ * 18:22 确定:
  *   - 用 bge-m3 embedding 做 semantic type 推断
  *   - 自动化过滤噪音实体 (通用词/日期片段/数字片段)
  *   - review 工作流从'打错'变成'确认正确'
  *   - similarity >= 0.85 → noise 不写入 entity-finalized.json
- *   - similarity < 0.85 → 写入 (kzclaw review 减少负担)
+ *   - similarity < 0.85 → 写入 (review 减少负担)
  *
- * kzclaw 16:28 确定"0 硬编码"哲学: noise anchors 不在 const, 从 R2 持久化读
- * kzclaw 5h 配额期外 review anchors 增删 (R2 entity-noise-anchors.json)
+ * 16:28 确定"0 硬编码"哲学: noise anchors 不在 const, 从 R2 持久化读
+ * 5h 配额期外 review anchors 增删 (R2 entity-noise-anchors.json)
  *
- * bge-m3 走 CF Workers AI 独立池 (0 kzclaw KR0+1 Neurons 关系)
+ * bge-m3 走 CF Workers AI 独立池 (0 KR0+1 Neurons 关系)
  */
 import { Env } from './shared';
 
@@ -20,7 +20,7 @@ export const NOISE_THRESHOLD_DEFAULT = 0.85;
 export const NOISE_THRESHOLD_MIN = 0.5;
 export const NOISE_THRESHOLD_MAX = 0.99;
 export const NOISE_ANCHORS_DEFAULT: string[] = [
-  // kzclaw 18:09 确定 batch incorrect 20 noise anchors (从 KR0 review 实战数据来)
+  // 18:09 确定 batch incorrect 20 noise anchors (从 KR0 review 实战数据来)
   // 17 通用词
   '回应', '表示', '工作', '人员', '媒体', '当地', '协议', '报道',
   '相关', '参与', '家属', '上市', '第三', '年初', '发现', '记者', '公司',
@@ -37,7 +37,7 @@ export interface NoiseAnchorsData {
 }
 
 /**
- * 读 R2 noise anchors (kzclaw 5h 配额期外 review 增删)
+ * 读 R2 noise anchors (5h 配额期外 review 增删)
  */
 export async function loadNoiseAnchors(env: Env): Promise<NoiseAnchorsData> {
   const obj = await env.csnews_raw.get(ENTITY_NOISE_ANCHORS_R2_KEY);
@@ -99,12 +99,12 @@ export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<nu
 }
 
 /**
- * 过滤噪音候选 (kzclaw 18:22 确定核心)
+ * 过滤噪音候选 (18:22 确定核心)
  *
  * @param candidates entity 候选 [{name, ...}]
  * @param candidateEmbeddings 跟 candidates 对应的 bge-m3 embedding
  * @param anchorEmbeddings noise anchors 的 bge-m3 embedding
- * @param threshold similarity 阈值 (kzclaw 18:22 确定 0.85 起步)
+ * @param threshold similarity 阈值 (18:22 确定 0.85 起步)
  * @returns { kept: 非 noise 候选, noise: 被过滤的 noise 候选, scores: 每个候选的 max noise similarity }
  */
 export interface FilterResult<T> {
@@ -127,7 +127,7 @@ export function filterNoiseCandidates<T extends { name: string }>(
     const cand = candidates[i];
     const emb = candidateEmbeddings[i];
     if (!emb) {
-      // 0 embedding → 保守 kept (让kzclaw review 决定)
+      // 0 embedding → 保守 kept (让 review 决定)
       kept.push(cand);
       scores.push({ name: cand.name, max_noise_similarity: 0, is_noise: false });
       continue;
