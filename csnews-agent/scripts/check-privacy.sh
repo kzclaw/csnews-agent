@@ -16,7 +16,7 @@ fi
 PATTERNS=$(paste -sd'|' "$PATTERNS_FILE")
 
 # Check staged changes (paths relative to git root, regardless of cwd)
-# Skip tooling directories
+# Skip tooling directories + patterns files (by-design contain forbidden terms)
 RAW_STAGED=$(git -C "$GIT_ROOT" diff --cached --name-only --diff-filter=AM)
 STAGED_FILES=""
 for f in $RAW_STAGED; do
@@ -27,6 +27,8 @@ for f in $RAW_STAGED; do
     csnews-agent/.githooks/*|csnews-agent/.githooks) continue ;;
     csnews-agent/scripts/*|csnews-agent/scripts) continue ;;
     csnews-agent/validate/*|csnews-agent/validate) continue ;;
+    .privacy-patterns.txt|.privacy-patterns.txt.example) continue ;;
+    csnews-agent/.privacy-patterns.txt|csnews-agent/.privacy-patterns.txt.example) continue ;;
   esac
   STAGED_FILES="$STAGED_FILES $f"
 done
