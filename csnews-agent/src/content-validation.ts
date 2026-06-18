@@ -1,5 +1,5 @@
 /**
- * CSNEWS Agent · content 端点输入校验（v0.36.6 · KR0 · v0.33+sweep 原则 #2 模块化）
+ * CSNEWS Agent · content 端点输入校验（v0.36.6 · 模块化）
  *
  * 唯一目标：守住"content 端点输入校验规则就是这样"（业务契约）
  *
