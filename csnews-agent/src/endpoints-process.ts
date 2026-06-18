@@ -20,6 +20,7 @@ import {
 import { logEvent } from './log';
 import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
+import { checkEntityCronHealth } from './utils';
 
 // ===================== process (News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
@@ -211,7 +212,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 }
 
 // ===================== health =====================
-// 11 大维度检查
+// 13 大维度检查
 //  1. last_process_at              - 最近 process 跑时间 (KV 持久化)
 //  2. cron_health                  - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
 //  3. secret_resolved              - WORKER_SELF_URL secret 是不是占位符
@@ -223,6 +224,8 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 //  9. cron_history                 - R2 logs/ 上一小时 [scheduler] log 数量
 // 10. zscore_signals_today         - 7d z-score 异常数
 // 11. ai_budget_today              - 当日 AI 配额用量
+// 12. entity_freshness             - entity cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
+// 13. event_freshness              - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const ts = Date.now();
   const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
@@ -512,6 +515,30 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   } catch (e: any) {
     result.ai_budget_today = { error: e?.message || "ai_budget calc failed" };
     checks.ai_budget_today = { status: "unknown", detail: e?.message };
+  }
+
+  // ========== 12. entity_freshness + 13. event_freshness ==========
+  // 读 R2 entity-finalized.json + event-clusters.json 元数据, 按阈值分类
+  // viewer dashboard 立即看到 entity/event cron 是否 stale (之前 viewer 不知道何时跑)
+  // entity / event cron 每日 1 次 (03:00 / 03:30 UTC), 阈值 25h / 50h
+  try {
+    const { entity_freshness, event_freshness } = await checkEntityCronHealth(env);
+    result.entity_freshness = entity_freshness;
+    result.event_freshness = event_freshness;
+    checks.entity_freshness = {
+      status: entity_freshness.status,
+      detail: entity_freshness.detail,
+    };
+    checks.event_freshness = {
+      status: event_freshness.status,
+      detail: event_freshness.detail,
+    };
+  } catch (e: any) {
+    // 1 个失败不影响其他: entity_freshness + event_freshness 都返 unknown
+    result.entity_freshness = { error: e?.message || "entity freshness check failed" };
+    result.event_freshness = { error: e?.message || "event freshness check failed" };
+    checks.entity_freshness = { status: "unknown", detail: e?.message };
+    checks.event_freshness = { status: "unknown", detail: e?.message };
   }
 
   // ========== 整体 status 聚合 ==========

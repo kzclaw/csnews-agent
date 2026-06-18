@@ -5,10 +5,14 @@
 // 让 endpoints.ts 不依赖 index.ts（避免循环依赖）
 // v0.36.20 · csnews-audit 修复：抽 readR2Json + checkRateLimit 通用 helper
 //  （audit 4.3.2 / 4.3.3 · 5 处 rate limit + 4 处 R2 JSON 读复用）
+// v0.36.21 · 加 checkEntityCronHealth helper
+//  （entity / event cron 每日 1 次 跑后, dashboard 多 2 字段 entity_freshness + event_freshness）
 //详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
 // specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
 import { Env } from './shared';
 import { AI_ROUTE_R_THRESHOLD } from './score';
+import { ENTITY_FINALIZED_R2_KEY } from './entity-process';
+import { EVENT_CLUSTERS_R2_KEY } from './event-process';
 
 //Workers AI响应解析
 // env.AI.run() 返回格式:{ response: string, usage: {...} }
@@ -100,3 +104,130 @@ export function rateLimitResponse(cors: Record<string, string>, limit: number): 
     headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
   });
 }
+
+// ============================================================
+// v0.36.21 entity / event cron freshness helper
+// ============================================================
+// viewer dashboard 加 entity_freshness / event_freshness 2 字段
+// 立刻看到 entity cron + event cron 是不是 stale (vs 之前 viewer 不知道 entity/event 何时跑)
+// entity / event cron 每日 1 次 (03:00 / 03:30 UTC), 阈值 = 25h (起床 ~26h 时看到 degraded) / 50h (cron 真 stale)
+// R2 永远 source of truth (跟 schema migration 撤回前一致), freshness 从 R2 读 generated_at
+export interface FreshnessResult {
+  status: 'ok' | 'degraded' | 'down' | 'unknown';
+  age_ms: number | null;
+  last_write: string | null;
+  count: number | null;
+  detail: string;
+}
+
+// 默认阈值: 25h / 50h (entity/event cron 间隔 24h, 起床 ~26h 时看到 degraded 是健康警告, 50h+ 是 cron stale)
+const DEFAULT_OK_HOURS = 25;
+const DEFAULT_DOWN_HOURS = 50;
+
+/**
+ * 读 R2 freshness 元数据 (entity-finalized.json 或 event-clusters.json)
+ * 业务契约:
+ *   - R2 obj 不存在 → 返 { last_write: null, count: null } (status='unknown')
+ *   - JSON parse 失败 → 同上 (status='unknown')
+ *   - generated_at 缺失或不可解析 → status='unknown'
+ *   - generated_at 可解析 → 计算 age_ms + 按阈值分类 status
+ */
+async function readR2Freshness(env: Env, key: string): Promise<{ last_write: string | null; count: number | null }> {
+  try {
+    const obj = await env.csnews_raw.get(key);
+    if (!obj) return { last_write: null, count: null };
+    const body = await obj.json<{ generated_at?: string; entities?: any[]; clusters?: any[] }>();
+    const lastWrite = body.generated_at || null;
+    const count = Array.isArray(body.entities)
+      ? body.entities.length
+      : Array.isArray(body.clusters)
+        ? body.clusters.length
+        : null;
+    return { last_write: lastWrite, count };
+  } catch {
+    return { last_write: null, count: null };
+  }
+}
+
+/**
+ * 按 age 阈值分类 freshness status
+ * 业务契约:
+ *   - 缺失 last_write 或不可解析 → 'unknown'
+ *   - age < okHours → 'ok'
+ *   - okHours <= age < downHours → 'degraded'
+ *   - age >= downHours → 'down'
+ */
+function classifyFreshness(
+  data: { last_write: string | null; count: number | null },
+  now: number,
+  okHours: number,
+  downHours: number,
+): FreshnessResult {
+  if (!data.last_write) {
+    return {
+      status: 'unknown',
+      age_ms: null,
+      last_write: null,
+      count: data.count,
+      detail: 'R2 未找到 (cron 尚未跑过)',
+    };
+  }
+  const lastMs = Date.parse(data.last_write);
+  if (!Number.isFinite(lastMs)) {
+    return {
+      status: 'unknown',
+      age_ms: null,
+      last_write: data.last_write,
+      count: data.count,
+      detail: `generated_at 不可解析: ${data.last_write}`,
+    };
+  }
+  const ageMs = now - lastMs;
+  const ageHours = ageMs / 3600_000;
+  if (ageHours < okHours) {
+    return {
+      status: 'ok',
+      age_ms: ageMs,
+      last_write: data.last_write,
+      count: data.count,
+      detail: `${Math.round(ageHours)} 小时前 (${data.count ?? 0} 条)`,
+    };
+  } else if (ageHours < downHours) {
+    return {
+      status: 'degraded',
+      age_ms: ageMs,
+      last_write: data.last_write,
+      count: data.count,
+      detail: `${Math.round(ageHours)} 小时前 (> ${okHours}h, 需要 cron 跑)`,
+    };
+  } else {
+    return {
+      status: 'down',
+      age_ms: ageMs,
+      last_write: data.last_write,
+      count: data.count,
+      detail: `${Math.round(ageHours)} 小时前 (> ${downHours}h, cron stale)`,
+    };
+  }
+}
+
+/**
+ * 实体 / 事件 cron freshness (viewer dashboard 立即可见 2 字段)
+ * 业务契约:
+ *   - 0 R2 obj (cron 尚未跑) → entity_freshness.status='unknown'
+ *   - 正常 → 'ok' (起床 ~26h 时看到 degraded 健康警告, 50h+ 是 cron stale)
+ *   - 失败 → 抛错由 caller 处理 (不会 catch, 让 handleHealthAction 5 字段都有, 1 个失败不影响其他)
+ */
+export async function checkEntityCronHealth(env: Env): Promise<{
+  entity_freshness: FreshnessResult;
+  event_freshness: FreshnessResult;
+}> {
+  const now = Date.now();
+  const entityData = await readR2Freshness(env, ENTITY_FINALIZED_R2_KEY);
+  const eventData = await readR2Freshness(env, EVENT_CLUSTERS_R2_KEY);
+  return {
+    entity_freshness: classifyFreshness(entityData, now, DEFAULT_OK_HOURS, DEFAULT_DOWN_HOURS),
+    event_freshness: classifyFreshness(eventData, now, DEFAULT_OK_HOURS, DEFAULT_DOWN_HOURS),
+  };
+}
+
