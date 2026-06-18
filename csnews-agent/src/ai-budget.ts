@@ -1,5 +1,5 @@
 /**
- * CSNEWS Agent · AI 预算追踪 (v0.36.9 · KR0+1)
+ * CSNEWS Agent · AI 预算追踪
  *
  * 蓝图 2.9: if ai_budget < threshold: only_process(L4, L5)
  *          threshold = 7K (70% 触发降级)
@@ -11,8 +11,6 @@
  *   - shutdown:  n ≥ 8K          → 跳过所有 AI 调用
  *
  * 用 existing PROCESS_STATE KV，不新建 namespace。
- *
- * 详见：tasks/csnews-agent-okr.md KR0+1
  */
 import type { Env } from './shared';
 
