@@ -11,7 +11,7 @@
  * 16:28 确定"0 硬编码"哲学: noise anchors 不在 const, 从 R2 持久化读
  * 5h 配额期外 review anchors 增删 (R2 entity-noise-anchors.json)
  *
- * bge-m3 走 CF Workers AI 独立池 (0 KR0+1 Neurons 关系)
+ * bge-m3 走 CF Workers AI 独立池 (0 Neurons 关系)
  */
 import { Env } from './shared';
 
