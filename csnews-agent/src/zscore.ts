@@ -14,7 +14,7 @@
  *   - 跟现有 velocity/acceleration 双轨触发 (z-score 是补充, 不是替代)
  *
  * 5h 配额期"快赢"哲学 v2 修订:
- *   - 原 OKR 范围: 写 warnings 表双轨判定 (需 Supabase RPC schema migration = kzclaw跑 SQL)
+ *   - 原 OKR 范围: 写 warnings 表双轨判定 (需 Supabase RPC schema migration = 手动跑 SQL)
  *   - v2 修订: utility function + KR0 health 端点字段计算 (0 DDL, 0 5h 配额期打扰)
  *   - 推迟到下个 5h 配额期: 集成到 record_trend_snapshot RPC (起床后拍 schema migration)
  *
