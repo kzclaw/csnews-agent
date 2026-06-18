@@ -116,6 +116,25 @@ open tools/pull-viewer.html
 
 ---
 
+## 🔒 Local Privacy Enforcement
+
+隐私 grep 工具 (本地工具链, 5 类硬禁词检测) 通过 husky pre-commit hook 自动跑.
+
+**新开发者 onboarding**:
+
+1. Clone 仓库 + `cd csnews-agent && npm install` (prepare hook 自动配置 husky + 创建本地 patterns 文件)
+2. 隐私 grep hook 默认开启 (commit 时自动检测, 命中 = block)
+
+**手动恢复隐私 tooling** (脚本 gitignored · 新克隆可能缺失):
+
+```bash
+git checkout HEAD~1 -- csnews-agent/scripts/check-privacy.sh csnews-agent/validate/privacy-grep.contract.ts
+```
+
+**自定义本地 patterns**: 编辑 `.privacy-patterns.txt` (gitignored, 每个开发者独立)
+
+---
+
 ## 📁 仓库结构
 
 ```
