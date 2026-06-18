@@ -43,7 +43,7 @@ export async function classifyBySemantic(
     return { category: '综合', confidence: 0, top_scores: [] };
   }
 
-  // 2. bge-m3 batch embedding (1 次 subrequest · 复用 KR0+1 模式)
+  // 2. bge-m3 batch embedding (1 次 subrequest, 复用 entity-noise-filter.ts 模式)
   const seedTexts = allSeeds.map((s) => s.seed);
   const seedEmbeddings = await bgeM3BatchEmbedding(env, seedTexts);
 
