@@ -71,14 +71,14 @@ export async function runEventClustering(
   const threshold = await getCurrentThreshold(env);
 
   // 简化版: 每个 entity 自成一组, 两两比 Jaccard, 超过 threshold 合并
-  // kzclaw 16:48 确定: v2 简化 = 不依赖 news_topic_members, 0 DDL
+  // 16:48 确定: v2 简化 = 不依赖 news_topic_members, 0 DDL
   // entity names 之间的共享 = 同一 event 候选
 
   // 1. 把 entities 按 name 分组, 同 name 合并
   const uniqueNames = Array.from(new Set(entities.map((e) => e.name)));
 
   // 2. 简化聚类: 包含共同高频 entity 名字 (e.g. 月份/数字) 的归一类
-  //    kzclaw 16:48 确定: 启发式聚类 + 0 硬编码 = 用 entity 名字字符重叠做粗聚类
+  //    16:48 确定: 启发式聚类 + 0 硬编码 = 用 entity 名字字符重叠做粗聚类
   const uf = new UnionFind();
   for (const name of uniqueNames) uf.find(name);  // 初始化
 
