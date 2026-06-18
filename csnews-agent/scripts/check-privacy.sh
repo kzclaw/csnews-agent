@@ -6,7 +6,6 @@
 set -e
 
 # Load patterns from local file (gitignored, per-developer)
-# Use git root path so script works regardless of cwd (husky hook may cd)
 GIT_ROOT=$(git rev-parse --show-toplevel)
 PATTERNS_FILE="$GIT_ROOT/.privacy-patterns.txt"
 if [ ! -f "$PATTERNS_FILE" ]; then
@@ -16,15 +15,37 @@ if [ ! -f "$PATTERNS_FILE" ]; then
 fi
 PATTERNS=$(paste -sd'|' "$PATTERNS_FILE")
 
-# Check staged changes, skip tooling directories
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=AM | grep -vE '^(csnews-agent/)?(\.githooks/|scripts/|validate/)' || true)
+# Check staged changes (paths relative to git root, regardless of cwd)
+# Skip tooling directories
+RAW_STAGED=$(git -C "$GIT_ROOT" diff --cached --name-only --diff-filter=AM)
+STAGED_FILES=""
+for f in $RAW_STAGED; do
+  case "$f" in
+    .githooks/*|.githooks) continue ;;
+    scripts/*|scripts) continue ;;
+    validate/*|validate) continue ;;
+    csnews-agent/.githooks/*|csnews-agent/.githooks) continue ;;
+    csnews-agent/scripts/*|csnews-agent/scripts) continue ;;
+    csnews-agent/validate/*|csnews-agent/validate) continue ;;
+  esac
+  STAGED_FILES="$STAGED_FILES $f"
+done
+# Trim leading space
+STAGED_FILES=$(echo "$STAGED_FILES" | sed 's/^ *//')
 
 if [ -z "$STAGED_FILES" ]; then
   echo '✅ privacy check 0 命中 (no user code staged)'
   exit 0
 fi
 
-VIOLATIONS=$(git diff --cached -- "$STAGED_FILES" | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATTERNS" | head -10 || true)
+# Check each staged file for forbidden patterns in added lines
+VIOLATIONS=""
+for f in $STAGED_FILES; do
+  MATCHES=$(git -C "$GIT_ROOT" diff --cached -- "$f" 2>/dev/null | grep -E '^\+' | grep -vE '^\+\+\+' | grep -E "$PATTERNS" | head -10 || true)
+  if [ -n "$MATCHES" ]; then
+    VIOLATIONS="${VIOLATIONS}${MATCHES}"$'\n'
+  fi
+done
 
 if [ -n "$VIOLATIONS" ]; then
   echo '❌ 5-class forbidden terms detected in staged changes:'
