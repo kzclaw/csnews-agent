@@ -45,6 +45,12 @@ preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 #   - 频率设计:每日 1 次(不是每小时)→ entity selflearn 重(bge-m3 embedding)
 #   - Neurons 预算:~5K/天 ≤ 10K Free 配额
 #   - 错开 process 整点,避免 Neurons spike 同时打
+# 每日 03:30(UTC)跑 event cron — Jaccard 聚类 + 写 R2 event-clusters.json
+#   - 频率设计:每日 1 次(不是每小时)→ 依赖 entity finalized 必须 entity 跑完
+#   - 0 Neurons(Jaccard 是数学运算,不调 AI)
+#   - 错开 entity 30min,确保读 entity-finalized.json 时数据已就位
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *" ]
+crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *" ]
+
+

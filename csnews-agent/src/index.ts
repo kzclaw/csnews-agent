@@ -21,7 +21,7 @@
 import { Env } from './shared';
 import { authRequest } from './auth';
 import { handleCorsPreflight, dispatchAction } from './dispatch';
-import { scheduledProcess, scheduledEntity } from './scheduled';
+import { scheduledProcess, scheduledEntity, scheduledEvent } from './scheduled';
 
 export default {
   // ====== HTTP fetch handler (v0.33 确定主入口) ======
@@ -40,10 +40,15 @@ export default {
   },
 
   // ====== Cron Trigger 路由 (v0.36.21): 按 controller.cron 分发 ======
-  // - '0 * * * *'   → scheduledProcess (process action + knowledge accumulation)
-  // - '0 3 * * *'   → scheduledEntity (entity selflearn + process)
-  // 调度顺序: scheduledEntity 错开整点 (03:00 UTC) → 避免 Neurons spike 同时打
-  // CF Free Plan cron trigger 限制: 5 个/账号 (现用 2 个, 留 3 个余量)
+  // - '0 * * * *'    → scheduledProcess (process action + knowledge accumulation)
+  // - '0 3 * * *'    → scheduledEntity (entity selflearn + process)
+  // - '30 3 * * *'   → scheduledEvent (event Jaccard clustering)
+  // 调度顺序:
+  //   - 整点 (每小时): process (最重: ZAKER fetch + bge-m3 embed + Supabase write)
+  //   - 03:00 UTC 每日: entity (重: bge-m3 embed, Neurons 集中在 selflearn)
+  //   - 03:30 UTC 每日: event (轻: Jaccard 数学, 0 Neurons)
+  //   - entity → event 30min 间隔确保 event 跑时 entity-finalized.json 已就位
+  // CF Free Plan cron trigger 限制: 5 个/账号 (现用 3 个, 留 2 个余量)
   // 选 CF cron 原因 (不变):
   //   1. Free tier 实际可用, 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
   // 调试: wrangler dev --test-scheduled
@@ -53,6 +58,8 @@ export default {
       await scheduledProcess(env, ctx, controller);
     } else if (cron === '0 3 * * *') {
       await scheduledEntity(env, ctx, controller);
+    } else if (cron === '30 3 * * *') {
+      await scheduledEvent(env, ctx, controller);
     } else {
       console.log(`[cron] unknown cron=${cron}, no handler matched`);
     }

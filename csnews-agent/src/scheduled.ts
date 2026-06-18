@@ -22,6 +22,7 @@ import { logEvent } from './log';
 import { handleProcessAction, runKnowledgeAccumulation } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
+import { runEventProcess } from './event-process';
 
 /**
  * 整点 cron 触发后的完整流程
@@ -156,4 +157,51 @@ export async function scheduledEntity(
 
   const totalElapsed = Date.now() - start;
   console.log(`[cron] entity done total_elapsed=${totalElapsed}ms`);
+}
+
+/**
+ * 每日 03:30 UTC cron 触发 event 聚类 + 写 R2 event-clusters.json (v0.36.21)
+ *
+ * 流程:
+ *   1. 写 [cron] event triggered log
+ *   2. inline 调 runEventProcess (读 entity-finalized.json + Jaccard 聚类 + 写 event-clusters.json)
+ *   3. 写 [cron] event process done/error log
+ *
+ * 失败处理:
+ *   - process 抛错 → log error + 不阻塞
+ *   - log 写失败 → catch 兜底
+ *
+ * 频率:每日 1 次 (依赖 entity finalized 必须 entity 跑完, 错开 entity 30min)
+ * 0 Neurons (Jaccard 是数学运算, 不调 AI)
+ */
+export async function scheduledEvent(
+  env: Env,
+  ctx: ExecutionContext,
+  controller: ScheduledController,
+): Promise<void> {
+  const start = Date.now();
+  const ts = new Date().toISOString();
+  const cron = controller?.cron || 'unknown';
+
+  console.log(`[cron] event triggered at ${ts} cron=${cron}`);
+  ctx.waitUntil(logEvent(env, "info", "[cron] event triggered", { cron, ts }, "scheduler").catch(() => {}));
+
+  try {
+    // 读 entity-finalized.json (依赖 entity cron 03:00 已跑完)
+    // Jaccard 聚类 + 写 R2 event-clusters.json + event-clusters-index.json
+    const result = await runEventProcess(env);
+    const elapsed = Date.now() - start;
+    console.log(`[cron] event process done clusters=${result.clusters} threshold=${result.threshold} written=${result.written} errors=${result.errors} elapsed=${elapsed}ms`);
+    ctx.waitUntil(logEvent(env, "info", "[cron] event process done", {
+      clusters: result.clusters,
+      threshold: result.threshold,
+      written: result.written,
+      errors: result.errors,
+      elapsed_ms: elapsed,
+    }, "scheduler").catch(() => {}));
+  } catch (e: any) {
+    const elapsed = Date.now() - start;
+    console.error(`[cron] event process failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    ctx.waitUntil(logEvent(env, "error", "[cron] event process failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler").catch(() => {}));
+  }
 }
