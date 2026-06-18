@@ -21,7 +21,7 @@
 import { Env } from './shared';
 import { authRequest } from './auth';
 import { handleCorsPreflight, dispatchAction } from './dispatch';
-import { scheduledProcess } from './scheduled';
+import { scheduledProcess, scheduledEntity } from './scheduled';
 
 export default {
   // ====== HTTP fetch handler (v0.33 确定主入口) ======
@@ -39,15 +39,22 @@ export default {
     return await dispatchAction(env, ctx, action, request);
   },
 
-  // ====== Cron Trigger: 每小时整点(UTC) 跑 process action + runKnowledgeAccumulation =====
-  // v0.36.5 mini (KR0): inline 调 handleProcessAction, **不** fetch 自家 URL
-  // v0.36.7 (KR0): process 跑完 inline 调 runKnowledgeAccumulation 累积 job
-  // v0.36.10 (KR0): scheduled 整段抽到 src/scheduled.ts
+  // ====== Cron Trigger 路由 (v0.36.21): 按 controller.cron 分发 ======
+  // - '0 * * * *'   → scheduledProcess (process action + knowledge accumulation)
+  // - '0 3 * * *'   → scheduledEntity (entity selflearn + process)
+  // 调度顺序: scheduledEntity 错开整点 (03:00 UTC) → 避免 Neurons spike 同时打
+  // CF Free Plan cron trigger 限制: 5 个/账号 (现用 2 个, 留 3 个余量)
   // 选 CF cron 原因 (不变):
-  //   1. Free tier 实际可用(每账号 5 个, CPU 10ms 限制, process 主要是 fetch 等待不算 CPU)
-  //   2. 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
+  //   1. Free tier 实际可用, 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
   // 调试: wrangler dev --test-scheduled
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    await scheduledProcess(env, ctx, controller);
+    const cron = controller?.cron || '';
+    if (cron === '0 * * * *') {
+      await scheduledProcess(env, ctx, controller);
+    } else if (cron === '0 3 * * *') {
+      await scheduledEntity(env, ctx, controller);
+    } else {
+      console.log(`[cron] unknown cron=${cron}, no handler matched`);
+    }
   },
 };
