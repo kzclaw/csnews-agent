@@ -234,7 +234,8 @@ export async function handleBatchScoreAction(request: Request, env: Env, url: UR
 
   const results = await Promise.all(items.map(async (item) => {
     const rule = scoreRule(item.title);
-    const category = await classify(item.title, env);
+    // optional summary, batch endpoint 调用方传才生效
+    const category = await classify(item.title, env, item.summary);
     let aiReport = '';
     if (useAI) {
       aiReport = await maybeFissionReport(item.title, env, rule.score);
@@ -416,7 +417,8 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
       if (!title) continue;
 
       const rule = scoreRule(title);
-      const category = await classify(title, env);
+      // 传 item.summary 让 title+summary 混合 → 减少边界样本错位率
+      const category = await classify(title, env, item.summary);
 
       // 跳过向量化和 R2, 只测 Supabase 写入
       await insertNewsHotspot(env, {

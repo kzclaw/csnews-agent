@@ -88,15 +88,18 @@ export function classifyRule(title: string): string {
 // Workers AI分类 (主分类, 优先于关键词兜底)
 // v0.36.13: 已替换为 bge-m3 semantic embedding 自分类 (候选 A)
 // Workers AI 响应慢 (15s+ 受 Free 10ms CPU 限制) 仍禁用, 改走 CF Workers AI bge-m3 独立池 (0 Neurons)
-export async function classifyByAI(title: string, env: Env): Promise<string> {
- const result = await classifyBySemantic(title, env);
+export async function classifyByAI(title: string, env: Env, summary?: string): Promise<string> {
+ const inputText = `${title} ${summary || ''}`.trim();
+ const result = await classifyBySemantic(inputText, env);
  return result.category;
 }
 
 // 双保险分类: 主路径 bge-m3 semantic 自分类, 关键词兜底, 综合保底
 // v0.36.13 主路径 = bge-m3 (16:28 0 硬编码哲学一致)
-export async function classify(title: string, env: Env): Promise<string> {
- const result = await classifyBySemantic(title, env);
+// 加 optional summary, title+summary 混合 → 边界样本准确率提升
+export async function classify(title: string, env: Env, summary?: string): Promise<string> {
+ const inputText = `${title} ${summary || ''}`.trim();
+ const result = await classifyBySemantic(inputText, env);
  // confidence < 0.3 时 fallback 到 keywords (跟18:43 确定兜底一致)
  if (result.confidence < 0.3 && result.top_scores.length === 0) {
  return classifyRule(title);

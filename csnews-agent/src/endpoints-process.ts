@@ -54,8 +54,9 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
       if (!title) continue;
 
       // 规则引擎评分+分类
+      // 传 item.summary 让 title+summary 混合 → 减少边界样本错位率
       const rule = scoreRule(title);
-      const category = await classify(title, env);
+      const category = await classify(title, env, item.summary);
 
       let topicId: string | undefined;
       let isStoredR2 = false;
