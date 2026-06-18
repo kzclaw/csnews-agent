@@ -1,14 +1,14 @@
 /**
- * CSNEWS Agent · 主 Worker (v0.36.10 · KR0 · Foundation 0 第 1 步)
+ * CSNEWS Agent · 主 Worker
  * Cloudflare Workers + Workers AI + Supabase + R2
  *
- * KR0 拆 index.ts 后:
- *   - 20 action handler 已抽到 src/endpoints.ts (v0.33+sweep) · v0.36.20 再拆 4 子文件
- *   - 调度逻辑已抽到 src/dispatch.ts (v0.36.10 KR0)
- *   - cron handler 已抽到 src/scheduled.ts (v0.36.10 KR0)
- *   - 鉴权 + CORS 已抽到 src/auth.ts (v0.33+sweep T000)
- *   - News Self Growth 8 核心函数已抽到 src/news-process.ts (v0.33+sweep T000)
- *   - 评分规则已抽到 src/score.ts (v0.33+sweep T000)
+ * 拆 index.ts 后:
+ *   - 20 action handler 已抽到 src/endpoints.ts, v0.36.20 再拆 4 子文件
+ *   - 调度逻辑已抽到 src/dispatch.ts
+ *   - cron handler 已抽到 src/scheduled.ts
+ *   - 鉴权 + CORS 已抽到 src/auth.ts
+ *   - News Self Growth 8 核心函数已抽到 src/news-process.ts
+ *   - 评分规则已抽到 src/score.ts
  *
  * 主 Worker 剩: 鉴权 (authRequest) + 2 行 dispatch (fetch + scheduled)
  *
