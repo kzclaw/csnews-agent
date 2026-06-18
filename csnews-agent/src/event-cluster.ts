@@ -1,9 +1,9 @@
 /**
  * CSNEWS Agent · 事件聚类 (v0.36.11)
  *
- * kzclaw 16:48 确定:
+ * 16:48 确定:
  *   - 蓝图 v0.35+ 第 2.7 节 Jaccard entity_overlap 公式
- *   - threshold 从 event-threshold.ts 读 (kzclaw review 反馈自适应)
+ *   - threshold 从 event-threshold.ts 读 (review 反馈自适应)
  *   - 聚类用 union-find 简化实现
  *   - 0 temporal / semantic / causal edge (留 v0.37+)
  */
