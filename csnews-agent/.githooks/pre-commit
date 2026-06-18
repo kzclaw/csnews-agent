@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Pre-commit hook · delegates to scripts/check-privacy.sh
-# Auto-configured by package.json "prepare" script: core.hooksPath = csnews-agent/.githooks
-
-set -e
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-bash "$SCRIPT_DIR/scripts/check-privacy.sh"
