@@ -1,13 +1,12 @@
 /**
- * CSNEWS Agent · Cron Trigger Handler (v0.36.10 · KR0 · Foundation 0 第 1 步)
+ * CSNEWS Agent · Cron Trigger Handler
  *
  * 唯一目标：守住"scheduled handler 整点 cron 行为就是这样"（业务契约）
  *
- * v0.33 确定 Foundation 0 第 1 步: index.ts 拆模块化
- *   - scheduled handler 整段抽到本文件
+ * 拆模块化: scheduled handler 整段抽到本文件
  *
  * 业务红线:
- *   - v0.36.5 mini (KR0): inline 调 handleProcessAction, **不** fetch selfUrl
+ *   - v0.36.5 mini: inline 调 handleProcessAction, **不** fetch selfUrl
  *     (历史教训: v0.34-v0.36.4 fetch(selfUrl) 走 CF 内部 routing 9 整点全 522)
  *   - v0.36.7 (KR0): process 跑完 inline 调 runKnowledgeAccumulation
  *     ("快赢"哲学: 0 DDL · 全 R2 · 失败不阻塞 process 200)
@@ -37,7 +36,7 @@ import { runEventProcess } from './event-process';
  * 失败处理:
  *   - process 抛错 → log error + 不阻塞 (v0.36.5 mini 确定)
  *   - knowledge 抛错 → log error + 不阻塞 (process 200 仍返回)
- *   - log 写失败 → catch 兜底 (v0.33+sweep 确定)
+ *   - log 写失败 → catch 兜底
  */
 export async function scheduledProcess(
   env: Env,
