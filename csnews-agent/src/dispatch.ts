@@ -1,10 +1,10 @@
 /**
- * CSNEWS Agent · 主 Worker 入口分派 (v0.36.10 · KR0 · Foundation 0 第 1 步)
+ * CSNEWS Agent · 主 Worker 入口分派
  *
  * 唯一目标：守住"20 action dispatch 路由表就是这样"（业务契约）
  *
- * v0.33 确定 Foundation 0 第 1 步: index.ts 拆模块化
- *   - 20 个 handler 已抽到 src/endpoints.ts (v0.33+sweep) · v0.36.20 再拆 4 子文件
+ * 拆模块化: index.ts 拆出
+ *   - 20 个 handler 已抽到 src/endpoints.ts, v0.36.20 再拆 4 子文件
  *   - 调度逻辑 (CORS + auth + dispatch) 抽到本文件
  *   - scheduled handler 抽到 src/scheduled.ts
  *
