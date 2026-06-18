@@ -7,7 +7,7 @@
  * 30 天 TTL 由 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/, MaxAge=30d)
  * 本文件不写 prune 代码
  *
- * kzclaw 2026-06-12 确定: 把颗粒度做细（之前按小时聚合 → put 覆盖导致 log 丢失）
+ * 2026-06-12 确定: 把颗粒度做细（之前按小时聚合 → put 覆盖导致 log 丢失）
  *  旧设计: key=logs/YYYY-MM-DD/HH.log → 同小时多次 logEvent = 后者覆盖前者
  *  新设计: key=logs/YYYY-MM-DD/HH/MM-SS-fff-{source}.log → 每条 log 独立 object
  *   - R2 list prefix=logs/ 仍能按时间筛选（dash.cloudflare 兼容）
