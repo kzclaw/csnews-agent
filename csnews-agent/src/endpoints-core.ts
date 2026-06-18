@@ -517,41 +517,56 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
     }
 
     // 5. UPDATE (only if not dry_run)
+    // 用 ctx.waitUntil 异步跑, 避免 CF Workers 单次 invocation 50 subrequests 上限
+    // (574 PATCHes × 1 subrequest = 574 > 50)
     let updated = 0, updateErrors = 0;
     const errorSamples: string[] = [];
-    if (!dryRun) {
-      for (const d of diffs.filter(d => d.changed)) {
-        try {
-          const patchRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?id=eq.${d.id}`, {
-            method: 'PATCH',
-            headers: {
-              'apikey': env.SUPABASE_SERVICE_KEY,
-              'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-              'Content-Type': 'application/json',
-              'Prefer': 'return=representation',
-            },
-            body: JSON.stringify({ category: d.new }),
-          });
-          if (patchRes.ok) {
-            updated++;
-          } else {
-            updateErrors++;
-            if (errorSamples.length < 3) {
-              const errText = await patchRes.text();
-              errorSamples.push(`${patchRes.status}: ${errText.slice(0, 150)}`);
+    let mode = dryRun ? 'preview' : 'started_async';
+    if (!dryRun && ctx && typeof ctx.waitUntil === 'function') {
+      const diffsToUpdate = diffs.filter(d => d.changed);
+      // 异步 UPDATE: 30 PATCHes/批, 不阻塞响应
+      ctx.waitUntil((async () => {
+        const PATCH_BATCH = 30;
+        for (let i = 0; i < diffsToUpdate.length; i += PATCH_BATCH) {
+          const batch = diffsToUpdate.slice(i, i + PATCH_BATCH);
+          for (const d of batch) {
+            try {
+              const patchRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?id=eq.${d.id}`, {
+                method: 'PATCH',
+                headers: {
+                  'apikey': env.SUPABASE_SERVICE_KEY,
+                  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=representation',
+                },
+                body: JSON.stringify({ category: d.new }),
+              });
+              if (patchRes.ok) {
+                updated++;
+              } else {
+                updateErrors++;
+                if (errorSamples.length < 3) {
+                  const errText = await patchRes.text();
+                  errorSamples.push(`${patchRes.status}: ${errText.slice(0, 150)}`);
+                }
+              }
+            } catch (e: any) {
+              updateErrors++;
+              if (errorSamples.length < 3) {
+                errorSamples.push(`exception: ${e?.message || e}`);
+              }
             }
           }
-        } catch (e: any) {
-          updateErrors++;
-          if (errorSamples.length < 3) {
-            errorSamples.push(`exception: ${e?.message || e}`);
-          }
         }
-      }
+      })());
+    } else if (!dryRun) {
+      mode = 'failed_no_ctx';
+      errorSamples.push('ctx.waitUntil not available; cannot run async update');
     }
 
     return new Response(JSON.stringify({
       type: 'rescore',
+      mode,
       dry_run: dryRun,
       total: newsList.length,
       changed,
