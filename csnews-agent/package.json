@@ -11,6 +11,6 @@
     "validate:watch": "vitest",
     "validate:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath csnews-agent/.githooks && [ -f .privacy-patterns.txt ] || cp .privacy-patterns.txt.example .privacy-patterns.txt"
   }
 }

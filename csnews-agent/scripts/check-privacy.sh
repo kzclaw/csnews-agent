@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Pre-commit privacy check: 5-class forbidden terms in staged changes
 # Skip tooling directories (validate/ + .githooks/ + scripts/) which by-design contain pattern strings
+# Patterns loaded from .privacy-patterns.txt (local, gitignored) — see .privacy-patterns.txt.example
 
 set -e
 
-# 5-class forbidden terms (regex alternation · required by hard rule)
-# Note: standalone 拍 excluded (too many FPs: 拍卖/拍照/拍电影)
-PATTERNS='戴|大虾|舒柯|戴大宝|戴舒柯拍板|拍板权|kzclaw|KR[1-9]|kr[1-9]|Phase[1-9]|T[1-9][0-9]{2}|M[1-5]|Foundation[ \t]+[1-9]|kwokzit\.info|/Users/zitkwok'
+# Load patterns from local file (gitignored, per-developer)
+PATTERNS_FILE=".privacy-patterns.txt"
+if [ ! -f "$PATTERNS_FILE" ]; then
+  echo "❌ .privacy-patterns.txt not found (戴舒柯 21:50 拍板)"
+  echo "Run: cp .privacy-patterns.txt.example .privacy-patterns.txt"
+  exit 1
+fi
+PATTERNS=$(paste -sd'|' "$PATTERNS_FILE")
 
 # Check staged changes, skip tooling directories
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=AM | grep -vE '^(csnews-agent/)?(\.githooks/|scripts/|validate/)' || true)
@@ -23,7 +29,7 @@ if [ -n "$VIOLATIONS" ]; then
   echo ''
   printf '%s\n' "$VIOLATIONS"
   echo ''
-  echo 'See validate/privacy-grep.contract.ts for the full forbidden-terms list.'
+  echo 'See .privacy-patterns.txt for the forbidden-terms list.'
   echo 'Replace forbidden terms with generic descriptions in your code/comments.'
   exit 1
 fi

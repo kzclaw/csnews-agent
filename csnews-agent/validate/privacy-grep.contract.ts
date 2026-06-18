@@ -67,6 +67,7 @@ const EXCLUDED_PATHS = [
   // Privacy 工具链 (戴舒柯 20:46 反问 hook 加): hook 脚本本身需要含 forbidden patterns (regex by-design)
   '.githooks/',
   'scripts/',
+  '.privacy-patterns.txt.example',  // 戴舒柯 21:50 拍板: patterns 文件 by-design 含 forbidden terms
   'csnews-agent/dist/',
   'csnews-agent/coverage/',
   'csnews-agent/.wrangler/',
