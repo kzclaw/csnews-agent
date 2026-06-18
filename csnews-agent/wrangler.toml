@@ -41,6 +41,10 @@ preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 #   2. Worker → 自家域名走 CF 内部 routing,绕开 Bot Fight Mode
 #   3. 0 漂移(精准整点),0 外部依赖
 #   4. process 主要是 fetch 等待,不算 CPU,10ms 限制够用
+# 每日 03:00(UTC)跑 entity cron — 自学习 + 写 R2 finalized
+#   - 频率设计:每日 1 次(不是每小时)→ entity selflearn 重(bge-m3 embedding)
+#   - Neurons 预算:~5K/天 ≤ 10K Free 配额
+#   - 错开 process 整点,避免 Neurons spike 同时打
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *" ]
+crons = [ "0 * * * *", "0 3 * * *" ]
