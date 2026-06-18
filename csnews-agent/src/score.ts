@@ -1,14 +1,12 @@
 // ============================================================
-//评分规则 +路由常量（v0.33+sweep·FT-KR0 · Phase0 · T000）
+// 标题评分 + 路由阈值常量
 // ============================================================
 //用途：标题评分（热词/超热/数字/长度）+3 个路由阈值常量
 // + hashStr工具（用于 topic_key 生成）
-//详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-// specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
 //
 // NOTE: scoreRule max=7.6, AI_ROUTE_R_THRESHOLD 必须 <=7.6 才能 reachable
 
-// R threshold for Workers AI routing (KR0: Neurons saving)
+// R threshold for Workers AI routing (Neurons saving)
 // NOTE: scoreRule max=8.6 (5 base + 2 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
 //       threshold must be <= 8.6 to be reachable
 export const AI_ROUTE_R_THRESHOLD =7.0;
