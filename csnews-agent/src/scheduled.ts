@@ -17,7 +17,7 @@
  * 详见：tasks/csnews-agent-okr.md KR0
  */
 
-import { Env } from './shared';
+import { Env, getSupabaseHost } from './shared';
 import { logEvent } from './log';
 import { handleProcessAction, runKnowledgeAccumulation } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
@@ -203,5 +203,142 @@ export async function scheduledEvent(
     const elapsed = Date.now() - start;
     console.error(`[cron] event process failed elapsed=${elapsed}ms err=${e?.message || e}`);
     ctx.waitUntil(logEvent(env, "error", "[cron] event process failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler").catch(() => {}));
+  }
+}
+
+/**
+ * 每月 1 号 0:00 UTC cron 触发 entity 热层归档 (方案 D · v0.36.21)
+ *
+ * 流程:
+ *   1. 写 [cron] archive triggered log
+ *   2. 查 Supabase entity_hot 30d+ 老 entity (active + reviewed 分类)
+ *   3. active 30d+ → R2 entity-archive-YYYY-MM.json (合并到本月 archive)
+ *   4. reviewed 30d+ → R2 entity-reviewed-YYYY.json (合并到本月 reviewed, 永久保留)
+ *   5. Supabase DELETE (所有 30d+ 都删, 已经在 R2 兜底)
+ *   6. 写 [cron] archive done/error log
+ *
+ * 失败处理:
+ *   - Supabase SELECT 失败 → log error + 不删
+ *   - R2 archive 写失败 → log error + 不删
+ *   - Supabase DELETE 失败 → log error + 0 数据丢失 (下次 cron 重试)
+ *
+ * 频率: 每月 1 次 (数据量稳态 150-300 行, 1 个月归档一次够)
+ * 0 Neurons (纯 SQL + R2 操作)
+ */
+export async function scheduledArchiveOldEntities(
+  env: Env,
+  ctx: ExecutionContext,
+  controller: ScheduledController,
+): Promise<void> {
+  const start = Date.now();
+  const ts = new Date().toISOString();
+  const cron = controller?.cron || 'unknown';
+
+  console.log(`[cron] archive triggered at ${ts} cron=${cron}`);
+  ctx.waitUntil(logEvent(env, "info", "[cron] archive triggered", { cron, ts }, "scheduler").catch(() => {}));
+
+  try {
+    // Step 1: 查 30d+ entity_hot (cutoff = now - 30 days)
+    const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const selectRes = await fetch(
+      `${getSupabaseHost(env)}/rest/v1/entity_hot?created_at=lt.${cutoff}&limit=1000`,
+      {
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      },
+    );
+    if (!selectRes.ok) {
+      const errText = await selectRes.text();
+      throw new Error(`SELECT failed HTTP ${selectRes.status}: ${errText.slice(0, 200)}`);
+    }
+    const oldEntities = (await selectRes.json()) as Array<{
+      id: string;
+      name: string;
+      type: string;
+      status: string;
+      // ... 其他字段
+    }>;
+
+    if (oldEntities.length === 0) {
+      const elapsed = Date.now() - start;
+      console.log(`[cron] archive done no_old_entities elapsed=${elapsed}ms`);
+      ctx.waitUntil(logEvent(env, "info", "[cron] archive done", { active: 0, reviewed: 0, deleted: 0, elapsed_ms: elapsed }, "scheduler").catch(() => {}));
+      return;
+    }
+
+    // Step 2: 分类 active vs reviewed
+    const active = oldEntities.filter((e) => e.status === 'active');
+    const reviewed = oldEntities.filter((e) => e.status === 'reviewed');
+    const yyyymm = new Date().toISOString().slice(0, 7);
+
+    // Step 3: active → R2 entity-archive-YYYY-MM.json (合并到本月 archive)
+    if (active.length > 0) {
+      const archiveKey = `entity-archive-${yyyymm}.json`;
+      let archiveData: { generated_at: string; entities: any[] } = { generated_at: ts, entities: [] };
+      try {
+        const existing = await env.csnews_raw.get(archiveKey);
+        if (existing) {
+          const parsed = await existing.json<{ generated_at: string; entities: any[] }>();
+          if (Array.isArray(parsed.entities)) archiveData = parsed;
+        }
+      } catch {
+        // R2 读失败用空 archive (不影响, 本次 active 仍写)
+      }
+      archiveData.entities = [...(archiveData.entities || []), ...active];
+      archiveData.generated_at = ts;
+      await env.csnews_raw.put(archiveKey, JSON.stringify(archiveData, null, 2));
+      console.log(`[cron] archive wrote ${active.length} active to ${archiveKey}`);
+    }
+
+    // Step 4: reviewed → R2 entity-reviewed-YYYY.json (合并到本月 reviewed, 永久保留)
+    if (reviewed.length > 0) {
+      const reviewedKey = `entity-reviewed-${yyyymm}.json`;
+      let reviewedData: { generated_at: string; entities: any[] } = { generated_at: ts, entities: [] };
+      try {
+        const existing = await env.csnews_raw.get(reviewedKey);
+        if (existing) {
+          const parsed = await existing.json<{ generated_at: string; entities: any[] }>();
+          if (Array.isArray(parsed.entities)) reviewedData = parsed;
+        }
+      } catch {
+        // 同上
+      }
+      reviewedData.entities = [...(reviewedData.entities || []), ...reviewed];
+      reviewedData.generated_at = ts;
+      await env.csnews_raw.put(reviewedKey, JSON.stringify(reviewedData, null, 2));
+      console.log(`[cron] archive wrote ${reviewed.length} reviewed to ${reviewedKey}`);
+    }
+
+    // Step 5: Supabase DELETE (所有 30d+ 都删, 已经在 R2 兜底)
+    const ids = oldEntities.map((e) => e.id);
+    const deleteRes = await fetch(
+      `${getSupabaseHost(env)}/rest/v1/entity_hot?id=in.(${ids.join(',')})`,
+      {
+        method: 'DELETE',
+        headers: {
+          'apikey': env.SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        },
+      },
+    );
+    if (!deleteRes.ok) {
+      const errText = await deleteRes.text();
+      throw new Error(`DELETE failed HTTP ${deleteRes.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const elapsed = Date.now() - start;
+    console.log(`[cron] archive done active=${active.length} reviewed=${reviewed.length} deleted=${ids.length} elapsed=${elapsed}ms`);
+    ctx.waitUntil(logEvent(env, "info", "[cron] archive done", {
+      active: active.length,
+      reviewed: reviewed.length,
+      deleted: ids.length,
+      elapsed_ms: elapsed,
+    }, "scheduler").catch(() => {}));
+  } catch (e: any) {
+    const elapsed = Date.now() - start;
+    console.error(`[cron] archive failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    ctx.waitUntil(logEvent(env, "error", "[cron] archive failed", { elapsed_ms: elapsed, err: e?.message || String(e) }, "scheduler").catch(() => {}));
   }
 }

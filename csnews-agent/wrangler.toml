@@ -49,8 +49,12 @@ preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 #   - 频率设计:每日 1 次(不是每小时)→ 依赖 entity finalized 必须 entity 跑完
 #   - 0 Neurons(Jaccard 是数学运算,不调 AI)
 #   - 错开 entity 30min,确保读 entity-finalized.json 时数据已就位
+# 每月 1 号 0:00(UTC)跑 archive cron — 30d+ entity 热层自动归档
+#   - 频率设计:每月 1 次(数据量稳态 150-300 行,1 个月归档 1 次够)
+#   - 0 Neurons(纯 SQL + R2 操作)
+#   - 业务: active 30d+ → R2 entity-archive-YYYY-MM.json / reviewed 30d+ → R2 entity-reviewed-YYYY.json (永久保留)
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *" ]
+crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *", "0 0 1 * *" ]
 
 

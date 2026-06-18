@@ -21,7 +21,7 @@
 import { Env } from './shared';
 import { authRequest } from './auth';
 import { handleCorsPreflight, dispatchAction } from './dispatch';
-import { scheduledProcess, scheduledEntity, scheduledEvent } from './scheduled';
+import { scheduledProcess, scheduledEntity, scheduledEvent, scheduledArchiveOldEntities } from './scheduled';
 
 export default {
   // ====== HTTP fetch handler (v0.33 确定主入口) ======
@@ -43,12 +43,14 @@ export default {
   // - '0 * * * *'    → scheduledProcess (process action + knowledge accumulation)
   // - '0 3 * * *'    → scheduledEntity (entity selflearn + process)
   // - '30 3 * * *'   → scheduledEvent (event Jaccard clustering)
+  // - '0 0 1 * *'    → scheduledArchiveOldEntities (每月 1 号 30d+ 热层归档)
   // 调度顺序:
   //   - 整点 (每小时): process (最重: ZAKER fetch + bge-m3 embed + Supabase write)
   //   - 03:00 UTC 每日: entity (重: bge-m3 embed, Neurons 集中在 selflearn)
   //   - 03:30 UTC 每日: event (轻: Jaccard 数学, 0 Neurons)
   //   - entity → event 30min 间隔确保 event 跑时 entity-finalized.json 已就位
-  // CF Free Plan cron trigger 限制: 5 个/账号 (现用 3 个, 留 2 个余量)
+  //   - 每月 1 号 0:00 UTC: archive (30d+ entity 移到 R2 冷层, Supabase DELETE)
+  // CF Free Plan cron trigger 限制: 5 个/账号 (现用 4 个, 留 1 个余量)
   // 选 CF cron 原因 (不变):
   //   1. Free tier 实际可用, 0 漂移(精准整点), 0 外部依赖, 0 GitHub 配额消耗
   // 调试: wrangler dev --test-scheduled
@@ -60,6 +62,8 @@ export default {
       await scheduledEntity(env, ctx, controller);
     } else if (cron === '30 3 * * *') {
       await scheduledEvent(env, ctx, controller);
+    } else if (cron === '0 0 1 * *') {
+      await scheduledArchiveOldEntities(env, ctx, controller);
     } else {
       console.log(`[cron] unknown cron=${cron}, no handler matched`);
     }
