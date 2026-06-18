@@ -1,9 +1,7 @@
 // ============================================================
-// News Self Growth核心函数（v0.33+sweep·FT-KR0 · Phase0 · T000）
+// News Self Growth 核心函数
 // ============================================================
-//用途：KR0 News Self Growth流水线核心 ·9 个函数实现话题簇/新闻/查重/趋势/存储
-//详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-// specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
+//用途：News Self Growth 流水线核心 · 9 个函数实现话题簇/新闻/查重/趋势/存储
 import { Env, supabaseFetch, safeJson } from './shared';
 import { logEvent } from './log';
 
