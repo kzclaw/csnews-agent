@@ -1,14 +1,8 @@
 // ============================================================
-// Worker AI工具函数（v0.33+sweep·FT-KR0 · Phase0 · T000 helper）
+// Workers AI 工具函数
 // ============================================================
-//用途：抽离 index.ts 的 Workers AI响应解析 +裂变报告生成函数
+//用途：抽离 index.ts 的 Workers AI 响应解析 + 裂变报告生成函数
 // 让 endpoints.ts 不依赖 index.ts（避免循环依赖）
-// v0.36.20 · csnews-audit 修复：抽 readR2Json + checkRateLimit 通用 helper
-//  （audit 4.3.2 / 4.3.3 · 5 处 rate limit + 4 处 R2 JSON 读复用）
-// v0.36.21 · 加 checkEntityCronHealth helper
-//  （entity / event cron 每日 1 次 跑后, dashboard 多 2 字段 entity_freshness + event_freshness）
-//详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-// specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
 import { Env } from './shared';
 import { AI_ROUTE_R_THRESHOLD } from './score';
 import { ENTITY_FINALIZED_R2_KEY } from './entity-process';
