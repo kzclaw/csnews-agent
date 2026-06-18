@@ -38,12 +38,10 @@ const BANNED_PATTERNS = [
 // 戴舒柯起床后拍: v0.36.22 阶段清理 OR 永久 skip (隐私红线仅适用 push 后新增)
 // 优先级建议: 公开文档 (README.md / AGENTS.md) + wrangler.toml 优先清理 (用户首次访问 GitHub repo 必看)
 const PRE_EXISTING_WHITELIST = [
-  // 公开文档 + 配置文件 (用户首次访问必看, v0.36.22 优先清理)
-  '.gitignore',
+  // 公开文档 (URL 含 GitHub username, public info structural, 不可改)
   'README.md',
-  'wrangler.toml',
   'AGENTS.md',
-  // v0.36.21 cleanup 已修 entity-process.ts 6 处 (派活 09327a9 + 7207c5c scope), 已从 whitelist 移除
+  // v0.36.21 cleanup 已修 entity-process.ts + wrangler.toml + .gitignore, 已从 whitelist 移除
   'src/category-classify.ts',
   'src/category-seeds.ts',
   'src/classify.ts',
