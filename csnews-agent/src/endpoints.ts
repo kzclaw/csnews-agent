@@ -36,11 +36,12 @@ export {
   handleZakerHotAction,
 } from './endpoints-core';
 
-// process (3)
+// process (3 + 1 temp debug)
 export {
   handleProcessAction,
   handleHealthAction,
   handleLogsAction,
+  handleDbSchemaAction,
 } from './endpoints-process';
 
 // trend (3) + helper
