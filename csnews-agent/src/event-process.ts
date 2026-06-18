@@ -1,8 +1,8 @@
 /**
  * CSNEWS Agent · 事件处理 (v0.36.11)
  *
- * kzclaw 16:48 确定: 0 DDL = 聚类结果暂存 R2 event-clusters.json
- * kzclaw 5h 配额期外拍 entity 表 schema migration 后启用 writeEventClustersToSupabase
+ * 16:48 确定: 0 DDL = 聚类结果暂存 R2 event-clusters.json
+ * 5h 配额期外等 entity 表 schema migration 后启用 writeEventClustersToSupabase
  */
 import { Env } from './shared';
 import { runEventClustering, type EventCluster } from './event-cluster';
@@ -42,7 +42,7 @@ export async function runEventProcess(env: Env): Promise<{
   const ts = new Date().toISOString();
 
   try {
-    // 暂存 R2 event-clusters.json (kzclaw 0 DDL)
+    // 暂存 R2 event-clusters.json (0 DDL 原则)
     await env.csnews_raw.put(EVENT_CLUSTERS_R2_KEY, JSON.stringify({
       generated_at: ts,
       threshold: result.threshold,
