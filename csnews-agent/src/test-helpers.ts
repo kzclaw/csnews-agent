@@ -1,7 +1,5 @@
 /**
- * CSNEWS Agent · 测试 mock helpers (v0.36.8 · KR0)
- *
- * 详见：tasks/csnews-agent-okr.md KR0
+ * CSNEWS Agent · 测试 mock helpers
  */
 import { vi } from 'vitest';
 
@@ -9,7 +7,7 @@ import { vi } from 'vitest';
  * 定位：业务契约验证的 mock 共享库
  * 用途：validate/*.contract.ts 里复用，不重复写 mock 逻辑
  *
- * KR0 规划 (v0.33+sweep · Foundation 0 第 2 步):
+ * 规划:
  *   - mock supabaseFetch (R2 + KV + Supabase DB 响应)
  *   - mock R2 bucket operations
  *   - mock KV namespace
