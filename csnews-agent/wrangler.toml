@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
 # Observability: 开启 CF Workers Tail Logs / Logs 实时面板
-# kzclaw 2026-06-10 确定: 开 log 看 cron scheduled handler 内部 fetch 失败原因
+# 2026-06-10 确定: 开 log 看 cron scheduled handler 内部 fetch 失败原因
 # (过去 24h news=0 但 CF Dashboard cron 记成功 → scheduled handler 内部 fetch 失败被 try/catch 吞)
 # head_sampling_rate = 1.0 全采样 (Worker Free Plan 默认支持, 5 重安全网之一)
 # 注: wrangler 4.95 不认顶层 log_level 字段, 控制台级别用 [observability] + [logging] 子块
@@ -23,7 +23,7 @@ id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
 preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 
 [vars]
-# kzclaw 2026-06-12 确定: WORKER_SELF_URL 真值走 CF Secret
+# 2026-06-12 确定: WORKER_SELF_URL 真值走 CF Secret
 # (wrangler secret put WORKER_SELF_URL) — 不入 wrangler.toml / 不入 git
 # 历史: commit 5798b18 用 YOUR-WORKER.workers.dev 占位符 + 不替换 = cron 14h+ 静默
 # 现在: [vars] 不设同名 key → secret 唯一 → Worker env.WORKER_SELF_URL = secret 真值

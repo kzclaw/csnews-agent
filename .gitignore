@@ -26,6 +26,8 @@ Thumbs.db
 # MiniMax Code local cache
 .mimocode/
 
+# (legacy comment 2026-06-10: helper scripts 统一放 .tmp/ 子目录, 绝不入库)
+
 # Test / dev workers
 csnews-h1-test/
 
