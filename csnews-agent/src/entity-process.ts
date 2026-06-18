@@ -2,7 +2,7 @@
  * CSNEWS Agent · 实体处理 (v0.36.21 方案 D)
  *
  * kzclaw 16:28 确定: 0 硬编码, 纯自适应/自学习/自进化
- * kzclaw 18:49 拍板方案 D = 分层架构 (R2 冷层 + Supabase 热层 + TTL 自动归档)
+ * 方案 D = 分层架构 (R2 冷层 + Supabase 热层 + TTL 自动归档)
  *
  * 业务流程 (方案 D · 分层写):
  *   1. 读 R2 entity-candidates.json (kzclaw review 后)
@@ -31,7 +31,7 @@ export interface EntityFinalized {
 }
 
 /**
- * 读 R2 已 kzclaw review 过的 candidates
+ * 读 R2 已 review 过的 candidates
  */
 export async function loadReviewedCandidates(env: Env): Promise<EntityFinalized[]> {
   const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
@@ -91,7 +91,7 @@ export async function runEntityProcess(env: Env): Promise<{ written: number; err
  *   - PostgREST batch upsert: POST /rest/v1/entity_hot?on_conflict=name,type
  *   - Prefer: resolution=merge-duplicates → 触发 ON CONFLICT DO UPDATE
  *   - updated_at + mention_count 累加 (mention_count = entity_hot.mention_count + excluded.mention_count)
- *   - status 保留 (kzclaw review 过的不会因 cron 跑改回 active)
+ *   - status 保留 (review 过的不会因 cron 跑改回 active)
  *   - 30d+ 自动归档: 由 scheduledArchiveOldEntities 跑 (独立 cron, 不在本函数)
  */
 export async function writeEntitiesHotLayer(env: Env, entities: EntityFinalized[]): Promise<{ written: number; errors: number }> {
