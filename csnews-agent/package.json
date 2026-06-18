@@ -10,6 +10,7 @@
     "validate": "vitest run",
     "validate:watch": "vitest",
     "validate:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "git config core.hooksPath .githooks"
   }
 }
