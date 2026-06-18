@@ -41,18 +41,8 @@ const PRE_EXISTING_WHITELIST = [
   // 公开文档 (URL 含 GitHub username, public info structural, 不可改)
   'README.md',
   'AGENTS.md',
-  // v0.36.21 cleanup 已修 entity-process.ts + wrangler.toml + .gitignore, 已从 whitelist 移除
-  'src/category-classify.ts',
-  'src/category-seeds.ts',
-  'src/classify.ts',
-  'src/entity-noise-filter.ts',
-  'src/entity-selflearn.ts',
-  'src/event-cluster.ts',
-  'src/event-process.ts',
-  'src/event-threshold.ts',
-  'src/log.ts',
-  'src/shared.ts',
-  'src/zscore.ts',
+  // v0.36.21+ 大清理 已修 entity-process.ts + wrangler.toml + .gitignore + 11 src/ 文件, 已从 whitelist 移除
+  // 戴舒柯 21:50 派活 v0.36.22 13 文件大清理 = 0 违规 (除 README.md / AGENTS.md URL/路径 structural)
 ];
 
 const EXCLUDED_PATHS = [

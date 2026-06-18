@@ -1,15 +1,15 @@
 /**
  * CSNEWS Agent · 事件聚类 threshold 自适应 (v0.36.11)
  *
- * kzclaw 16:48 确定:
+ * 16:48 确定:
  *   - threshold 0.4 起步 (蓝图 v0.35+ 第 2.7 节)
- *   - kzclaw review 反馈驱动自适应 (0 硬编码固定值)
- *   - step 0.05 (kzclaw 5h 配额期外确定)
+ *   - review 反馈驱动自适应 (0 硬编码固定值)
+ *   - step 0.05 (5h 配额期外确定)
  *   - R2 event-threshold-history.json 持久化调优历史
  *
- * kzclaw 第 40 + 41 条跨项目原则实战:
- *   - #16 (memory §3): 自适应/自学习/自进化优先, 硬编码是最后手段
- *   - #17 (memory §3): 决策前必须先调研→判断可行性→做微调, PDCA 循环
+ * 跨项目原则实战:
+ *   - 自适应/自学习/自进化优先, 硬编码是最后手段
+ *   - 决策前必须先调研→判断可行性→做微调, PDCA 循环
  */
 import { Env } from './shared';
 
@@ -100,7 +100,7 @@ export async function recordReview(
 }
 
 /**
- * 拿当前 threshold (kzclaw 0 确定点 = 自动)
+ * 拿当前 threshold (0 确定点 = 自动)
  */
 export async function getCurrentThreshold(env: Env): Promise<number> {
   const history = await loadThresholdHistory(env);
