@@ -62,6 +62,8 @@ const EXCLUDED_PATHS = [
   'csnews-agent/coverage/',
   'csnews-agent/.wrangler/',
   'validate/',  // 隐私测试自己的代码, 含规则描述
+  'csnews-agent/package.json',
+  'package.json',  // bootstrap prepare script 含 patterns (Mavis 23:37 拍板, cwd 是 csnews-agent/ 时相对路径)
   // README + AGENTS.md + docs 是公开文档, 但仍不能含隐私 (rule 通用)
 ];
 
