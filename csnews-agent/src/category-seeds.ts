@@ -1,12 +1,12 @@
 /**
  * CSNEWS Agent · Category Seeds 自学习 (v0.36.13 · 候选 A)
  *
- * kzclaw 18:43 确定候选 A: 用 bge-m3 embedding 自分类
- * kzclaw 18:43 确定 #1 + #4: 0 硬编码类别 (类别名和 seeds 都从 R2 读)
+ * 18:43 确定候选 A: 用 bge-m3 embedding 自分类
+ * 18:43 确定 #1 + #4: 0 硬编码类别 (类别名和 seeds 都从 R2 读)
  *
  * 复用 entity-noise-filter.ts 80% 模式 (R2 持久化 + bge-m3 batch)
  *
- * 自进化闭环 (kzclaw 18:43 确定 #3):
+ * 自进化闭环 (18:43 确定 #3):
  *   - 分类错 review → seeds 自动更新 (addSeedToCategory)
  *   - 0 Neurons 消耗 (bge-m3 走 CF Workers AI 独立池)
  */
@@ -17,8 +17,8 @@ export const CATEGORY_SEEDS_R2_KEY = 'category-seeds.json';
 
 /**
  * 默认 10 类 × 5 代表词 = 50 seeds fallback
- * (kzclaw 18:43 确定 0 硬编码 = R2 持久化是主路径, 这是 R2 不存在时的 fallback)
- * (kzclaw 5h 配额期外 review R2 增删 seeds 即可生效, 0 维护成本)
+ * (18:43 确定 0 硬编码 = R2 持久化是主路径, 这是 R2 不存在时的 fallback)
+ * (5h 配额期外 review R2 增删 seeds 即可生效, 0 维护成本)
  */
 export const DEFAULT_CATEGORY_SEEDS: Record<string, string[]> = {
   '科技': [
@@ -60,7 +60,7 @@ export interface CategorySeedsData {
 }
 
 /**
- * 读 R2 category-seeds.json (kzclaw 5h 配额期外 review 增删)
+ * 读 R2 category-seeds.json (5h 配额期外 review 增删)
  */
 export async function loadCategorySeeds(env: Env): Promise<CategorySeedsData> {
   const obj = await env.csnews_raw.get(CATEGORY_SEEDS_R2_KEY);
@@ -96,8 +96,8 @@ export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<nu
 }
 
 /**
- * kzclaw review: 分类错 → 加 seed 到正确类别
- * (kzclaw 18:43 确定 #3 自进化闭环)
+ * review: 分类错 → 加 seed 到正确类别
+ * (18:43 确定 #3 自进化闭环)
  */
 export async function addSeedToCategory(
   env: Env,
@@ -118,7 +118,7 @@ export async function addSeedToCategory(
 }
 
 /**
- * kzclaw review: 删 seed (噪音 seed 错误)
+ * review: 删 seed (噪音 seed 错误)
  */
 export async function removeSeedFromCategory(
   env: Env,
