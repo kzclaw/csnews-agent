@@ -35,3 +35,6 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+
+# Local privacy patterns (per-developer, copy from .privacy-patterns.txt.example at repo root)
+.privacy-patterns.txt
