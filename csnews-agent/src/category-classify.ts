@@ -1,8 +1,8 @@
 /**
  * CSNEWS Agent · 分类自分类 (v0.36.13 · 候选 A)
  *
- * kzclaw 18:43 确定候选 A: bge-m3 embedding 自分类
- * kzclaw 18:43 确定 #2: news title bge-m3 embed + cosine similarity 选最近类别
+ * 18:43 确定候选 A: bge-m3 embedding 自分类
+ * 18:43 确定 #2: news title bge-m3 embed + cosine similarity 选最近类别
  *
  * 复用 entity-noise-filter.ts 80% 代码
  */
@@ -13,7 +13,7 @@ import {
 import { cosineSimilarity } from './entity-noise-filter';
 
 /**
- * 自分类主函数 (kzclaw 18:43 确定候选 A 核心)
+ * 自分类主函数 (18:43 确定候选 A 核心)
  *
  * @param title 新闻标题
  * @param env CF Workers Env
@@ -75,7 +75,7 @@ export async function classifyBySemantic(
     return { category: '综合', confidence: 0, top_scores: [] };
   }
 
-  // kzclaw 18:43 确定: 分类错 → review → seeds 自更新
+  // 18:43 确定: 分类错 → review → seeds 自更新
   // confidence < 0.3 → 综合兜底 (跟 entity-noise-filter 0 embedding 兜底一致)
   const top = topScores[0];
   const confidence = top.score;

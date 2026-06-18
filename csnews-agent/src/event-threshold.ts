@@ -57,7 +57,7 @@ export async function loadThresholdHistory(env: Env): Promise<ThresholdHistory> 
 /**
  * 计算下一次 threshold (review 反馈驱动)
  *
- * kzclaw 16:48 确定:
+ * 16:48 确定:
  *   - correct (聚类对) → threshold +0.05 (更宽, 接受更多 entity 共享 = 同一 cluster)
  *   - incorrect (聚类错) → threshold -0.05 (更严, 只接受更明确的 entity 共享)
  *   - 边界: [THRESHOLD_MIN, THRESHOLD_MAX] clamp
@@ -69,7 +69,7 @@ export function nextThreshold(current: number, review: 'correct' | 'incorrect'):
 }
 
 /**
- * kzclaw review 反馈 → 持久化
+ * review 反馈 → 持久化
  */
 export async function recordReview(
   env: Env,
