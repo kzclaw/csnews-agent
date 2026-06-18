@@ -1,19 +1,19 @@
 /**
  * CSNEWS Agent · 实体自学习 (v0.36.11)
  *
- * kzclaw 16:28 确定: 0 硬编码, 纯自适应/自学习/自进化
- * kzclaw 16:33 确定推 · bge-m3 走 CF Workers AI 独立池
+ * 16:28 确定: 0 硬编码, 纯自适应/自学习/自进化
+ * 16:33 确定推 · bge-m3 走 CF Workers AI 独立池
  *
  * 业务流程:
  *   1. 拉 news_topic_members + news_hotspots (last 24h)
  *   2. 抽 title + summary 文本
- *   3. 提取 n-gram (2-4 字) 频率统计 (kzclaw 0 硬编码 = 启发式 type 推断)
+ *   3. 提取 n-gram (2-4 字) 频率统计 (0 硬编码 = 启发式 type 推断)
  *   4. 用 bge-m3 embedding 计算与已有 entity 的相似度
  *   5. 过滤: 频率 ≥ 阈值 + 相似度 < 阈值 (跟现有 entity 不重复)
- *   6. 写 R2 entity-candidates.json (kzclaw review)
+ *   6. 写 R2 entity-candidates.json (review 入口)
  *
- * kzclaw 0 维护 = 系统自动跑, kzclaw只 review 错词
- * kzclaw 5h 配额期哲学 = 0 Neurons (bge-m3 embedding 走 CF Workers AI 独立池, 跟 KR0+1 MiniMax 0 关系)
+ * 0 维护 = 系统自动跑, 只 review 错词
+ * 5h 配额期哲学 = 0 Neurons (bge-m3 embedding 走 CF Workers AI 独立池)
  */
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
@@ -77,7 +77,7 @@ export function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, n
 }
 
 /**
- * 启发式 type 推断 (kzclaw 16:28 确定 0 硬编码 · 启发式 OK)
+ * 启发式 type 推断 (16:28 确定 0 硬编码 · 启发式 OK)
  * 含常见组织关键词 → org
  * 含常见地名关键词 → place
  * 其他 → person
@@ -117,7 +117,7 @@ async function fetchRecentNewsTitles(env: Env, sinceHours: number = 24): Promise
 }
 
 /**
- * bge-m3 embedding (CF Workers AI 独立池, 0 kzclaw KR0+1 Neurons 关系)
+ * bge-m3 embedding (CF Workers AI 独立池, 0 Neurons 关系)
  */
 async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
@@ -155,7 +155,7 @@ async function loadExistingCandidates(env: Env): Promise<EntityCandidate[]> {
 }
 
 /**
- * 主函数: 自学习 (kzclaw 5h 配额期可推, 1-2 min 跑完)
+ * 主函数: 自学习 (5h 配额期可推, 1-2 min 跑完)
  */
 export async function runEntitySelfLearn(env: Env): Promise<{ candidates: EntityCandidate[]; total: number; embedded: number; noise_filtered: number; noise_anchors_count: number }> {
   try {
@@ -182,7 +182,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       return { candidates: [], total: news.length, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
     }
 
-    // bge-m3 embedding 候选词 (batch, 0 Neurons kzclaw 5h 配额期 0 关系)
+    // bge-m3 embedding 候选词 (batch, 0 Neurons)
     const embeddings = await bgeM3Embedding(env, candidateGrams);
 
     // 跟已有 candidates 比相似度 (去重)
@@ -191,7 +191,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       ? await bgeM3Embedding(env, existing.slice(0, 50).map((c) => c.name))
       : [];
 
-    // semantic noise anchor filtering (kzclaw 18:22 确定: similarity >= 0.85 → noise)
+    // semantic noise anchor filtering (18:22 确定: similarity >= 0.85 → noise)
     const noiseAnchorsData = await loadNoiseAnchors(env);
     const anchorEmbeddings = noiseAnchorsData.anchors.length > 0
       ? await bgeM3Embedding(env, noiseAnchorsData.anchors)
@@ -222,7 +222,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       dedupCandidates.push({ gram, count: filtered[i].count });
     }
 
-    // noise filter (kzclaw 18:22 确定)
+    // noise filter (18:22 确定)
     // 转换 dedupCandidates 到 filter function 期望的 shape {name, count}
     const dedupForFilter = dedupCandidates.map((c) => ({ name: c.gram, count: c.count }));
     const dedupEmbs = dedupForFilter.map((c) => {
@@ -261,7 +261,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
         first_seen: new Date().toISOString(),
       }));
 
-    // 写 R2 entity-candidates.json (kzclaw review 入口 · 含 noise 分组)
+    // 写 R2 entity-candidates.json (review 入口 · 含 noise 分组)
     await env.csnews_raw.put(ENTITY_CANDIDATES_R2_KEY, JSON.stringify({
       generated_at: new Date().toISOString(),
       total_news: news.length,
