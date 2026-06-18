@@ -38,6 +38,9 @@ specs/
 .githooks/
 scripts/
 
+# Local privacy patterns (per-developer, copy from .privacy-patterns.txt.example)
+.privacy-patterns.txt
+
 # Wrangler local cache + build outputs
 .wrangler/
 csnews-agent/.wrangler/
