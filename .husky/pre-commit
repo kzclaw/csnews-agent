@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Pre-commit hook · delegates to scripts/check-privacy.sh
-# Auto-configured by package.json "prepare" script: core.hooksPath = csnews-agent/.githooks
-# Mavis 23:37 拍板 C: check-privacy.sh gitignored (local tooling, optional for new contributors)
+# Pre-commit hook · delegates to csnews-agent/scripts/check-privacy.sh
+# Auto-configured by package.json "prepare" script (husky 9 installs core.hooksPath)
+# 23:27 privacy tooling gitignored (local, optional for new contributors)
 
 set -e
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT_PATH="$SCRIPT_DIR/scripts/check-privacy.sh"
+GIT_ROOT=$(git rev-parse --show-toplevel)
+SCRIPT_PATH="$GIT_ROOT/csnews-agent/scripts/check-privacy.sh"
 
 if [ ! -f "$SCRIPT_PATH" ]; then
   echo "⚠️ check-privacy.sh not found (gitignored, optional)"
