@@ -1,9 +1,7 @@
 // ============================================================
-// 鉴权 + CORS（v0.33+sweep·FT-KR0 · Foundation 0 第 1 步 · T000）
+// 鉴权 + CORS
 // ============================================================
 // 用途：入口看门（每请求先验证身份）+ 跨域头
-// 详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0 · KR0
-//       specs/001-kr17-split-index-ts/{spec.md,plan.md,tasks.md}
 
 import { Env } from './shared';
 
