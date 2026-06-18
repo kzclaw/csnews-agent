@@ -6,7 +6,9 @@
 set -e
 
 # Load patterns from local file (gitignored, per-developer)
-PATTERNS_FILE=".privacy-patterns.txt"
+# Use git root path so script works regardless of cwd (husky hook may cd)
+GIT_ROOT=$(git rev-parse --show-toplevel)
+PATTERNS_FILE="$GIT_ROOT/.privacy-patterns.txt"
 if [ ! -f "$PATTERNS_FILE" ]; then
   echo "❌ .privacy-patterns.txt not found (戴舒柯 21:50 拍板)"
   echo "Run: cp .privacy-patterns.txt.example .privacy-patterns.txt"

@@ -1717,7 +1717,7 @@ function updateTicker(items) {
   const html = spans + spans;  // 2 次重复 · 配合 CSS translateX(-50%) 无缝
   tracks.forEach(track => track.innerHTML = html);
 }
-async function fetchEntity() { return apiGet('/?action=entity&text=__latest__'); }
+async function fetchEntity() { return apiGet('/?action=entity&type=finalized'); }
 async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
 async function fetchLogs(date, hour, limit) {
   const params = { action: 'logs', limit: String(limit) };
