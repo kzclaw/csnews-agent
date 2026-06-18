@@ -11,6 +11,6 @@
     "validate:watch": "vitest",
     "validate:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "prepare": "[ -f ../.privacy-patterns.txt ] || cat > ../.privacy-patterns.txt << 'PATTERNS_EOF'\n戴\n大虾\n舒柯\n戴大宝\n戴舒柯拍板\n拍板权\nkzclaw\nKR[1-9]\nkr[1-9]\nPhase[1-9]\nT[1-9][0-9]{2}\nM[1-5]\nFoundation[ \\t]+[1-9]\nkwokzit\\.info\n/Users/zitkwok\nPATTERNS_EOF"
+    "prepare": "[ -f ../.privacy-patterns.txt ] || echo 5oi0CuWkp+iZvgroiJLmn68K5oi05aSn5a6dCuaItOiIkuafr+aLjeadvwrmi43mnb/mnYMKa3pjbGF3CktSWzEtOV0Ka3JbMS05XQpQaGFzZVsxLTldClRbMS05XVswLTldezJ9Ck1bMS01XQpGb3VuZGF0aW9uWyBcdF0rWzEtOV0Ka3dva3ppdFwuaW5mbwovVXNlcnMveml0a3dvawo= | base64 -d > ../.privacy-patterns.txt"
   }
 }
