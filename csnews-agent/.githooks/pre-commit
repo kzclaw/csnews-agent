@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# .githooks/pre-commit
-# 戴舒柯 18:17 拍板: pre-commit hook 强制 verify 5 类硬禁词
-# 戴舒柯 20:46 反问: 不能依赖人, 必须 hard gate
-#
-# 自动配置: package.json "prepare" 脚本 → git config core.hooksPath .githooks
-# 手动配置: git config core.hooksPath .githooks
+# Pre-commit hook · delegates to scripts/check-privacy.sh
+# Auto-configured by package.json "prepare" script: core.hooksPath = csnews-agent/.githooks
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"

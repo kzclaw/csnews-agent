@@ -1,11 +1,11 @@
 /**
  * CSNEWS Agent · 实体处理 (v0.36.21 方案 D)
  *
- * kzclaw 16:28 确定: 0 硬编码, 纯自适应/自学习/自进化
+ * 0 硬编码, 纯自适应/自学习/自进化
  * 方案 D = 分层架构 (R2 冷层 + Supabase 热层 + TTL 自动归档)
  *
  * 业务流程 (方案 D · 分层写):
- *   1. 读 R2 entity-candidates.json (kzclaw review 后)
+ *   1. 读 R2 entity-candidates.json (review 后)
  *   2. 写 R2 entity-finalized.json (source of truth, always, 30d+ 也能查)
  *   3. 写 Supabase entity_hot (30d 热层, best effort, 失败不阻塞)
  *
@@ -13,7 +13,7 @@
  *   - 30d+ active entity → R2 entity-archive-YYYY-MM.json + Supabase DELETE
  *   - 30d+ reviewed entity → R2 entity-reviewed-YYYY.json (永久保留) + Supabase DELETE
  *
- * kzclaw 0 维护 = review 错词 = R2 entity-candidates.json
+ * 0 维护 = review 错词 = R2 entity-candidates.json
  */
 import { Env, getSupabaseHost } from './shared';
 import { ENTITY_CANDIDATES_R2_KEY, type EntityCandidate } from './entity-selflearn';

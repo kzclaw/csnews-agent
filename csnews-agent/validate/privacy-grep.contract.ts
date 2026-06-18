@@ -43,12 +43,11 @@ const PRE_EXISTING_WHITELIST = [
   'README.md',
   'wrangler.toml',
   'AGENTS.md',
-  // v0.36.21 cleanup 已修 entity-process.ts 3 处 (派活 scope), 但 4/8/16 仍 pre-existing
+  // v0.36.21 cleanup 已修 entity-process.ts 6 处 (派活 09327a9 + 7207c5c scope), 已从 whitelist 移除
   'src/category-classify.ts',
   'src/category-seeds.ts',
   'src/classify.ts',
   'src/entity-noise-filter.ts',
-  'src/entity-process.ts',
   'src/entity-selflearn.ts',
   'src/event-cluster.ts',
   'src/event-process.ts',
