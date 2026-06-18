@@ -1,11 +1,11 @@
 // ============================================================
 // 自分类 (v0.36.13 · 候选 A · bge-m3 embedding 自分类)
 // ============================================================
-// kzclaw 18:43 确定候选 A: 用 bge-m3 embedding 替换 250+ 词硬编码
-// kzclaw 16:28 确定 #40 条 0 硬编码哲学: 类别和 seeds 都从 R2 读
-// kzclaw 18:43 确定自进化闭环: 分类错 review → seeds 自动更新
+// 18:43 确定候选 A: 用 bge-m3 embedding 替换 250+ 词硬编码
+// 16:28 确定 #40 条 0 硬编码哲学: 类别和 seeds 都从 R2 读
+// 18:43 确定自进化闭环: 分类错 review → seeds 自动更新
 //
-// 历史: v0.33+sweep·FT-KR0 关键词兜底 (kzclaw 16:00 之前确定) · 16:28 哲学违规最严重源
+// 历史: v0.33+sweep·FT-KR0 关键词兜底 (16:00 之前确定) · 16:28 哲学违规最严重源
 // v0.36.13 起: 主路径走 bge-m3 embedding 自分类 · 旧 classifyRule 降级兜底
 //
 // 详见：tasks/csnews-agent-okr.md v0.36.13 候选 A
@@ -76,7 +76,7 @@ const CATEGORY_KW: Record<string, string[]> = {
  ],
 };
 
-// legacy 关键词兜底 (kzclaw 16:00 确定 · kzclaw 16:28 哲学违规但兜底保留)
+// legacy 关键词兜底 (16:00 确定 · 16:28 哲学违规但兜底保留)
 // v0.36.13 起不在主路径, 仅作 legacy fallback
 export function classifyRule(title: string): string {
  for (const [cat, kws] of Object.entries(CATEGORY_KW)) {
@@ -94,10 +94,10 @@ export async function classifyByAI(title: string, env: Env): Promise<string> {
 }
 
 // 双保险分类: 主路径 bge-m3 semantic 自分类, 关键词兜底, 综合保底
-// v0.36.13 主路径 = bge-m3 (kzclaw 16:28 0 硬编码哲学一致)
+// v0.36.13 主路径 = bge-m3 (16:28 0 硬编码哲学一致)
 export async function classify(title: string, env: Env): Promise<string> {
  const result = await classifyBySemantic(title, env);
- // confidence < 0.3 时 fallback 到 keywords (跟kzclaw 18:43 确定兜底一致)
+ // confidence < 0.3 时 fallback 到 keywords (跟18:43 确定兜底一致)
  if (result.confidence < 0.3 && result.top_scores.length === 0) {
  return classifyRule(title);
  }
