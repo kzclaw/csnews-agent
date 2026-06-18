@@ -445,8 +445,8 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
 }
 
 // ===================== rescore =====================
-// 派活 14: 批量重跑旧新闻分类
-// 读 news_hotspots 全部 (or top N), 用 batchClassifyBySemantic 一次性算新分类,
+// 批量重跑旧新闻分类
+// 读 news_hotspots (分页处理 Supabase 1000 行/页限制), 用 batchClassifyBySemantic 算新分类,
 // PATCH 写回 Supabase. dry_run 默认 true 防误操作.
 export async function handleRescoreAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
   try {
@@ -454,14 +454,20 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
     const dryRun = url.searchParams.get('dry_run') !== 'false';
     // 默认 limit=100 (防止超时), limit=0 表示全部 (2,394+ 条)
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    // offset 用于分页 (PostgREST 默认 1000 行/页), 调用方可手动翻页
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
 
-    // 1. 读 news_hotspots
-    // limit=0 表示全部 (默认 5000 上限覆盖 2,394+ news_hotspots)
-    const effectiveLimit = limit > 0 ? limit : 5000;
-    const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc&limit=${effectiveLimit}`, {
+    // 1. 读 news_hotspots (分页)
+    // Supabase PostgREST 单次 1000 行上限, 用 Range header 或 offset 翻页
+    const effectiveLimit = limit > 0 ? limit : 1000;
+    const effectiveOffset = offset > 0 ? offset : 0;
+    const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc`, {
       headers: {
         'apikey': env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'Range-Unit': 'items',
+        'Range': `${effectiveOffset}-${effectiveOffset + effectiveLimit - 1}`,
+        'Prefer': 'count=exact',
       },
     });
     if (!newsRes.ok) {
