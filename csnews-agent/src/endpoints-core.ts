@@ -456,8 +456,9 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
 
     // 1. 读 news_hotspots
-    const queryLimit = limit > 0 ? `&limit=${limit}` : '';
-    const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc${queryLimit}`, {
+    // limit=0 表示全部 (默认 5000 上限覆盖 2,394+ news_hotspots)
+    const effectiveLimit = limit > 0 ? limit : 5000;
+    const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc&limit=${effectiveLimit}`, {
       headers: {
         'apikey': env.SUPABASE_SERVICE_KEY,
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
@@ -517,6 +518,7 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
 
     // 5. UPDATE (only if not dry_run)
     let updated = 0, updateErrors = 0;
+    const errorSamples: string[] = [];
     if (!dryRun) {
       for (const d of diffs.filter(d => d.changed)) {
         try {
@@ -526,12 +528,24 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
               'apikey': env.SUPABASE_SERVICE_KEY,
               'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
               'Content-Type': 'application/json',
+              'Prefer': 'return=representation',
             },
             body: JSON.stringify({ category: d.new }),
           });
-          if (patchRes.ok) updated++; else updateErrors++;
-        } catch {
+          if (patchRes.ok) {
+            updated++;
+          } else {
+            updateErrors++;
+            if (errorSamples.length < 3) {
+              const errText = await patchRes.text();
+              errorSamples.push(`${patchRes.status}: ${errText.slice(0, 150)}`);
+            }
+          }
+        } catch (e: any) {
           updateErrors++;
+          if (errorSamples.length < 3) {
+            errorSamples.push(`exception: ${e?.message || e}`);
+          }
         }
       }
     }
@@ -545,6 +559,7 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
       errors,
       updated: dryRun ? 0 : updated,
       update_errors: dryRun ? 0 : updateErrors,
+      error_samples: errorSamples.length > 0 ? errorSamples : undefined,
       sample: diffs.slice(0, 5),
       timestamp: new Date().toISOString(),
     }), {
