@@ -478,8 +478,22 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
 
     // 2. 准备 input texts (title + summary 混合, 跟新分类逻辑一致)
     const inputTexts = newsList.map(n => `${n.title || ''} ${n.summary || ''}`.trim());
-    // 3. 1 次 bge-m3 batch 算所有 input + seed
-    const batchResults = await batchClassifyBySemantic(inputTexts, env);
+    // 3. 分批跑 batchClassifyBySemantic (Workers AI 上下文 60K token 上限, 全量 2,394 条超限)
+    //    每批 300 条 ≈ 24K tokens (title 30-50 + summary 200 字 ≈ 80 tokens/条)
+    const CHUNK_SIZE = 300;
+    const batchResults: Array<{ category: string; confidence: number }> = [];
+    for (let i = 0; i < inputTexts.length; i += CHUNK_SIZE) {
+      const chunk = inputTexts.slice(i, i + CHUNK_SIZE);
+      try {
+        const chunkResults = await batchClassifyBySemantic(chunk, env);
+        batchResults.push(...chunkResults);
+      } catch (e: any) {
+        // 单批失败: 用综合兜底, 不阻塞其他批
+        for (let j = 0; j < chunk.length; j++) {
+          batchResults.push({ category: '综合', confidence: 0 });
+        }
+      }
+    }
 
     // 4. 对比新旧分类, 统计 changed / unchanged
     const diffs: any[] = [];
