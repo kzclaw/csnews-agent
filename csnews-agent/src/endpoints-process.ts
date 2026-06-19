@@ -21,12 +21,18 @@ import { logEvent } from './log';
 import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
 import { checkEntityCronHealth } from './utils';
+import { getCacheMetrics, resetCacheMetrics } from './cache';
 
 // ===================== process (News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
   // try/finally 包裹整个函数体, finally 写 KV last_process_at
   // 即使 throw (subrequest 超限 / 网络失败 / SQL 错) 也能记录 cron 最后运行时间, cron_health 派生真实状态
   try {
+    // Step 0a: 重置 per-isolate cache metrics (小时窗口重置, 避免跨小时累加漂移)
+    // cache metrics 是 module-level state, 跨 invoke 共享, 每小时 cron 起点清零
+    // 让 health 端点 cache_metrics 反映"最近一小时"的 hit rate, 不是"历史累加"
+    resetCacheMetrics();
+
     // Step 0: 清理过期话题簇 (1 subrequest)
     const cleaned = await cleanupStaleTopics(env) as any;
 
@@ -213,7 +219,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 }
 
 // ===================== health =====================
-// 13 大维度检查
+// 14 大维度检查
 //  1. last_process_at              - 最近 process 跑时间 (KV 持久化)
 //  2. cron_health                  - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
 //  3. secret_resolved              - WORKER_SELF_URL secret 是不是占位符
@@ -227,6 +233,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 // 11. ai_budget_today              - 当日 AI 配额用量
 // 12. entity_freshness             - entity cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 13. event_freshness              - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
+// 14. cache_metrics                - pull KV 缓存 hit rate (per-isolate, hit_rate≥50%=ok)
 export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
   const ts = Date.now();
   const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
@@ -540,6 +547,43 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
     result.event_freshness = { error: e?.message || "event freshness check failed" };
     checks.entity_freshness = { status: "unknown", detail: e?.message };
     checks.event_freshness = { status: "unknown", detail: e?.message };
+  }
+
+  // ========== 14. cache_metrics (pull KV 缓存 hit rate, per-isolate) ==========
+  // 读 module-level metrics (hits/misses/stores/store_failures), 派生 hit_rate
+  // 状态规则: 0 请求 = unknown (冷启动 / 无 pull 流量)
+  //           hit_rate >= 50% = ok (缓存有效)
+  //           hit_rate < 50% = degraded (缓存失效, 命中偏低)
+  // 已知限制: per-isolate state 不跨 isolate 共享, 多 Worker instance 时 metrics 是局部视图
+  try {
+    const m = getCacheMetrics();
+    result.cache_metrics = {
+      hits: m.hits,
+      misses: m.misses,
+      stores: m.stores,
+      store_failures: m.store_failures,
+      total_requests: m.total_requests,
+      hit_rate: Number(m.hit_rate.toFixed(4)),
+    };
+    if (m.total_requests === 0) {
+      checks.cache_metrics = {
+        status: "unknown",
+        detail: "no cache requests yet (cold start or no pull traffic this isolate)",
+      };
+    } else if (m.hit_rate >= 0.5) {
+      checks.cache_metrics = {
+        status: "ok",
+        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests)`,
+      };
+    } else {
+      checks.cache_metrics = {
+        status: "degraded",
+        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests, < 50%)`,
+      };
+    }
+  } catch (e: any) {
+    result.cache_metrics = { error: e?.message || "cache metrics read failed" };
+    checks.cache_metrics = { status: "unknown", detail: e?.message };
   }
 
   // ========== 整体 status 聚合 ==========

@@ -172,7 +172,7 @@ describe('cache · cacheSet', () => {
   it('PROCESS_STATE undefined → recordStoreFailure + 静默', async () => {
     const env = mockEnv();
     await cacheSet(env, 'cache:foo', { x: 1 });
-    expect(getCacheMetrics().storeFailures).toBe(1);
+    expect(getCacheMetrics().store_failures).toBe(1);
   });
 
   it('正常写: KV.put + recordStore (TTL 默认 1h)', async () => {
@@ -199,7 +199,7 @@ describe('cache · cacheSet', () => {
     const huge = 'x'.repeat(26 * 1024 * 1024); // 26MB string
     await cacheSet(env, 'cache:foo', huge);
     expect(putSpy).not.toHaveBeenCalled();
-    expect(getCacheMetrics().storeFailures).toBe(1);
+    expect(getCacheMetrics().store_failures).toBe(1);
   });
 
   it('KV.put 抛错 → recordStoreFailure + 静默 (不抛)', async () => {
@@ -208,7 +208,7 @@ describe('cache · cacheSet', () => {
     };
     const env = mockEnv({ PROCESS_STATE: fakeKV });
     await cacheSet(env, 'cache:foo', { x: 1 });
-    expect(getCacheMetrics().storeFailures).toBe(1);
+    expect(getCacheMetrics().store_failures).toBe(1);
   });
 });
 
@@ -242,7 +242,7 @@ describe('cache · metrics', () => {
 
   it('reset 后: 全部 0, hit_rate = 0', () => {
     const m = getCacheMetrics();
-    expect(m).toEqual({ hits: 0, misses: 0, stores: 0, storeFailures: 0, total_requests: 0, hit_rate: 0 });
+    expect(m).toEqual({ hits: 0, misses: 0, stores: 0, store_failures: 0, total_requests: 0, hit_rate: 0 });
   });
 
   it('total_requests = hits + misses (派生字段自动算)', async () => {
