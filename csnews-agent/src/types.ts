@@ -31,12 +31,29 @@ export interface NewsHotspotRow {
   url: string | null;
   source: string | null;
   category: string | null;
+  summary?: string | null;
   hot_score: number | null;
   score: number | null;
   level: string | null;
   topic_id: string | null;
   r2_key: string | null;
   created_at: string;
+}
+
+/**
+ * R2 存储的新闻内容数据（content endpoint 用）
+ * 来自 saveToR2(env, 'news/zaker', {...})，形状由 news-process.ts 决定
+ * endpoints-trend.ts handleContentAction 用
+ */
+export interface R2ContentData {
+  title?: string;
+  category?: string;
+  score?: number;
+  level?: string;
+  topic_id?: string;
+  fission?: boolean;
+  similarity?: number;
+  created_at?: string;
 }
 
 /** topics 表行（trend/knowledge/process/pull 端点共用 SELECT） */

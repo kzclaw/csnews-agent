@@ -14,10 +14,12 @@ import type {
 
 //清理过期话题簇(跟进7天/重要14天/爆炸28天)
 export async function cleanupStaleTopics(env: Env) {
- const { data } = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
+ // Supabase PostgREST RPC 返回数组，不包装 {data} 对象
+ const json = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
  method: 'POST',
- })).json() as CleanupStaleTopicsResult[];
- return data?.[0] || { deleted_topic_count:0, deleted_news_count:0 };
+ })).json() as CleanupStaleTopicsResult[] | null;
+ if (!json) return { deleted_topic_count:0, deleted_news_count:0 };
+ return json[0] || { deleted_topic_count:0, deleted_news_count:0 };
 }
 
 //向量查重:查相似新闻

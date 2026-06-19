@@ -36,7 +36,7 @@ import {
   knowledgeR2Key, KNOWLEDGE_INDEX_KEY,
 } from './knowledge-validation';
 import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
-import type { NewsHotspotRow, TopicRow } from './types';
+import type { NewsHotspotRow, TopicRow, R2ContentData } from './types';
 
 // ===================== content (R2 全文内容读取端点) =====================
 // 用途: 消费者 (推送 / 第三方 IM 转发) 从 R2 拿 news_hotspots 关联的摘要 + 原始 URL
@@ -80,15 +80,15 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
   const news = newsData[0];
 
   // 4. R2 拿 content (按 news.r2_key)
-  // R2 存储内容来自 saveToR2()，形状由 news-process.ts 的数据结构决定，跨模块动态 schema 保持 any
-  let r2Data: unknown = null;
+  // R2ContentData 接口覆盖 content endpoint 用到的字段（来自 saveToR2 写入结构）
+  let r2Data: R2ContentData | null = null;
   let r2Error: string | null = null;
   if (news.r2_key) {
     try {
       const obj = await env.csnews_raw.get(news.r2_key);
       if (obj) {
         const text = await obj.text();
-        r2Data = JSON.parse(text);
+        r2Data = JSON.parse(text) as R2ContentData;
       } else {
         r2Error = 'r2_key_found_but_object_missing';
       }
