@@ -9,7 +9,7 @@
  * - KV native expirationTtl only: 简化, 不存额外 expiresAt (避免双时钟漂移)
  * - cache: prefix 隔离: 跟 PROCESS_STATE 现有 prefix 区分 (ai-budget, rate-limit, cron_health)
  * - Silent failure: cache miss / KV 错不阻塞主流程 (缓存是优化, 不是依赖)
- * - Per-isolate metrics: hits / misses / stores / storeFailures / hitRate
+ * - Per-isolate metrics: hits / misses / stores / store_failures / hit_rate
  */
 
 import { Env } from './shared';
@@ -62,7 +62,7 @@ export interface CacheMetrics {
   hits: number;
   misses: number;
   stores: number;
-  storeFailures: number;
+  store_failures: number;
   total_requests: number;
   hit_rate: number;
 }
@@ -71,7 +71,7 @@ let metrics: CacheMetrics = {
   hits: 0,
   misses: 0,
   stores: 0,
-  storeFailures: 0,
+  store_failures: 0,
   total_requests: 0,
   hit_rate: 0,
 };
@@ -86,7 +86,7 @@ export function getCacheMetrics(): CacheMetrics {
 }
 
 export function resetCacheMetrics(): void {
-  metrics = { hits: 0, misses: 0, stores: 0, storeFailures: 0, total_requests: 0, hit_rate: 0 };
+  metrics = { hits: 0, misses: 0, stores: 0, store_failures: 0, total_requests: 0, hit_rate: 0 };
 }
 
 /**
@@ -123,20 +123,20 @@ export async function cacheSet(
   ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<void> {
   if (!env.PROCESS_STATE) {
-    metrics.storeFailures++;
+    metrics.store_failures++;
     return;
   }
   try {
     const serialized = JSON.stringify(value);
     const bytes = new TextEncoder().encode(serialized).length;
     if (bytes > MAX_VALUE_SIZE_BYTES) {
-      metrics.storeFailures++;
+      metrics.store_failures++;
       return;
     }
     await env.PROCESS_STATE.put(key, serialized, { expirationTtl: ttlSeconds });
     metrics.stores++;
   } catch (e) {
-    metrics.storeFailures++;
+    metrics.store_failures++;
   }
 }
 
