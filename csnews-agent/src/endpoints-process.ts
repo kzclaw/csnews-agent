@@ -10,7 +10,7 @@
 //   - logs: 读 R2 logs 端点
 // ============================================================
 
-import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
+import { Env } from './shared';
 import { scoreRule, hashStr } from './score';
 import { classify } from './classify';
 import {
@@ -18,18 +18,27 @@ import {
   createTopic, insertNewsHotspotsBatch, recordTrendWithMember, saveToR2,
 } from './news-process';
 import { logEvent } from './log';
-import { countAnomalySignals } from './zscore';
-import { getBudgetStatus } from './ai-budget';
-import { checkEntityCronHealth } from './utils';
-import { getCacheMetrics, resetCacheMetrics } from './cache';
+import { resetCacheMetrics } from './cache';
 import type {
   CleanupStaleTopicsResult,
   ZakerHotResponse,
   BgeEmbeddingResponse,
   UpdateTopicScoreResult,
   CreatedTopicRow,
-  TrendSnapshotRow,
 } from './types';
+import {
+  checkLastProcessAt,
+  checkSecretResolved,
+  checkSupabaseCounts,
+  checkR2LatestWrite,
+  checkR2LatestSupabaseWrite,
+  checkR2PrefixCounts,
+  checkCronHistory,
+  checkZscoreSignals,
+  checkAiBudget,
+  checkEntityAndEventFreshness,
+  checkCacheMetrics,
+} from './health-checks';
 
 // ===================== process (News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
@@ -228,7 +237,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 }
 
 // ===================== health =====================
-// 14 大维度检查
+// 14 大维度检查 (拆分至 health-checks.ts)
 //  1. last_process_at              - 最近 process 跑时间 (KV 持久化)
 //  2. cron_health                  - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
 //  3. secret_resolved              - WORKER_SELF_URL secret 是不是占位符
@@ -247,355 +256,68 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   const ts = Date.now();
   const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
   const result: any = {
-    status: "ok",  // 整体 status: ok / degraded / down
+    status: "ok",
     ts,
   };
 
-  // ========== 2. last_process_at (KV 持久化) ==========
-  try {
-    if (env.PROCESS_STATE) {
-      const last = await env.PROCESS_STATE.get("last_process_at");
-      result.last_process_at = last;
-      checks.last_process_at = { status: last ? "ok" : "degraded", detail: last || "KV empty" };
-    } else {
-      result.last_process_at = null;
-      checks.last_process_at = { status: "down", detail: "PROCESS_STATE KV binding missing" };
-    }
-  } catch (e: any) {
-    result.last_process_at = { error: e?.message || "kv unavailable" };
-    checks.last_process_at = { status: "down", detail: e?.message };
-  }
+  // 1+2. last_process_at + cron_health
+  const lastProcessResult = await checkLastProcessAt(env, ts);
+  result.last_process_at = lastProcessResult.last_process_at;
+  result.cron_health = lastProcessResult.cron_health;
+  checks.last_process_at = lastProcessResult.checks.last_process_at;
+  checks.cron_health = lastProcessResult.checks.cron_health;
 
-  // ========== 3. cron_health (派生) ==========
-  let cronHealth: "ok" | "degraded" | "down" = "ok";
-  if (typeof result.last_process_at === "string") {
-    const lastMs = Date.parse(result.last_process_at);
-    if (Number.isFinite(lastMs)) {
-      const ageMs = ts - lastMs;
-      if (ageMs > 3 * 3600_000) cronHealth = "down";
-      else if (ageMs > 1.5 * 3600_000) cronHealth = "degraded";
-    }
-  } else if (checks.last_process_at.status === "down") {
-    cronHealth = "down";
-  } else {
-    cronHealth = "degraded";
-  }
-  result.cron_health = cronHealth;
-  checks.cron_health = {
-    status: cronHealth,
-    detail: typeof result.last_process_at === "string"
-      ? `${Math.round((ts - Date.parse(result.last_process_at)) / 60000)} min ago`
-      : "no last_process_at recorded"
-  };
+  // 3. secret_resolved
+  const secretResult = checkSecretResolved(env);
+  checks.secret_resolved = secretResult.checks.secret_resolved;
 
-  // ========== 4. secret_resolved (看 WORKER_SELF_URL 是不是占位符) ==========
-  const selfUrl = env.WORKER_SELF_URL || "";
-  const isPlaceholder = selfUrl === "DO_NOT_USE" ||
-    selfUrl === "https://YOUR-WORKER.workers.dev" ||
-    selfUrl.includes("YOUR-WORKER") ||
-    selfUrl === "";
-  checks.secret_resolved = {
-    status: isPlaceholder ? "down" : "ok",
-    detail: isPlaceholder ? `placeholder: "${selfUrl}"` : `set to non-placeholder URL`
-  };
+  // 4+5. supabase_counts + supabase_reachable
+  const supabaseResult = await checkSupabaseCounts(env);
+  result.supabase_counts = supabaseResult.supabase_counts;
+  checks.supabase_reachable = supabaseResult.checks.supabase_reachable;
 
-  // ========== 5+6. supabase_counts + supabase_reachable (6 张表 parallel fetch) ==========
-  const supabaseTables: { name: string; column: string }[] = [
-    { name: "news_hotspots", column: "id" },
-    { name: "topics", column: "id" },
-    { name: "news_topic_members", column: "news_id" },
-    { name: "trend_snapshots", column: "id" },
-    { name: "warnings", column: "id" },
-    { name: "fission_searches", column: "id" },
-  ];
-  const supabaseCounts: Record<string, number | { error: string }> = {};
-  const supabaseResults = await Promise.allSettled(
-    supabaseTables.map(async (tbl) => {
-      const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl.name}?select=${tbl.column}&limit=0`, {
-        headers: {
-          "apikey": env.SUPABASE_SERVICE_KEY,
-          "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-          "Prefer": "count=exact",
-        },
-      });
-      if (!r.ok) {
-        const errText = await r.text();
-        throw new Error(`${tbl.name}: HTTP ${r.status} ${errText.slice(0, 200)}`);
-      }
-      const cr = r.headers.get("Content-Range") || "";
-      const total = cr.split("/").pop();
-      return { name: tbl.name, total: (total && total !== "*") ? parseInt(total, 10) : 0 };
-    })
-  );
-  let supabaseOkCount = 0;
-  for (let i = 0; i < supabaseResults.length; i++) {
-    const r = supabaseResults[i];
-    const tblName = supabaseTables[i].name;
-    if (r.status === "fulfilled") {
-      supabaseCounts[tblName] = r.value.total;
-      supabaseOkCount++;
-    } else {
-      supabaseCounts[tblName] = { error: r.reason?.message || "fetch failed" };
-    }
-  }
-  result.supabase_counts = supabaseCounts;
-  checks.supabase_reachable = {
-    status: supabaseOkCount === supabaseTables.length ? "ok" : supabaseOkCount === 0 ? "down" : "degraded",
-    detail: `${supabaseOkCount}/${supabaseTables.length} tables OK`
-  };
+  // 6. r2_latest_write
+  const r2LatestResult = await checkR2LatestWrite(env, ts);
+  result.r2_latest_write = r2LatestResult.r2_latest_write;
+  checks.r2_latest_write = r2LatestResult.checks.r2_latest_write;
 
-  // ========== 7. r2_latest_write (informational only) ==========
-  try {
-    const list = await env.csnews_raw.list({ prefix: "news/zaker/", limit: 1000 });
-    if (list.objects && list.objects.length > 0) {
-      const sorted = [...list.objects].sort((a, b) => b.key.localeCompare(a.key));
-      const latestObj = sorted[0];
-      let lastWriteTs: number | null = null;
-      let lastWriteSource: "r2_uploaded" | "content_created_at" = "r2_uploaded";
-      if (latestObj.uploaded) {
-        lastWriteTs = latestObj.uploaded.getTime();
-      } else {
-        const body = await env.csnews_raw.get(latestObj.key);
-        if (body) {
-          const text = await body.text();
-          try {
-            const parsed = JSON.parse(text);
-            if (parsed.created_at) {
-              lastWriteTs = Date.parse(parsed.created_at);
-              lastWriteSource = "content_created_at";
-            }
-          } catch { }
-        }
-      }
-      result.r2_latest_write = {
-        key: latestObj.key,
-        uploaded: latestObj.uploaded ? latestObj.uploaded.toISOString() : null,
-        source: lastWriteSource,
-      };
-      const ageLabel = lastWriteTs
-        ? `historical: last R2 news/zaker/ write ${Math.round((ts - lastWriteTs) / 3600_000)}h ago (process no longer writes R2 news/zaker/, see r2_latest_supabase_write for current process status)`
-        : "no uploaded or content.created_at (historical data)";
-      checks.r2_latest_write = { status: "ok", detail: ageLabel };
-    } else {
-      result.r2_latest_write = null;
-      checks.r2_latest_write = { status: "ok", detail: "no objects in news/zaker/ (historical prefix, informational only)" };
-    }
-  } catch (e: any) {
-    result.r2_latest_write = { error: e?.message || "r2 unavailable" };
-    checks.r2_latest_write = { status: "ok", detail: `r2 list failed: ${e?.message} (informational, does not impact process status)` };
-  }
+  // 7. r2_latest_supabase_write
+  const r2SupabaseResult = await checkR2LatestSupabaseWrite(env, ts);
+  result.r2_latest_supabase_write = r2SupabaseResult.r2_latest_supabase_write;
+  checks.r2_latest_supabase_write = r2SupabaseResult.checks.r2_latest_supabase_write;
 
-  // ========== 7b. r2_latest_supabase_write (真实 process 状态) ==========
-  try {
-    const res = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=created_at&order=created_at.desc&limit=1`, {
-      headers: {
-        "apikey": env.SUPABASE_SERVICE_KEY,
-        "Authorization": `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-      },
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status} ${errText.slice(0, 200)}`);
-    }
-    const arr = await res.json() as Array<{ created_at: string }>;
-    if (arr && arr.length > 0 && arr[0].created_at) {
-      const lastWriteMs = Date.parse(arr[0].created_at);
-      if (Number.isFinite(lastWriteMs)) {
-        const ageMs = ts - lastWriteMs;
-        result.r2_latest_supabase_write = {
-          last_write: arr[0].created_at,
-          source: "supabase_news_hotspots",
-        };
-        if (ageMs < 1.5 * 3600_000) {
-          checks.r2_latest_supabase_write = { status: "ok", detail: `last news_hotspots write ${Math.round(ageMs / 60000)} min ago` };
-        } else if (ageMs < 3 * 3600_000) {
-          checks.r2_latest_supabase_write = { status: "degraded", detail: `last news_hotspots write ${Math.round(ageMs / 60)} min ago (> 1.5h, expected every 1h)` };
-        } else {
-          checks.r2_latest_supabase_write = { status: "down", detail: `last news_hotspots write ${Math.round(ageMs / 3600_000)}h ago (> 3h, process stale)` };
-        }
-      } else {
-        result.r2_latest_supabase_write = { last_write: arr[0].created_at, source: "supabase_news_hotspots" };
-        checks.r2_latest_supabase_write = { status: "unknown", detail: "created_at unparseable" };
-      }
-    } else {
-      result.r2_latest_supabase_write = null;
-      checks.r2_latest_supabase_write = { status: "down", detail: "news_hotspots table empty (no data ever)" };
-    }
-  } catch (e: any) {
-    result.r2_latest_supabase_write = { error: e?.message || "supabase query failed" };
-    checks.r2_latest_supabase_write = { status: "down", detail: e?.message };
-  }
+  // 8. r2_prefix_counts
+  const r2PrefixResult = await checkR2PrefixCounts(env);
+  result.r2_prefix_counts = r2PrefixResult.r2_prefix_counts;
 
-  // ========== 8. r2_prefix_counts (各 prefix 行数) ==========
-  const r2Prefixes = ["news/zaker/", "news/", "embeddings/", "fission/", "trends/", "warnings/", "logs/"];
-  const r2PrefixCounts: Record<string, number | { error: string }> = {};
-  const r2Results = await Promise.allSettled(
-    r2Prefixes.map(async (prefix) => {
-      const list = await env.csnews_raw.list({ prefix, limit: 1000 });
-      return { prefix, count: list.objects?.length || 0 };
-    })
-  );
-  for (let i = 0; i < r2Results.length; i++) {
-    const r = r2Results[i];
-    const prefix = r2Prefixes[i];
-    if (r.status === "fulfilled") {
-      r2PrefixCounts[prefix] = r.value.count;
-    } else {
-      r2PrefixCounts[prefix] = { error: r.reason?.message || "list failed" };
-    }
-  }
-  result.r2_prefix_counts = r2PrefixCounts;
+  // 9. cron_history
+  const cronHistoryResult = await checkCronHistory(env, ts);
+  result.cron_history = cronHistoryResult.cron_history;
+  checks.cron_history = cronHistoryResult.checks.cron_history;
 
-  // ========== 9. cron_history (看上一小时 R2 logs 是否有 [scheduler] log) ==========
-  try {
-    const now = new Date(ts);
-    const yyyy = now.getUTCFullYear();
-    const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-    const dd = String(now.getUTCDate()).padStart(2, "0");
-    const hh = String(now.getUTCHours()).padStart(2, "0");
-    const list = await env.csnews_raw.list({ prefix: `logs/${yyyy}-${mm}-${dd}/${hh}/`, limit: 100 });
-    const thisHourSchedulerLogs = list.objects?.filter((o) => o.key.includes("-scheduler.log")) || [];
-    result.cron_history = {
-      this_hour: {
-        hour: `${yyyy}-${mm}-${dd}T${hh}`,
-        scheduler_log_count: thisHourSchedulerLogs.length,
-      },
-    };
-    checks.cron_history = {
-      status: thisHourSchedulerLogs.length >= 1 ? "ok" : "degraded",
-      detail: thisHourSchedulerLogs.length >= 1
-        ? `${thisHourSchedulerLogs.length} scheduler logs this hour`
-        : "no scheduler logs this hour (cron may not have run)"
-    };
-  } catch (e: any) {
-    result.cron_history = { error: e?.message };
-    checks.cron_history = { status: "unknown", detail: e?.message };
-  }
+  // 10. zscore_signals_today
+  const zscoreResult = await checkZscoreSignals(env, ts);
+  result.zscore_signals_today = zscoreResult.zscore_signals_today;
+  checks.zscore_signals_today = zscoreResult.checks.zscore_signals_today;
 
-  // ========== 10. zscore_signals_today (7d z-score 异常数) ==========
-  try {
-    const sevenDaysAgo = new Date(ts - 7 * 24 * 3600 * 1000).toISOString();
-    const snapshotsRes = await supabaseFetch(env, `/rest/v1/trend_snapshots?select=id,topic_id,score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`);
-    const snapshots = (await safeJson(snapshotsRes) as TrendSnapshotRow[]) || [];
+  // 11. ai_budget_today
+  const aiBudgetResult = await checkAiBudget(env);
+  result.ai_budget_today = aiBudgetResult.ai_budget_today;
+  checks.ai_budget_today = aiBudgetResult.checks.ai_budget_today;
 
-    let totalAnomalies = 0;
-    const anomaliesByField: Record<string, number> = { score: 0, velocity: 0, acceleration: 0 };
-    if (snapshots.length >= 2) {
-      const byTopic: Record<string, any[]> = {};
-      for (const s of snapshots) {
-        if (!s.topic_id) continue;
-        if (!byTopic[s.topic_id]) byTopic[s.topic_id] = [];
-        byTopic[s.topic_id].push(s);
-      }
-      for (const topicSnapshots of Object.values(byTopic)) {
-        if (topicSnapshots.length < 2) continue;
-        for (const field of ['score', 'velocity', 'acceleration'] as const) {
-          const count = countAnomalySignals(topicSnapshots, field);
-          anomaliesByField[field] += count;
-          totalAnomalies += count;
-        }
-      }
-    }
+  // 12+13. entity_freshness + event_freshness
+  const freshnessResult = await checkEntityAndEventFreshness(env);
+  result.entity_freshness = freshnessResult.entity_freshness;
+  result.event_freshness = freshnessResult.event_freshness;
+  checks.entity_freshness = freshnessResult.checks.entity_freshness;
+  checks.event_freshness = freshnessResult.checks.event_freshness;
 
-    result.zscore_signals_today = {
-      total_7d: totalAnomalies,
-      by_field_7d: anomaliesByField,
-      snapshots_analyzed: snapshots.length,
-      window: '7d',
-    };
-    checks.zscore_signals_today = {
-      status: "ok",  // 0 = 正常 (新功能, 没异常是 expected)
-      detail: totalAnomalies > 0
-        ? `${totalAnomalies} z-score anomalies in last 7d (${JSON.stringify(anomaliesByField)})`
-        : `0 anomalies in last 7d (algorithm ready, wakeup review pending)`,
-    };
-  } catch (e: any) {
-    result.zscore_signals_today = { error: e?.message || "zscore calc failed" };
-    checks.zscore_signals_today = { status: "unknown", detail: e?.message };
-  }
+  // 14. cache_metrics
+  const cacheResult = checkCacheMetrics();
+  result.cache_metrics = cacheResult.cache_metrics;
+  checks.cache_metrics = cacheResult.checks.cache_metrics;
 
-  // ========== 11. ai_budget_today ==========
-  try {
-    const budget = await getBudgetStatus(env);
-    result.ai_budget_today = {
-      used: budget.used,
-      tier: budget.tier,
-      remaining: budget.remaining,
-      quota: budget.quota,
-    };
-    checks.ai_budget_today = {
-      status: budget.tier === 'shutdown' ? 'down'
-        : budget.tier === 'critical' ? 'degraded'
-        : 'ok',
-      detail: `daily used: ${budget.used} / ${budget.quota} (${budget.tier})`,
-    };
-  } catch (e: any) {
-    result.ai_budget_today = { error: e?.message || "ai_budget calc failed" };
-    checks.ai_budget_today = { status: "unknown", detail: e?.message };
-  }
-
-  // ========== 12. entity_freshness + 13. event_freshness ==========
-  // 读 R2 entity-finalized.json + event-clusters.json 元数据, 按阈值分类
-  // viewer dashboard 立即看到 entity/event cron 是否 stale (之前 viewer 不知道何时跑)
-  // entity / event cron 每日 1 次 (03:00 / 03:30 UTC), 阈值 25h / 50h
-  try {
-    const { entity_freshness, event_freshness } = await checkEntityCronHealth(env);
-    result.entity_freshness = entity_freshness;
-    result.event_freshness = event_freshness;
-    checks.entity_freshness = {
-      status: entity_freshness.status,
-      detail: entity_freshness.detail,
-    };
-    checks.event_freshness = {
-      status: event_freshness.status,
-      detail: event_freshness.detail,
-    };
-  } catch (e: any) {
-    // 1 个失败不影响其他: entity_freshness + event_freshness 都返 unknown
-    result.entity_freshness = { error: e?.message || "entity freshness check failed" };
-    result.event_freshness = { error: e?.message || "event freshness check failed" };
-    checks.entity_freshness = { status: "unknown", detail: e?.message };
-    checks.event_freshness = { status: "unknown", detail: e?.message };
-  }
-
-  // ========== 14. cache_metrics (pull KV 缓存 hit rate, per-isolate) ==========
-  // 读 module-level metrics (hits/misses/stores/store_failures), 派生 hit_rate
-  // 状态规则: 0 请求 = unknown (冷启动 / 无 pull 流量)
-  //           hit_rate >= 50% = ok (缓存有效)
-  //           hit_rate < 50% = degraded (缓存失效, 命中偏低)
-  // 已知限制: per-isolate state 不跨 isolate 共享, 多 Worker instance 时 metrics 是局部视图
-  try {
-    const m = getCacheMetrics();
-    result.cache_metrics = {
-      hits: m.hits,
-      misses: m.misses,
-      stores: m.stores,
-      store_failures: m.store_failures,
-      total_requests: m.total_requests,
-      hit_rate: Number(m.hit_rate.toFixed(4)),
-    };
-    if (m.total_requests === 0) {
-      checks.cache_metrics = {
-        status: "unknown",
-        detail: "no cache requests yet (cold start or no pull traffic this isolate)",
-      };
-    } else if (m.hit_rate >= 0.5) {
-      checks.cache_metrics = {
-        status: "ok",
-        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests)`,
-      };
-    } else {
-      checks.cache_metrics = {
-        status: "degraded",
-        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests, < 50%)`,
-      };
-    }
-  } catch (e: any) {
-    result.cache_metrics = { error: e?.message || "cache metrics read failed" };
-    checks.cache_metrics = { status: "unknown", detail: e?.message };
-  }
-
-  // ========== 整体 status 聚合 ==========
+  // 整体 status 聚合
   const statuses = Object.values(checks).map((c) => c.status);
   if (statuses.includes("down")) result.status = "down";
   else if (statuses.includes("degraded")) result.status = "degraded";
