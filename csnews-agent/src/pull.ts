@@ -13,6 +13,7 @@
 
 import { Env, supabaseFetch, safeJson } from './shared';
 import { cacheGet, cacheSet, makeCacheKey } from './cache';
+import type { NewsHotspotRow, PullTopicRow } from './types';
 
 // ====== Type 白名单配置(v0.31) ======
 
@@ -395,7 +396,7 @@ async function queryFissionPending(env: Env, filters: ParsedFilters): Promise<{ 
     const errText = await res.text();
     throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
   }
-  const items = (await safeJson(res)) as any[] || [];
+  const items = (await safeJson(res)) as PullTopicRow[] || [];
 
   // 客户端再过滤 score >= 6(避免 Or/And 拼接)
   // 实际生产应该用 RPC,但 v0.31 阶段先客户端过滤,简单且无 SQL 注入风险
@@ -428,7 +429,8 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
   const config = TYPE_CONFIG[filters.type];
 
   // 缓存 lookup (按 filters 顺序无关)
-  const cacheKey = await makeCacheKey('pull', filters as any);
+  // makeCacheKey 接受 Record<string, any>，ParsedFilters 满足结构兼容，无需 cast
+  const cacheKey = await makeCacheKey('pull', filters);
   const cached = await cacheGet(env, cacheKey);
   if (cached) {
     return cached as PullResponse;
@@ -450,7 +452,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
       const errText = await res.text();
       throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
     }
-    items = (await safeJson(res)) as any[] || [];
+    items = (await safeJson(res)) as PullTopicRow[] || [];
 
     // total: PostgREST 默认不在响应里;v0.31 阶段用 items.length 近似
     // 精确 count 留给 v0.32 (Prefer: count=exact 头)

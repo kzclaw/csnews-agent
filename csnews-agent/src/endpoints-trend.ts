@@ -36,6 +36,7 @@ import {
   knowledgeR2Key, KNOWLEDGE_INDEX_KEY,
 } from './knowledge-validation';
 import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
+import type { NewsHotspotRow, TopicRow } from './types';
 
 // ===================== content (R2 全文内容读取端点) =====================
 // 用途: 消费者 (推送 / 第三方 IM 转发) 从 R2 拿 news_hotspots 关联的摘要 + 原始 URL
@@ -70,7 +71,7 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
 
   // 3. Supabase 查 news_hotspots (拿 url + r2_key + 基础摘要)
   const newsRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${id}&select=id,title,url,source,category,hot_score,score,level,topic_id,r2_key,created_at&limit=1`);
-  const newsData = await safeJson(newsRes) as any[];
+  const newsData = await safeJson(newsRes) as NewsHotspotRow[];
   if (!newsData || newsData.length === 0) {
     return new Response(JSON.stringify({ error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` }), {
       status: 404, headers: { 'Content-Type': 'application/json', ...cors },
@@ -79,7 +80,8 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
   const news = newsData[0];
 
   // 4. R2 拿 content (按 news.r2_key)
-  let r2Data: any = null;
+  // R2 存储内容来自 saveToR2()，形状由 news-process.ts 的数据结构决定，跨模块动态 schema 保持 any
+  let r2Data: unknown = null;
   let r2Error: string | null = null;
   if (news.r2_key) {
     try {
@@ -237,7 +239,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
 
   if (type === 'topics') {
     const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at,first_news_id&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as any[];
+    const topics = await safeJson(topicsRes) as TopicRow[];
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
@@ -257,7 +259,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     description = '当前所有 active topic (按 last_active_at 倒序)';
   } else if (type === 'velocity') {
     const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as any[];
+    const topics = await safeJson(topicsRes) as TopicRow[];
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         const nowMs = Date.now();
@@ -284,7 +286,7 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
     description = 'topic velocity (1h 增量 / 24h 均值)';
   } else if (type === 'acceleration') {
     const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as any[];
+    const topics = await safeJson(topicsRes) as TopicRow[];
     if (topics && topics.length > 0) {
       items = await Promise.all(topics.map(async (t) => {
         const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
@@ -454,7 +456,7 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
   try {
     // 1. 拉所有 active topics (跟 trend 同款, last_active_at desc, limit 50 = 早晨日报默认覆盖)
     const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=50`);
-    const topics = await safeJson(topicsRes) as any[];
+    const topics = await safeJson(topicsRes) as TopicRow[];
     if (!topics || topics.length === 0) {
       return { written: 0, errors: 0 };
     }

@@ -4,12 +4,19 @@
 //用途：News Self Growth 流水线核心 · 9 个函数实现话题簇/新闻/查重/趋势/存储
 import { Env, supabaseFetch, safeJson } from './shared';
 import { logEvent } from './log';
+import type {
+  CleanupStaleTopicsResult,
+  SimilarNewsItem,
+  UpdateTopicScoreResult,
+  RecordTrendWithMemberResult,
+  InsertedNewsHotspotRow,
+} from './types';
 
 //清理过期话题簇(跟进7天/重要14天/爆炸28天)
 export async function cleanupStaleTopics(env: Env) {
  const { data } = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
  method: 'POST',
- })).json() as any;
+ })).json() as CleanupStaleTopicsResult[];
  return data?.[0] || { deleted_topic_count:0, deleted_news_count:0 };
 }
 
@@ -19,7 +26,7 @@ export async function findSimilarNews(env: Env, embedding: number[], threshold =
  method: 'POST',
  body: JSON.stringify({ query_embedding: embedding, threshold, match_count: matchCount }),
  });
- const data = await safeJson(res) as any[];
+ const data = await safeJson(res) as SimilarNewsItem[];
  return data || [];
 }
 
@@ -29,7 +36,7 @@ export async function updateTopicScore(env: Env, topicId: string, delta =1) {
  method: 'POST',
  body: JSON.stringify({ p_topic_id: topicId, p_score_delta: delta }),
  });
- const data = await safeJson(res) as any[];
+ const data = await safeJson(res) as UpdateTopicScoreResult[];
  return data?.[0] || { new_score:0, new_level: 'follow', upgraded: false, fission_triggered: false };
 }
 
@@ -45,7 +52,7 @@ export async function recordTrendSnapshot(env: Env, topicId: string) {
  console.error(`[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0,200)}`);
  return null;
  }
- const data = await safeJson(res) as any[];
+ const data = await safeJson(res) as RecordTrendWithMemberResult[];
  return Array.isArray(data) ? data[0] || null : null;
  } catch (e: any) {
  console.error(`[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`);
@@ -126,8 +133,9 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
   //   pgvector embedding 列 schema 允许 NULL (无 NOT NULL 约束) 所以 null 安全
   const allKeys = Array.from(new Set(withIds.flatMap(r => Object.keys(r))));
   const normalizedRows = withIds.map(r => {
-    const out: Record<string, any> = {};
-    for (const k of allKeys) out[k] = (r as any)[k] !== undefined ? (r as any)[k] : null;
+    // 每个 key 的值类型取决于 news 属性：string | number | number[] | boolean | null
+    const out: Record<string, string | number | number[] | boolean | null> = {};
+    for (const k of allKeys) out[k] = (r as Record<string, string | number | number[] | boolean | null | undefined>)[k] ?? null;
     return out;
   });
   const res = await supabaseFetch(env, '/rest/v1/news_hotspots', {
@@ -153,7 +161,7 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
     }, "process");
     return [];
   }
-  const data = await safeJson(res) as any[];
+  const data = await safeJson(res) as InsertedNewsHotspotRow[];
   await logEvent(env, "info", "[KR0] insertNewsHotspotsBatch: result", {
     returned_ids: data?.length || 0,
     expected_ids: withIds.length,
@@ -176,7 +184,8 @@ export async function recordTrendWithMember(env: Env, newsId: string, topicId: s
       console.error(`[KR0] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0,200)}`);
       return null;
     }
-    const data = await safeJson(res) as any[];
+    // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
+    const data = await safeJson(res) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
     console.error(`[KR0] record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`);

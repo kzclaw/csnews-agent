@@ -7,6 +7,7 @@ import { Env } from './shared';
 import { AI_ROUTE_R_THRESHOLD } from './score';
 import { ENTITY_FINALIZED_R2_KEY } from './entity-process';
 import { EVENT_CLUSTERS_R2_KEY } from './event-process';
+import type { LlamaAIResponse } from './types';
 
 //Workers AI响应解析
 // env.AI.run() 返回格式:{ response: string, usage: {...} }
@@ -25,13 +26,14 @@ export function extractText(resp: any): string {
 export async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
  if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
  try {
- const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
- messages: [
- { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
- ],
- max_tokens:200,
- temperature:0.3,
- }) as any;
+  // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
+  const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+  messages: [
+  { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
+  ],
+  max_tokens:200,
+  temperature:0.3,
+  }) as LlamaAIResponse;
  return extractText(resp) || '(无AI输出)';
  } catch (e: any) {
  return `(AI错误: ${e.message})`;

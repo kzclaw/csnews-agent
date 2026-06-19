@@ -22,6 +22,14 @@ import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
 import { checkEntityCronHealth } from './utils';
 import { getCacheMetrics, resetCacheMetrics } from './cache';
+import type {
+  CleanupStaleTopicsResult,
+  ZakerHotResponse,
+  BgeEmbeddingResponse,
+  UpdateTopicScoreResult,
+  CreatedTopicRow,
+  TrendSnapshotRow,
+} from './types';
 
 // ===================== process (News Self Growth 主流程) =====================
 export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
@@ -34,13 +42,13 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
     resetCacheMetrics();
 
     // Step 0: 清理过期话题簇 (1 subrequest)
-    const cleaned = await cleanupStaleTopics(env) as any;
+    const cleaned = await cleanupStaleTopics(env) as CleanupStaleTopicsResult;
 
     // Step 1: 拉 ZAKER 热点 (1 subrequest)
     const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3', {
       signal: AbortSignal.timeout(10_000), // 10s 超时
     });
-    const json = await r.json() as any;
+    const json = await r.json() as ZakerHotResponse;
     const list: any[] = json?.data?.list || [];
     if (list.length === 0) {
       return new Response(JSON.stringify({ error: 'no news' }), { headers: { 'Content-Type': 'application/json', ...cors } });
@@ -79,8 +87,9 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
       // 仅前 FULL_COUNT 条做 embedding + 向量查重 (Workers AI CPU 限制)
       if (i < FULL_COUNT) {
         try {
-          const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as any;
-          const raw = embResp as any;
+          // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
+          const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as BgeEmbeddingResponse;
+          const raw = embResp as BgeEmbeddingResponse;
           if (Array.isArray(raw?.data) && raw.data.length > 0) {
             const it = raw.data[0];
             embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
@@ -92,7 +101,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
           if (similar.length > 0 && similar[0].topic_id) {
             const top = similar[0];
             topicId = top.topic_id;
-            const updated = await updateTopicScore(env, top.topic_id, 1) as any;
+            const updated = await updateTopicScore(env, top.topic_id, 1) as UpdateTopicScoreResult;
             newsScore = updated.new_score || 0;
             newsLevel = updated.new_level || 'follow';
             fission = updated.fission_triggered || false;
@@ -119,7 +128,7 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
           // 改为纯 hashStr, 兼容中文; 加 't-' 前缀便于辨识
           const titleHash = Math.abs(hashStr(title)).toString(36);
           const topicKey = `t-${titleHash}`;
-          const created = await createTopic(env, topicKey, 'follow') as any;
+          const created = await createTopic(env, topicKey, 'follow') as CreatedTopicRow;
           if (created?.id) {
             topicId = created.id;
             newsScore = 0;
@@ -467,7 +476,7 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
   try {
     const sevenDaysAgo = new Date(ts - 7 * 24 * 3600 * 1000).toISOString();
     const snapshotsRes = await supabaseFetch(env, `/rest/v1/trend_snapshots?select=id,topic_id,score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`);
-    const snapshots = (await safeJson(snapshotsRes) as any[]) || [];
+    const snapshots = (await safeJson(snapshotsRes) as TrendSnapshotRow[]) || [];
 
     let totalAnomalies = 0;
     const anomaliesByField: Record<string, number> = { score: 0, velocity: 0, acceleration: 0 };

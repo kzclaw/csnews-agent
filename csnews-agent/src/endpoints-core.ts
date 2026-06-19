@@ -22,6 +22,12 @@ import {
 import { scoreRule, AI_ROUTE_R_THRESHOLD } from './score';
 import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
+import type {
+  LlamaAIResponse,
+  BgeEmbeddingResponse,
+  ZakerHotResponse,
+  NewsHotspotRow,
+} from './types';
 
 // ===================== pull =====================
 export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
@@ -49,10 +55,11 @@ export async function handlePingAction(request: Request, env: Env, url: URL, cor
 // ===================== model-test =====================
 // 注: extractText + maybeFissionReport 已抽到 utils.ts (避免循环依赖)
 export async function handleModelTestAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+  // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
   const r = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
     messages: [{ role: 'user', content: '说一段话介绍自己' }],
     max_tokens: 100,
-  }) as any;
+  }) as LlamaAIResponse;
   return new Response(JSON.stringify({
     ok: true,
     model: 'llama-3-8b-instruct',
@@ -273,13 +280,14 @@ export async function handleFissionAction(request: Request, env: Env, url: URL, 
     }), { headers: { 'Content-Type': 'application/json', ...cors } });
   }
   try {
+    // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
     const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
       messages: [
         { role: 'user', content: `生成5个深度裂变搜索查询词(每个不超过15字),用|分隔:\n新闻:${seed}` }
       ],
       max_tokens: 200,
       temperature: 0.3,
-    }) as any;
+    }) as LlamaAIResponse;
     const text = extractText(resp);
     const queries = text.split('|').map(q => q.trim()).filter(q => q.length > 0 && q.length <= 20);
     return new Response(JSON.stringify({ seed, queries, count: queries.length }), {
@@ -361,12 +369,13 @@ export async function handleEmbedAction(request: Request, env: Env, url: URL, co
   }
 
   try {
+    // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
     const resp = await env.AI.run('@cf/baai/bge-m3', {
       text: [text],
-    }) as any;
+    }) as BgeEmbeddingResponse;
 
     // bge-m3 返回格式: { shape: [n, dim], data: [...], response: string }
-    const raw = resp as any;
+    const raw = resp as BgeEmbeddingResponse;
     let embedding: number[] = [];
     if (Array.isArray(raw?.data) && raw.data.length > 0) {
       const item = raw.data[0];
@@ -408,7 +417,8 @@ export async function handleZakerHotAction(request: Request, env: Env, url: URL,
     const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3', {
       signal: AbortSignal.timeout(10_000), // 10s 超时 (audit 4.3 安全审计)
     });
-    const json = await r.json() as any;
+    // Zaker 外部三方 API 响应形状不归我们控制，保持 ZakerHotResponse 接口
+    const json = await r.json() as ZakerHotResponse;
     const list: any[] = json?.data?.list || [];
     const results = [];
 
@@ -476,7 +486,7 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
         status: 500, headers: { 'Content-Type': 'application/json', ...cors }
       });
     }
-    const newsList = await newsRes.json() as any[];
+    const newsList = await newsRes.json() as NewsHotspotRow[];
     if (newsList.length === 0) {
       return new Response(JSON.stringify({ type: 'rescore', total: 0, dry_run: dryRun, message: 'no news to rescore' }), {
         headers: { 'Content-Type': 'application/json', ...cors }

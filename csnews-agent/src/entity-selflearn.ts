@@ -21,6 +21,7 @@ import {
   loadNoiseAnchors, bgeM3BatchEmbedding, filterNoiseCandidates,
   type FilterResult,
 } from './entity-noise-filter';
+import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 
 export interface EntityCandidate {
   name: string;
@@ -107,7 +108,7 @@ async function fetchRecentNewsTitles(env: Env, sinceHours: number = 24): Promise
     env,
     `/rest/v1/news_hotspots?select=id,title,summary&created_at=gte.${sinceIso}&order=created_at.desc&limit=200`,
   );
-  const news = (await safeJson(res) as any[]) || [];
+  const news = (await safeJson(res) as NewsHotspotRow[]) || [];
   return news
     .map((n) => ({
       id: n.id,
@@ -121,8 +122,9 @@ async function fetchRecentNewsTitles(env: Env, sinceHours: number = 24): Promise
  */
 async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] };
-  return result.data || [];
+  // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
+  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as BgeEmbeddingResponse;
+  return result.data ? result.data.map(item => item.embedding ?? []) : [];
 }
 
 /**
