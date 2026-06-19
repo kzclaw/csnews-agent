@@ -24,9 +24,9 @@ import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
 
 // ===================== pull =====================
-export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+export async function handlePullAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
   try {
-    const result = await handlePull(env, url);
+    const result = await handlePull(env, url, ctx);
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json', ...cors }
     });

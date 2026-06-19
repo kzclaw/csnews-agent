@@ -82,7 +82,7 @@ export async function dispatchAction(
   ctx.waitUntil(logEvent(env, "info", "endpoint called", { endpoint: action, method: request.method }, "dispatcher").catch(() => {}));
 
   // 20 action dispatch
-  if (action === 'pull') return await handlePullAction(request, env, url, cors);
+  if (action === 'pull') return await handlePullAction(request, env, url, cors, ctx);
   if (action === 'ping') return await handlePingAction(request, env, url, cors);
   if (action === 'model-test') return await handleModelTestAction(request, env, url, cors);
   if (action === 'ai-test') return await handleAiTestAction(request, env, url, cors);

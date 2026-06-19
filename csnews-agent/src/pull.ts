@@ -12,6 +12,7 @@
  */
 
 import { Env, supabaseFetch, safeJson } from './shared';
+import { cacheGet, cacheSet, makeCacheKey } from './cache';
 
 // ====== Type 白名单配置(v0.31) ======
 
@@ -409,8 +410,14 @@ async function queryFissionPending(env: Env, filters: ParsedFilters): Promise<{ 
 /**
  * pull 端点主入口
  * 返回: 标准 PullResponse 或 throw
+ *
+ * 缓存策略 (v0.36.25 派活 17):
+ * - 入口 cacheGet → 命中直接返 (不查 Supabase)
+ * - miss 走 Supabase → 写回 cache (ctx.waitUntil fire-and-forget, 响应不等 KV put)
+ * - cacheKey = makeCacheKey('pull', filters), 顺序无关 + null 过滤
+ * - 缓存错 / 写错 → 静默, 不影响主流程
  */
-export async function handlePull(env: Env, url: URL): Promise<PullResponse> {
+export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Promise<PullResponse> {
   const parsed = parseFilters(url);
   if (!parsed.ok) {
     const err: any = new Error(parsed.error);
@@ -419,6 +426,13 @@ export async function handlePull(env: Env, url: URL): Promise<PullResponse> {
   }
   const filters = parsed.filters;
   const config = TYPE_CONFIG[filters.type];
+
+  // 缓存 lookup (按 filters 顺序无关)
+  const cacheKey = await makeCacheKey('pull', filters as any);
+  const cached = await cacheGet(env, cacheKey);
+  if (cached) {
+    return cached as PullResponse;
+  }
 
   let items: any[];
   let total: number;
@@ -445,7 +459,7 @@ export async function handlePull(env: Env, url: URL): Promise<PullResponse> {
 
   const projected = projectFormat(items, filters.format);
 
-  return {
+  const response: PullResponse = {
     type: filters.type,
     count: projected.length,
     total,
@@ -468,4 +482,14 @@ export async function handlePull(env: Env, url: URL): Promise<PullResponse> {
     },
     items: projected,
   };
+
+  // fire-and-forget 写缓存 (ctx.waitUntil 让 KV put 在响应后继续)
+  if (ctx && typeof ctx.waitUntil === 'function') {
+    ctx.waitUntil(cacheSet(env, cacheKey, response));
+  } else {
+    // 无 ctx (如测试) → 同步写
+    await cacheSet(env, cacheKey, response);
+  }
+
+  return response;
 }
