@@ -13,6 +13,7 @@
 
 import { Env, getSupabaseHost } from './shared';
 import { NewsItem } from './types';
+import { supabaseHeaders } from './utils';
 import { handlePull } from './pull';
 import { classify, classifyRule } from './classify';
 import { classifyBySemantic, batchClassifyBySemantic } from './category-classify';
@@ -473,8 +474,7 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
     const effectiveOffset = offset > 0 ? offset : 0;
     const newsRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?select=id,title,summary,category&order=created_at.desc`, {
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        ...supabaseHeaders(env),
         'Range-Unit': 'items',
         'Range': `${effectiveOffset}-${effectiveOffset + effectiveLimit - 1}`,
         'Prefer': 'count=exact',
@@ -550,8 +550,7 @@ export async function handleRescoreAction(request: Request, env: Env, url: URL, 
               const patchRes = await fetch(`${getSupabaseHost(env)}/rest/v1/news_hotspots?id=eq.${d.id}`, {
                 method: 'PATCH',
                 headers: {
-                  'apikey': env.SUPABASE_SERVICE_KEY,
-                  'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+                  ...supabaseHeaders(env),
                   'Content-Type': 'application/json',
                   'Prefer': 'return=representation',
                 },

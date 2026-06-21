@@ -8,7 +8,7 @@
 import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
-import { checkEntityCronHealth } from './utils';
+import { checkEntityCronHealth, supabaseHeaders } from './utils';
 import { getCacheMetrics } from './cache';
 import type { TrendSnapshotRow } from './types';
 
@@ -129,8 +129,7 @@ export async function checkSupabaseCounts(
     supabaseTables.map(async (tbl) => {
       const r = await fetch(`${getSupabaseHost(env)}/rest/v1/${tbl.name}?select=${tbl.column}&limit=0`, {
         headers: {
-          apikey: env.SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          ...supabaseHeaders(env),
           Prefer: "count=exact",
         },
       });
@@ -258,10 +257,7 @@ export async function checkR2LatestSupabaseWrite(
     const res = await fetch(
       `${getSupabaseHost(env)}/rest/v1/news_hotspots?select=created_at&order=created_at.desc&limit=1`,
       {
-        headers: {
-          apikey: env.SUPABASE_SERVICE_KEY,
-          Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        },
+        headers: supabaseHeaders(env),
       },
     );
     if (!res.ok) {

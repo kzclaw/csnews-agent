@@ -16,6 +16,7 @@
  * 0 维护 = review 错词 = R2 entity-candidates.json
  */
 import { Env, getSupabaseHost } from './shared';
+import { supabaseHeaders } from './utils';
 import { ENTITY_CANDIDATES_R2_KEY, type EntityCandidate } from './entity-selflearn';
 
 export const ENTITY_FINALIZED_R2_KEY = 'entity-finalized.json';
@@ -112,8 +113,7 @@ export async function writeEntitiesHotLayer(env: Env, entities: EntityFinalized[
     const res = await fetch(`${getSupabaseHost(env)}/rest/v1/entity_hot?on_conflict=name,type`, {
       method: 'POST',
       headers: {
-        'apikey': env.SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        ...supabaseHeaders(env),
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates',
       },

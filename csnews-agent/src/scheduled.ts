@@ -17,6 +17,7 @@
  */
 
 import { Env, getSupabaseHost } from './shared';
+import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
 import { handleProcessAction, runKnowledgeAccumulation } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
@@ -242,10 +243,7 @@ export async function scheduledArchiveOldEntities(
     const selectRes = await fetch(
       `${getSupabaseHost(env)}/rest/v1/entity_hot?created_at=lt.${cutoff}&limit=1000`,
       {
-        headers: {
-          'apikey': env.SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-        },
+        headers: supabaseHeaders(env),
       },
     );
     if (!selectRes.ok) {
@@ -320,10 +318,7 @@ export async function scheduledArchiveOldEntities(
         `${getSupabaseHost(env)}/rest/v1/entity_hot?id=in.(${batch.join(',')})&limit=${BATCH_SIZE}`,
         {
           method: 'DELETE',
-          headers: {
-            'apikey': env.SUPABASE_SERVICE_KEY,
-            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-          },
+          headers: supabaseHeaders(env),
         },
       );
       if (!deleteRes.ok) {

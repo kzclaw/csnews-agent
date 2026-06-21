@@ -4,6 +4,17 @@
 //用途：抽离 index.ts 的 Workers AI 响应解析 + 裂变报告生成函数
 // 让 endpoints.ts 不依赖 index.ts（避免循环依赖）
 import { Env } from './shared';
+
+// ============================================================
+// Supabase auth headers helper
+// ============================================================
+// 替代 7 处 (scheduled×2, endpoints-core×2, entity-process×1, health-checks×2) 重复拼装
+export function supabaseHeaders(env: Env): Record<string, string> {
+  return {
+    'apikey': env.SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+  };
+}
 import { AI_ROUTE_R_THRESHOLD } from './score';
 import { ENTITY_FINALIZED_R2_KEY } from './entity-process';
 import { EVENT_CLUSTERS_R2_KEY } from './event-process';
