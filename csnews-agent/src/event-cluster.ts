@@ -57,7 +57,7 @@ class UnionFind {
  * 主函数: 跑事件聚类
  *
  * 流程:
- *   1. 读 R2 entity-finalized.json (KR0 跑出来的)
+ *   1. 读 R2 entity-finalized.json
  *   2. 按 topic_id 分组 (每条 news 关联 entity)
  *   3. 每个 topic = 一个 event candidate
  *   4. 两两算 Jaccard entity_overlap

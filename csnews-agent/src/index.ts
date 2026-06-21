@@ -14,9 +14,7 @@
  *
  * 安全设计:
  * - 所有请求需带 Bearer Token(BEARER_TOKEN env var)
- * - CORS 仅允许已授权来源
- *
- * 详见：tasks/csnews-agent-okr.md KR0
+ *   - CORS 仅允许已授权来源
  */
 import { Env } from './shared';
 import { authRequest } from './auth';

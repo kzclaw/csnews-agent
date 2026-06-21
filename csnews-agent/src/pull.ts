@@ -1,5 +1,5 @@
 /**
- * CSNEWS Agent · 消费面通用 pull 端点（KR0 · v0.31）
+ * CSNEWS Agent · 消费面通用 pull 端点（v0.31）
  *
  * 端点：GET /?action=pull
  * 设计原则：架构接口统一 / 模块化可复用可扩展通用性 / 最少扰动 / 不增熵

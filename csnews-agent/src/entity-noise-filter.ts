@@ -20,7 +20,7 @@ export const NOISE_THRESHOLD_DEFAULT = 0.85;
 export const NOISE_THRESHOLD_MIN = 0.5;
 export const NOISE_THRESHOLD_MAX = 0.99;
 export const NOISE_ANCHORS_DEFAULT: string[] = [
-  // 18:09 确定 batch incorrect 20 noise anchors (从 KR0 review 实战数据来)
+  // 18:09 确定 batch incorrect 20 noise anchors
   // 17 通用词
   '回应', '表示', '工作', '人员', '媒体', '当地', '协议', '报道',
   '相关', '参与', '家属', '上市', '第三', '年初', '发现', '记者', '公司',
@@ -90,7 +90,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * bge-m3 batch embedding (复用 KR0 entity-selflearn 同款)
+ * bge-m3 batch embedding
  */
 export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];

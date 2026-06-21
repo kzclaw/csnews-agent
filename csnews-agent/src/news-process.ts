@@ -110,10 +110,9 @@ export async function saveToR2(env: Env, prefix: string, data: object): Promise<
 }
 
 // ============================================================
-// KR0 subrequest 优化 (v0.36.10)
+// batch insert optimization (v0.36.10)
 // ============================================================
 //用途：handleProcessAction 每次 cron 调用 10 条新闻, 优化 subrequest 数从 ~56 降到 ~37
-//详见：tasks/csnews-agent-okr.md v0.36.10 · KR0
 
 //批量插入新闻记录: 单次 subrequest 插 N 条, 返 N 个 id 对应原 array 顺序
 export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
@@ -148,7 +147,7 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
   // 2026-06-17 修订: 用 logEvent (fire-and-forget R2) 诊断 batch 静默 fail
   // 不 throw 避免破坏 cron 行为 (return [] 仍然让 caller 走 else 分支)
   // 上一版 console.log 错: console.log 只到 CF Workers Tail Logs, 不自动写 R2 csnews_raw
-  await logEvent(env, "info", "[KR0] insertNewsHotspotsBatch: response", {
+  await logEvent(env, "info", "batch-insert response", {
     rows: withIds.length,
     status: res.status,
     ok: res.ok,
@@ -156,7 +155,7 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
   }, "process");
   if (!res.ok) {
     const errText = await res.text();
-    await logEvent(env, "error", "[KR0] insertNewsHotspotsBatch: HTTP errBody", {
+    await logEvent(env, "error", "batch-insert HTTP errBody", {
       status: res.status,
       err_body: errText.slice(0, 500),
       sample_row_fields: Object.keys(withIds[0] || {}).join(','),
@@ -164,7 +163,7 @@ export async function insertNewsHotspotsBatch(env: Env, newsList: Array<{
     return [];
   }
   const data = await safeJson(res) as InsertedNewsHotspotRow[];
-  await logEvent(env, "info", "[KR0] insertNewsHotspotsBatch: result", {
+  await logEvent(env, "info", "batch-insert result", {
     returned_ids: data?.length || 0,
     expected_ids: withIds.length,
     sample_returned: JSON.stringify(data?.[0] || null).slice(0, 300),
@@ -183,14 +182,14 @@ export async function recordTrendWithMember(env: Env, newsId: string, topicId: s
     });
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[KR0] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0,200)}`);
+      console.error(`record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0,200)}`);
       return null;
     }
     // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
     const data = await safeJson(res) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
-    console.error(`[KR0] record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`);
+    console.error(`record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`);
     return null;
   }
 }

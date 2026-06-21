@@ -13,8 +13,6 @@
  *   - unknown action 返 400 + { error: "unknown action" }
  *   - dispatcher log 用 ctx.waitUntil 异步持久化 (fire-and-forget, R2 失败不阻塞)
  *   - CORS 头复用 auth.ts corsHeaders() (跟 endpoints.ts 模式一致)
- *
- * 详见：tasks/csnews-agent-okr.md KR0
  */
 
 import { Env } from './shared';
@@ -34,7 +32,6 @@ import {
 /**
  * 20 个支持 action（白名单）
  * 加新 action 时: ALLOWED_ACTIONS 加 + 此文件 describe 块补 1 个 it
- * 详见：tasks/csnews-agent-okr.md KR0
  */
 export const ALLOWED_ACTIONS = [
   'pull', 'ping', 'model-test', 'ai-test',

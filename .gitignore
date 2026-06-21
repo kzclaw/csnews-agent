@@ -39,6 +39,7 @@ tasks/
 specs/
 .githooks/
 scripts/
+verifier/
 
 # Privacy tooling (local, by-design contain forbidden terms)
 # 本地开发者 npm install 后 prepare hook 自动 cp .privacy-patterns.txt.example → .privacy-patterns.txt

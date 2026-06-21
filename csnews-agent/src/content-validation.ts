@@ -9,8 +9,6 @@
  *   - rate limit key 格式: content_rate:<ip>
  *
  * 加新 format 时: 在 ALLOWED_FORMATS 加 + 此文件 describe 块补 1 个 it
- *
- * 详见：tasks/csnews-agent-okr.md KR0
  */
 
 // UUID v4 regex (RFC 4122 简化版, 接受 v1-5 因为 Supabase uuid-ossp / pgcrypto 都可能生成)

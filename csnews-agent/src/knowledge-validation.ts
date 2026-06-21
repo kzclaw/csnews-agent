@@ -14,8 +14,6 @@
  *   - 监控 KV key 格式: r2_knowledge_hits:YYYY-MM-DD
  *
  * 加新 type 时: ALLOWED_TYPES 加 + 此文件 describe 块补 1 个 it
- *
- * 详见：tasks/csnews-agent-okr.md KR0
  */
 
 // ISO 8601 时间 regex (跟 trend 同款, 简化版)

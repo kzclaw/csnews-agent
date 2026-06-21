@@ -14,7 +14,6 @@ import { vi } from 'vitest';
  *   - mock Workers AI
  *   - 共享 fixture factory
  *
- * 详见：tasks/csnews-agent-okr.md KR0
  */
 
 // ============================================================

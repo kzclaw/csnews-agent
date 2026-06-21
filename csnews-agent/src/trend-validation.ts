@@ -7,12 +7,12 @@
  *   - type 必须是 topics / velocity / acceleration 三选一 (白名单)
  *   - since 必须是 ISO 8601 时间或相对时间 (24h / 7d / 30m)
  *   - limit 1-200 (上限 200)
- *   - 反爬限流 KV key 格式: trend_rate:<ip> (跟 KR0 同模式, 独立前缀)
+ *   - 反爬限流 KV key 格式: trend_rate:<ip> (独立前缀)
  *   - 监控 KV key 格式: r2_trend_hits:YYYY-MM-DD
  *
  * 加新 type 时: ALLOWED_TYPES 加 + 此文件 describe 块补 1 个 it
  *
- * 详见：tasks/csnews-agent-okr.md KR0
+
  */
 
 // ISO 8601 时间 regex (简化版, 接受 2026-06-16 / 2026-06-16T10:00:00Z / 2026-06-16T10:00:00+08:00)
@@ -21,7 +21,7 @@ export const ISO8601_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z
 export const ALLOWED_TYPES = ['topics', 'velocity', 'acceleration'] as const;
 export type TrendType = typeof ALLOWED_TYPES[number];
 
-// 相对时间 regex: 24h / 7d / 30m (跟 KR0 同款)
+// 相对时间 regex: 24h / 7d / 30m
 export const RELATIVE_TIME_REGEX = /^(\d+)([mhd])$/;
 
 export const RATE_LIMIT_PER_MIN = 60;

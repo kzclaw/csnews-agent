@@ -100,7 +100,7 @@ export function calculateZScore(currentValue: number, historyValues: number[]): 
 }
 
 /**
- * 从 trend_snapshots 拉 last 7d data 算 z-score (KR0 health 端点用)
+ * 从 trend_snapshots 拉 last 7d data 算 z-score
  *
  * @param currentSnapshot 当前 snapshot
  * @param historySnapshots 历史 snapshots 数组 (默认 7d)
@@ -122,7 +122,7 @@ export function calculateZScoreFromSnapshots<T extends Record<string, any>>(
 }
 
 /**
- * 批量计算 z-score (从 snapshots 列表, 返回异常数) (KR0 health 端点 zscore_signals_today 用)
+ * 批量计算 z-score (从 snapshots 列表, 返回异常数)
  *
  * @param snapshots trend_snapshots 数组
  * @param field 字段名

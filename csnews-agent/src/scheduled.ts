@@ -8,12 +8,12 @@
  * 业务红线:
  *   - v0.36.5 mini: inline 调 handleProcessAction, **不** fetch selfUrl
  *     (历史教训: v0.34-v0.36.4 fetch(selfUrl) 走 CF 内部 routing 9 整点全 522)
- *   - v0.36.7 (KR0): process 跑完 inline 调 runKnowledgeAccumulation
+ *   - v0.36.7: process 跑完 inline 调 runKnowledgeAccumulation
  *     ("快赢"哲学: 0 DDL · 全 R2 · 失败不阻塞 process 200)
  *   - 所有 log 用 ctx.waitUntil 异步持久化 (fire-and-forget, R2 失败不阻塞)
  *   - scheduler log 失败不阻塞 process (v0.36.5 mini 确定 try/catch 兜底)
  *
- * 详见：tasks/csnews-agent-okr.md KR0
+
  */
 
 import { Env, getSupabaseHost } from './shared';
@@ -30,7 +30,7 @@ import { runEventProcess } from './event-process';
  *   1. 写 [cron] process triggered log
  *   2. inline 调 handleProcessAction (v0.36.5 mini 修, 不 fetch selfUrl)
  *   3. 写 [cron] process done/error log
- *   4. inline 调 runKnowledgeAccumulation (v0.36.7 KR0 加)
+ *   4. inline 调 runKnowledgeAccumulation (v0.36.7 加)
  *   5. 写 [cron] knowledge accumulation done/error log
  *
  * 失败处理:
@@ -64,7 +64,7 @@ export async function scheduledProcess(
     console.log(`[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
     ctx.waitUntil(logEvent(env, ok ? "info" : "error", "[cron] process done", { status: res.status, elapsed_ms: elapsed, body_preview: body.slice(0, 200) }, "scheduler").catch(() => {}));
 
-    // v0.36.7 (KR0): process 跑完 inline 调 runKnowledgeAccumulation 累积 job
+    // v0.36.7: process 跑完 inline 调 runKnowledgeAccumulation 累积 job
     // "快赢"哲学: 0 Supabase DDL · 全 R2 持久化 · 0 5h 配额期打扰
     // 跟 process 走同 ctx.waitUntil, 累积失败不阻塞 process 200 (早晨日报金句是 nice-to-have, 失败可次日累积)
     const knowledgeStart = Date.now();
