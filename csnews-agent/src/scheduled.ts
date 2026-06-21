@@ -310,29 +310,36 @@ export async function scheduledArchiveOldEntities(
       console.log(`[cron] archive wrote ${reviewed.length} reviewed to ${reviewedKey}`);
     }
 
-    // Step 5: Supabase DELETE (所有 30d+ 都删, 已经在 R2 兜底)
+    // Step 5: Supabase DELETE (分批删除, 每次最多 500 条, 已经在 R2 兜底)
     const ids = oldEntities.map((e) => e.id);
-    const deleteRes = await fetch(
-      `${getSupabaseHost(env)}/rest/v1/entity_hot?id=in.(${ids.join(',')})`,
-      {
-        method: 'DELETE',
-        headers: {
-          'apikey': env.SUPABASE_SERVICE_KEY,
-          'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    const BATCH_SIZE = 500;
+    let totalDeleted = 0;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const deleteRes = await fetch(
+        `${getSupabaseHost(env)}/rest/v1/entity_hot?id=in.(${batch.join(',')})&limit=${BATCH_SIZE}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'apikey': env.SUPABASE_SERVICE_KEY,
+            'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+          },
         },
-      },
-    );
-    if (!deleteRes.ok) {
-      const errText = await deleteRes.text();
-      throw new Error(`DELETE failed HTTP ${deleteRes.status}: ${errText.slice(0, 200)}`);
+      );
+      if (!deleteRes.ok) {
+        const errText = await deleteRes.text();
+        throw new Error(`DELETE failed HTTP ${deleteRes.status}: ${errText.slice(0, 200)}`);
+      }
+      const deletedCount = parseInt(deleteRes.headers.get('content-length') || '0', 10);
+      totalDeleted += deletedCount > 0 ? deletedCount : batch.length;
     }
 
     const elapsed = Date.now() - start;
-    console.log(`[cron] archive done active=${active.length} reviewed=${reviewed.length} deleted=${ids.length} elapsed=${elapsed}ms`);
+    console.log(`[cron] archive done active=${active.length} reviewed=${reviewed.length} deleted=${totalDeleted} elapsed=${elapsed}ms`);
     ctx.waitUntil(logEvent(env, "info", "[cron] archive done", {
       active: active.length,
       reviewed: reviewed.length,
-      deleted: ids.length,
+      deleted: totalDeleted,
       elapsed_ms: elapsed,
     }, "scheduler").catch(() => {}));
   } catch (e: any) {
