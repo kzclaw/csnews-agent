@@ -29,6 +29,15 @@ import type {
 } from './types';
 
 // ===================== pull =====================
+
+const CACHE_HEADERS: Record<string, string> = {
+  news: 'public, max-age=120',
+  topics: 'public, max-age=300',
+  warnings: 'no-store',
+  'fission-pending': 'public, max-age=60',
+  stats: 'public, max-age=60',
+};
+
 export async function handlePullAction(
   request: Request,
   env: Env,
@@ -38,14 +47,15 @@ export async function handlePullAction(
 ): Promise<Response> {
   try {
     const result = await handlePull(env, url, ctx);
+    const cacheControl = CACHE_HEADERS[result.type] || 'no-store';
     return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json', ...cors },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': cacheControl, ...cors },
     });
   } catch (e: any) {
     const status = e.status || 500;
     return new Response(JSON.stringify({ error: e.message || 'pull failed' }), {
       status,
-      headers: { 'Content-Type': 'application/json', ...cors },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
     });
   }
 }
