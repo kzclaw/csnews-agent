@@ -257,56 +257,54 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
       }));
     }
     description = '当前所有 active topic (按 last_active_at 倒序)';
-  } else if (type === 'velocity') {
+  } else if (type === 'velocity' || type === 'acceleration') {
+    // 公共: 拉取 topic 列表 (velocity / acceleration 共用)
     const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
     const topics = await safeJson(topicsRes) as TopicRow[];
     if (topics && topics.length > 0) {
-      items = await Promise.all(topics.map(async (t) => {
-        const nowMs = Date.now();
-        const nowMinus1h = new Date(nowMs - 3600 * 1000);
-        const nowMinus2h = new Date(nowMs - 7200 * 1000);
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
-        const sinceTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-        const hourlyAvg = sinceTotal / 24;
-        const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
-        return {
-          topic_id: t.id,
-          topic_key: t.topic_key,
-          level: t.level,
-          score: t.score,
-          last_1h_count: last1hTotal,
-          hourly_avg: Math.round(hourlyAvg * 100) / 100,
-          velocity_ratio: Math.round(velocityRatio * 100) / 100,
-          trend: velocityRatio > 2 ? 'explosive' : velocityRatio > 1 ? 'rising' : velocityRatio < 0.5 ? 'declining' : 'stable',
-        };
-      }));
+      if (type === 'velocity') {
+        items = await Promise.all(topics.map(async (t) => {
+          const nowMs = Date.now();
+          const nowMinus1h = new Date(nowMs - 3600 * 1000);
+          const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+          const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+          const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
+          const sinceTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+          const hourlyAvg = sinceTotal / 24;
+          const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
+          return {
+            topic_id: t.id,
+            topic_key: t.topic_key,
+            level: t.level,
+            score: t.score,
+            last_1h_count: last1hTotal,
+            hourly_avg: Math.round(hourlyAvg * 100) / 100,
+            velocity_ratio: Math.round(velocityRatio * 100) / 100,
+            trend: velocityRatio > 2 ? 'explosive' : velocityRatio > 1 ? 'rising' : velocityRatio < 0.5 ? 'declining' : 'stable',
+          };
+        }));
+        description = 'topic velocity (1h 增量 / 24h 均值)';
+      } else {
+        items = await Promise.all(topics.map(async (t) => {
+          const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+          const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+          const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
+          const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+          const acceleration = last1hTotal - between1h2hTotal;
+          return {
+            topic_id: t.id,
+            topic_key: t.topic_key,
+            level: t.level,
+            score: t.score,
+            last_1h_count: last1hTotal,
+            previous_1h_count: between1h2hTotal,
+            acceleration: acceleration,
+            trend: acceleration > 0 ? 'accelerating' : acceleration < 0 ? 'decelerating' : 'stable',
+          };
+        }));
+        description = 'topic acceleration (二阶导, 1h 增量 - 上一小时增量)';
+      }
     }
-    description = 'topic velocity (1h 增量 / 24h 均值)';
-  } else if (type === 'acceleration') {
-    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as TopicRow[];
-    if (topics && topics.length > 0) {
-      items = await Promise.all(topics.map(async (t) => {
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-        const acceleration = last1hTotal - between1h2hTotal;
-        return {
-          topic_id: t.id,
-          topic_key: t.topic_key,
-          level: t.level,
-          score: t.score,
-          last_1h_count: last1hTotal,
-          previous_1h_count: between1h2hTotal,
-          acceleration: acceleration,
-          trend: acceleration > 0 ? 'accelerating' : acceleration < 0 ? 'decelerating' : 'stable',
-        };
-      }));
-    }
-    description = 'topic acceleration (二阶导, 1h 增量 - 上一小时增量)';
   }
 
   // 5. 大小限制
