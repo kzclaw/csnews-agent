@@ -24,6 +24,7 @@ import {
 } from './news-process';
 import { logEvent } from './log';
 import { resetCacheMetrics } from './cache';
+import { MCP_TOOLS_COUNT } from './mcp-handler';
 import type {
   CleanupStaleTopicsResult,
   ZakerHotResponse,
@@ -391,6 +392,9 @@ export async function handleHealthAction(
   const pullCacheFreshnessResult = await checkPullCacheFreshness(env, ts);
   result.pull_cache_freshness = pullCacheFreshnessResult.pull_cache_freshness;
   checks.pull_cache_freshness = pullCacheFreshnessResult.checks.pull_cache_freshness;
+
+  // 16. mcp_tools_count — MCP Server 工具数量（O13-MCP）
+  result.mcp_tools_count = MCP_TOOLS_COUNT;
 
   // 整体 status 聚合
   const statuses = Object.values(checks).map((c) => c.status);
