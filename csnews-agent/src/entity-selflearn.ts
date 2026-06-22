@@ -18,7 +18,9 @@
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
 import {
-  loadNoiseAnchors, bgeM3BatchEmbedding, filterNoiseCandidates,
+  loadNoiseAnchors,
+  bgeM3BatchEmbedding,
+  filterNoiseCandidates,
   type FilterResult,
 } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
@@ -43,7 +45,10 @@ export const SELFLEARN_BATCH_SIZE = 50;
 /**
  * 从文本中提取 n-gram 频率
  */
-export function extractNgramFrequency(text: string, sizes: number[] = SELFLEARN_NGRAM_SIZES): Map<string, number> {
+export function extractNgramFrequency(
+  text: string,
+  sizes: number[] = SELFLEARN_NGRAM_SIZES
+): Map<string, number> {
   const freq = new Map<string, number>();
   if (!text) return freq;
 
@@ -84,7 +89,8 @@ export function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, n
  * 其他 → person
  */
 export function inferEntityType(gram: string): 'person' | 'org' | 'place' {
-  if (/公司|集团|科技|AI|银行|学院|大学|社|局|部|委|所|院|校|厂|店|行|司|署/.test(gram)) return 'org';
+  if (/公司|集团|科技|AI|银行|学院|大学|社|局|部|委|所|院|校|厂|店|行|司|署/.test(gram))
+    return 'org';
   if (/省|市|国|区|县|州|镇|村|路|街|岛|海|河|山|湖|港|城|都|府/.test(gram)) return 'place';
   return 'person';
 }
@@ -102,13 +108,16 @@ export function isValidGram(gram: string): boolean {
 /**
  * 从 news_topic_members 拉 last N hours news
  */
-async function fetchRecentNewsTitles(env: Env, sinceHours: number = 24): Promise<{ id: string; text: string }[]> {
+async function fetchRecentNewsTitles(
+  env: Env,
+  sinceHours: number = 24
+): Promise<{ id: string; text: string }[]> {
   const sinceIso = new Date(Date.now() - sinceHours * 3600 * 1000).toISOString();
   const res = await supabaseFetch(
     env,
-    `/rest/v1/news_hotspots?select=id,title,summary&created_at=gte.${sinceIso}&order=created_at.desc&limit=200`,
+    `/rest/v1/news_hotspots?select=id,title,summary&created_at=gte.${sinceIso}&order=created_at.desc&limit=200`
   );
-  const news = (await safeJson(res) as NewsHotspotRow[]) || [];
+  const news = ((await safeJson(res)) as NewsHotspotRow[]) || [];
   return news
     .map((n) => ({
       id: n.id,
@@ -124,7 +133,7 @@ async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
   const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as BgeEmbeddingResponse;
-  return result.data ? result.data.map(item => item.embedding ?? []) : [];
+  return result.data ? result.data.map((item) => item.embedding ?? []) : [];
 }
 
 /**
@@ -132,7 +141,9 @@ async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
-  let dot = 0, na = 0, nb = 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
     na += a[i] * a[i];
@@ -159,7 +170,13 @@ async function loadExistingCandidates(env: Env): Promise<EntityCandidate[]> {
 /**
  * 主函数: 自学习 (5h 配额期可推, 1-2 min 跑完)
  */
-export async function runEntitySelfLearn(env: Env): Promise<{ candidates: EntityCandidate[]; total: number; embedded: number; noise_filtered: number; noise_anchors_count: number }> {
+export async function runEntitySelfLearn(env: Env): Promise<{
+  candidates: EntityCandidate[];
+  total: number;
+  embedded: number;
+  noise_filtered: number;
+  noise_anchors_count: number;
+}> {
   try {
     const news = await fetchRecentNewsTitles(env, 24);
     if (news.length === 0) {
@@ -181,7 +198,13 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
 
     const candidateGrams = filtered.slice(0, SELFLEARN_MAX_CANDIDATES).map((f) => f.gram);
     if (candidateGrams.length === 0) {
-      return { candidates: [], total: news.length, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
+      return {
+        candidates: [],
+        total: news.length,
+        embedded: 0,
+        noise_filtered: 0,
+        noise_anchors_count: 0,
+      };
     }
 
     // bge-m3 embedding 候选词 (batch, 0 Neurons)
@@ -189,15 +212,20 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
 
     // 跟已有 candidates 比相似度 (去重)
     const existing = await loadExistingCandidates(env);
-    const existingEmbeddings = existing.length > 0
-      ? await bgeM3Embedding(env, existing.slice(0, 50).map((c) => c.name))
-      : [];
+    const existingEmbeddings =
+      existing.length > 0
+        ? await bgeM3Embedding(
+            env,
+            existing.slice(0, 50).map((c) => c.name)
+          )
+        : [];
 
     // semantic noise anchor filtering (18:22 确定: similarity >= 0.85 → noise)
     const noiseAnchorsData = await loadNoiseAnchors(env);
-    const anchorEmbeddings = noiseAnchorsData.anchors.length > 0
-      ? await bgeM3Embedding(env, noiseAnchorsData.anchors)
-      : [];
+    const anchorEmbeddings =
+      noiseAnchorsData.anchors.length > 0
+        ? await bgeM3Embedding(env, noiseAnchorsData.anchors)
+        : [];
 
     // 启发式 type 推断 + 过滤重复 + noise filter
     const dedupCandidates: { gram: string; count: number }[] = [];
@@ -235,7 +263,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
       dedupForFilter,
       dedupEmbs,
       anchorEmbeddings,
-      noiseAnchorsData.threshold,
+      noiseAnchorsData.threshold
     );
 
     // 构造最终 candidates (review 入口) + noise 数组 (review 实战参考)
@@ -252,27 +280,33 @@ export async function runEntitySelfLearn(env: Env): Promise<{ candidates: Entity
         first_seen: new Date().toISOString(),
       }));
 
-    const noiseCandidates: EntityCandidate[] = filterResult.noise
-      .map((n) => ({
-        name: n.candidate.name,
-        type: inferEntityType(n.candidate.name),
-        frequency: n.candidate.count,
-        sample_context: sampleText,
-        confidence: SELFLEARN_CONFIDENCE,
-        source: 'selflearn' as const,
-        first_seen: new Date().toISOString(),
-      }));
+    const noiseCandidates: EntityCandidate[] = filterResult.noise.map((n) => ({
+      name: n.candidate.name,
+      type: inferEntityType(n.candidate.name),
+      frequency: n.candidate.count,
+      sample_context: sampleText,
+      confidence: SELFLEARN_CONFIDENCE,
+      source: 'selflearn' as const,
+      first_seen: new Date().toISOString(),
+    }));
 
     // 写 R2 entity-candidates.json (review 入口 · 含 noise 分组)
-    await env.csnews_raw.put(ENTITY_CANDIDATES_R2_KEY, JSON.stringify({
-      generated_at: new Date().toISOString(),
-      total_news: news.length,
-      noise_threshold: noiseAnchorsData.threshold,
-      noise_anchors_count: noiseAnchorsData.anchors.length,
-      candidates,
-      noise: noiseCandidates,
-      noise_scores: filterResult.scores,
-    }, null, 2));
+    await env.csnews_raw.put(
+      ENTITY_CANDIDATES_R2_KEY,
+      JSON.stringify(
+        {
+          generated_at: new Date().toISOString(),
+          total_news: news.length,
+          noise_threshold: noiseAnchorsData.threshold,
+          noise_anchors_count: noiseAnchorsData.anchors.length,
+          candidates,
+          noise: noiseCandidates,
+          noise_scores: filterResult.scores,
+        },
+        null,
+        2
+      )
+    );
 
     return {
       candidates,

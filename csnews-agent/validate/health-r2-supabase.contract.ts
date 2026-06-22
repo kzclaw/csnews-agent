@@ -28,7 +28,7 @@ describe('handleHealthAction · 业务契约', () => {
   });
 
   it('handleHealthAction 必须返回 Promise<Response> (async 函数)', () => {
-    const env: any = {};  // 空 env, 会触发内部 try/catch 兜底
+    const env: any = {}; // 空 env, 会触发内部 try/catch 兜底
     const request: any = new Request('https://example.com/?action=health');
     const url = new URL('https://example.com/?action=health');
     const cors: any = {};
@@ -56,34 +56,34 @@ describe('r2_latest_supabase_write 阈值契约 (v0.36.13)', () => {
 
   // 业务契约：< 1.5h 应判 ok
   it('created_at < 1.5h 前应判 ok', () => {
-    const ageMs = 30 * 60 * 1000;  // 30 min ago
+    const ageMs = 30 * 60 * 1000; // 30 min ago
     expect(ageMs < OK_THRESHOLD_MS).toBe(true);
     expect(ageMs < DOWN_THRESHOLD_MS).toBe(true);
   });
 
   // 业务契约：1.5h-3h 应判 degraded
   it('created_at 在 1.5h-3h 之间应判 degraded', () => {
-    const ageMs = 2 * 3600 * 1000;  // 2h ago
+    const ageMs = 2 * 3600 * 1000; // 2h ago
     expect(ageMs >= OK_THRESHOLD_MS).toBe(true);
     expect(ageMs < DOWN_THRESHOLD_MS).toBe(true);
   });
 
   // 业务契约：>= 3h 应判 down
   it('created_at >= 3h 应判 down (跟 cron_health 阈值同步)', () => {
-    const ageMs = 4 * 3600 * 1000;  // 4h ago
+    const ageMs = 4 * 3600 * 1000; // 4h ago
     expect(ageMs >= OK_THRESHOLD_MS).toBe(true);
     expect(ageMs >= DOWN_THRESHOLD_MS).toBe(true);
   });
 
   // 业务契约：boundary 1.5h 严格 < (非 <=)
   it('1.5h 边界严格 < (degraded 起点, 不算 ok)', () => {
-    const ageMs = 1.5 * 3600 * 1000;  // exactly 1.5h
+    const ageMs = 1.5 * 3600 * 1000; // exactly 1.5h
     expect(ageMs < OK_THRESHOLD_MS).toBe(false);
   });
 
   // 业务契约：boundary 3h 严格 < (非 <=)
   it('3h 边界严格 < (down 起点, 不算 degraded)', () => {
-    const ageMs = 3 * 3600 * 1000;  // exactly 3h
+    const ageMs = 3 * 3600 * 1000; // exactly 3h
     expect(ageMs < DOWN_THRESHOLD_MS).toBe(false);
   });
 });
@@ -99,15 +99,17 @@ describe('r2_latest_write informational only 契约 (2026-06-17)', () => {
   it('r2_latest_write 永为 ok (不参与整体 status 聚合)', () => {
     // 业务契约: status 字段只可能 "ok" (informational)
     const validStatuses = ['ok'];
-    const actualStatus = 'ok';  // 2026-06-17 修订后永为 ok
+    const actualStatus = 'ok'; // 2026-06-17 修订后永为 ok
     expect(validStatuses).toContain(actualStatus);
   });
 
   it('r2_latest_write detail 必须包含 "informational" 或 "historical" 标记', () => {
     // 业务契约: 即使 status=ok, detail 必须明确告诉用户这是 informational
     // (因为 2026-06-17 修订说明这是"historical R2 写入", 真实 process 状态看 supabase)
-    const detailSample = 'historical: last R2 news/zaker/ write 8h ago (process no longer writes R2 news/zaker/, see r2_latest_supabase_write for current process status)';
-    const isInformational = detailSample.includes('historical') || detailSample.includes('informational');
+    const detailSample =
+      'historical: last R2 news/zaker/ write 8h ago (process no longer writes R2 news/zaker/, see r2_latest_supabase_write for current process status)';
+    const isInformational =
+      detailSample.includes('historical') || detailSample.includes('informational');
     expect(isInformational).toBe(true);
   });
 });

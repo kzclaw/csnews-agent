@@ -18,12 +18,26 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  validateType, validateSince, validateLimit, validateTopicId,
-  resolveRelativeTime, rateKeyForIp, dailyHitsKeyForToday,
-  knowledgeR2Key, KNOWLEDGE_INDEX_KEY,
-  ISO8601_REGEX, UUID_REGEX, ALLOWED_TYPES, RELATIVE_TIME_REGEX,
-  RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES, RATE_KEY_PREFIX, KNOWLEDGE_HITS_KEY_PREFIX,
-  LIMIT_MIN, LIMIT_MAX, DEFAULT_LIMIT,
+  validateType,
+  validateSince,
+  validateLimit,
+  validateTopicId,
+  resolveRelativeTime,
+  rateKeyForIp,
+  dailyHitsKeyForToday,
+  knowledgeR2Key,
+  KNOWLEDGE_INDEX_KEY,
+  ISO8601_REGEX,
+  UUID_REGEX,
+  ALLOWED_TYPES,
+  RELATIVE_TIME_REGEX,
+  RATE_LIMIT_PER_MIN,
+  PAYLOAD_LIMIT_BYTES,
+  RATE_KEY_PREFIX,
+  KNOWLEDGE_HITS_KEY_PREFIX,
+  LIMIT_MIN,
+  LIMIT_MAX,
+  DEFAULT_LIMIT,
 } from '../src/knowledge-validation';
 
 // ============================================================

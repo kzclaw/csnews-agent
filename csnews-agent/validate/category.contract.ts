@@ -9,9 +9,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  CATEGORY_SEEDS_R2_KEY, DEFAULT_CATEGORY_SEEDS,
-  loadCategorySeeds, bgeM3BatchEmbedding, saveCategorySeeds,
-  addSeedToCategory, removeSeedFromCategory,
+  CATEGORY_SEEDS_R2_KEY,
+  DEFAULT_CATEGORY_SEEDS,
+  loadCategorySeeds,
+  bgeM3BatchEmbedding,
+  saveCategorySeeds,
+  addSeedToCategory,
+  removeSeedFromCategory,
   type CategorySeedsData,
 } from '../src/category-seeds';
 import { classifyBySemantic } from '../src/category-classify';
@@ -35,7 +39,18 @@ describe('category-seeds 业务常量', () => {
   });
 
   it('DEFAULT_CATEGORY_SEEDS 必须包含kzclaw老分类体系全部 10 类', () => {
-    const required = ['科技', '财经', '国际', '社会', '娱乐', '体育', '房产', '汽车', '消费', '法律'];
+    const required = [
+      '科技',
+      '财经',
+      '国际',
+      '社会',
+      '娱乐',
+      '体育',
+      '房产',
+      '汽车',
+      '消费',
+      '法律',
+    ];
     for (const cat of required) {
       expect(DEFAULT_CATEGORY_SEEDS[cat]).toBeDefined();
     }
@@ -72,7 +87,7 @@ describe('loadCategorySeeds · 读 R2 category-seeds.json', () => {
 
   it('R2 返 seeds JSON → 透传', async () => {
     const stored: CategorySeedsData = {
-      categories: { '科技': ['foo', 'bar'] },
+      categories: { 科技: ['foo', 'bar'] },
       updated_at: '2026-06-16T18:00:00Z',
       updated_count: 5,
     };
@@ -80,7 +95,7 @@ describe('loadCategorySeeds · 读 R2 category-seeds.json', () => {
       csnews_raw: { get: async () => ({ json: async () => stored }) },
     };
     const data = await loadCategorySeeds(env);
-    expect(data.categories).toEqual({ '科技': ['foo', 'bar'] });
+    expect(data.categories).toEqual({ 科技: ['foo', 'bar'] });
     expect(data.updated_count).toBe(5);
   });
 });
@@ -122,7 +137,7 @@ describe('addSeedToCategory · kzclaw review 加 seed', () => {
     };
     await addSeedToCategory(env, '科技', '量子计算突破');
     const data = await addSeedToCategory(env, '科技', '量子计算突破');
-    expect(data.updated_count).toBe(1);  // 第二次 noop
+    expect(data.updated_count).toBe(1); // 第二次 noop
   });
 
   it('新类别自动创建', async () => {
@@ -243,8 +258,8 @@ describe('classifyBySemantic · bge-m3 自分类', () => {
           return {
             data: texts.map((t: string, i: number) => {
               // 让 title 跟种子 seed '人工智能发布' similarity 高
-              if (i === 0) return [1, 0, 0];  // title
-              return [0.9, 0, 0];  // 所有 seed 都偏向科技
+              if (i === 0) return [1, 0, 0]; // title
+              return [0.9, 0, 0]; // 所有 seed 都偏向科技
             }),
           };
         },
@@ -282,7 +297,7 @@ describe('classifyBySemantic · bge-m3 自分类', () => {
           return {
             data: texts.map((t: string) => {
               if (t.includes('量子计算') || t.includes('突破')) {
-                return [1, 0.5, 0];  // 跟 default 科技 seed "量子计算突破" 相似
+                return [1, 0.5, 0]; // 跟 default 科技 seed "量子计算突破" 相似
               }
               return [0, 1, 0];
             }),

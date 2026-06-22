@@ -303,7 +303,9 @@ describe('parseFilters · category 校验', () => {
 // ============================================================
 describe('parseFilters · topic_id UUID 校验', () => {
   it('合法 UUID 必须 ok', () => {
-    const url = new URL('https://example.com/?type=news&topic_id=550e8400-e29b-41d4-a716-446655440000');
+    const url = new URL(
+      'https://example.com/?type=news&topic_id=550e8400-e29b-41d4-a716-446655440000'
+    );
     const result = parseFilters(url);
     expect(result.ok).toBe(true);
   });
@@ -356,7 +358,10 @@ describe('parseFilters · fission_triggered（v0.32 占位）', () => {
       const result = parseFilters(url);
       expect(result.ok, `type=${type}`).toBe(true);
       if (result.ok) {
-        expect(result.filters.fissionTriggered, `type=${type} 不应设置 fissionTriggered`).toBeUndefined();
+        expect(
+          result.filters.fissionTriggered,
+          `type=${type} 不应设置 fissionTriggered`
+        ).toBeUndefined();
       }
     }
   });

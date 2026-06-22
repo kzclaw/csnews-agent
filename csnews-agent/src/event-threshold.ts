@@ -75,7 +75,7 @@ export async function recordReview(
   env: Env,
   review: 'correct' | 'incorrect',
   clusterId?: string,
-  reason?: string,
+  reason?: string
 ): Promise<ThresholdHistory> {
   const history = await loadThresholdHistory(env);
   const newValue = nextThreshold(history.current, review);

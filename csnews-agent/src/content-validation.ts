@@ -15,7 +15,7 @@
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ALLOWED_FORMATS = ['text', 'html', 'json'] as const;
-export type ContentFormat = typeof ALLOWED_FORMATS[number];
+export type ContentFormat = (typeof ALLOWED_FORMATS)[number];
 
 export const RATE_LIMIT_PER_MIN = 60;
 export const RATE_KEY_PREFIX = 'content_rate:';
@@ -37,7 +37,11 @@ export function validateId(id: string): ValidationResult {
     return { ok: false, error: 'invalid_id', reason: 'id 不能为空' };
   }
   if (!UUID_REGEX.test(id)) {
-    return { ok: false, error: 'invalid_id', reason: 'id 必须是 UUID 格式 (e.g. 550e8400-e29b-41d4-a716-446655440000)' };
+    return {
+      ok: false,
+      error: 'invalid_id',
+      reason: 'id 必须是 UUID 格式 (e.g. 550e8400-e29b-41d4-a716-446655440000)',
+    };
   }
   return { ok: true };
 }
@@ -78,5 +82,8 @@ export function dailyHitsKeyForToday(date: Date = new Date()): string {
  * HTML escape helper (避免 XSS)
  */
 export function escapeHtml(s: string): string {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+  );
 }

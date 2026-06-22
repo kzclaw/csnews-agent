@@ -17,19 +17,43 @@
  * 详见：tasks/csnews-agent-okr.md KR0
  */
 import { describe, it, expect } from 'vitest';
-import { validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday, escapeHtml, UUID_REGEX, ALLOWED_FORMATS, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES, RATE_KEY_PREFIX, CONTENT_HITS_KEY_PREFIX } from '../src/content-validation';
+import {
+  validateId,
+  validateFormat,
+  rateKeyForIp,
+  dailyHitsKeyForToday,
+  escapeHtml,
+  UUID_REGEX,
+  ALLOWED_FORMATS,
+  RATE_LIMIT_PER_MIN,
+  PAYLOAD_LIMIT_BYTES,
+  RATE_KEY_PREFIX,
+  CONTENT_HITS_KEY_PREFIX,
+} from '../src/content-validation';
 
 // ============================================================
 // validateId (id 必须 UUID 格式)
 // ============================================================
 describe('validateId · UUID 校验', () => {
   it('缺 id 必须 fail + reason 提到 id 不能为空', () => {
-    expect(validateId('')).toEqual({ ok: false, error: 'invalid_id', reason: expect.stringContaining('不能为空') });
+    expect(validateId('')).toEqual({
+      ok: false,
+      error: 'invalid_id',
+      reason: expect.stringContaining('不能为空'),
+    });
   });
 
   it('非 string 类型 必须 fail', () => {
-    expect(validateId(null as any)).toEqual({ ok: false, error: 'invalid_id', reason: expect.any(String) });
-    expect(validateId(undefined as any)).toEqual({ ok: false, error: 'invalid_id', reason: expect.any(String) });
+    expect(validateId(null as any)).toEqual({
+      ok: false,
+      error: 'invalid_id',
+      reason: expect.any(String),
+    });
+    expect(validateId(undefined as any)).toEqual({
+      ok: false,
+      error: 'invalid_id',
+      reason: expect.any(String),
+    });
   });
 
   it('普通字符串 必须 fail', () => {
@@ -41,11 +65,17 @@ describe('validateId · UUID 校验', () => {
   });
 
   it('超长 UUID 必须 fail', () => {
-    expect(validateId('550e8400-e29b-41d4-a716-446655440000-extra')).toMatchObject({ ok: false, error: 'invalid_id' });
+    expect(validateId('550e8400-e29b-41d4-a716-446655440000-extra')).toMatchObject({
+      ok: false,
+      error: 'invalid_id',
+    });
   });
 
   it('含非法字符 必须 fail', () => {
-    expect(validateId('550e8400-e29b-41d4-a716-44665544000Z')).toMatchObject({ ok: false, error: 'invalid_id' });
+    expect(validateId('550e8400-e29b-41d4-a716-44665544000Z')).toMatchObject({
+      ok: false,
+      error: 'invalid_id',
+    });
   });
 
   it('标准 UUID v4 格式 必须 ok', () => {
@@ -95,7 +125,10 @@ describe('validateFormat · format 白名单', () => {
   });
 
   it('format= 必须 fail', () => {
-    expect(validateFormat('text; charset=utf-8')).toMatchObject({ ok: false, error: 'invalid_format' });
+    expect(validateFormat('text; charset=utf-8')).toMatchObject({
+      ok: false,
+      error: 'invalid_format',
+    });
   });
 
   it('ALLOWED_FORMATS 必须是 text/html/json 三个', () => {
@@ -129,11 +162,15 @@ describe('rateKeyForIp · 反爬限流 KV key', () => {
 // ============================================================
 describe('dailyHitsKeyForToday · 监控计数 KV key', () => {
   it('2026-06-16 必须返 r2_content_hits:2026-06-16', () => {
-    expect(dailyHitsKeyForToday(new Date('2026-06-16T00:00:00Z'))).toBe('r2_content_hits:2026-06-16');
+    expect(dailyHitsKeyForToday(new Date('2026-06-16T00:00:00Z'))).toBe(
+      'r2_content_hits:2026-06-16'
+    );
   });
 
   it('2026-01-01 必须返 r2_content_hits:2026-01-01', () => {
-    expect(dailyHitsKeyForToday(new Date('2026-01-01T23:59:59Z'))).toBe('r2_content_hits:2026-01-01');
+    expect(dailyHitsKeyForToday(new Date('2026-01-01T23:59:59Z'))).toBe(
+      'r2_content_hits:2026-01-01'
+    );
   });
 
   it('CONTENT_HITS_KEY_PREFIX 必须是 r2_content_hits:', () => {

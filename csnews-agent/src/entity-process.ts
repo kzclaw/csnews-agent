@@ -44,7 +44,9 @@ export async function loadReviewedCandidates(env: Env): Promise<EntityFinalized[
 /**
  * 主函数: 方案 D 分层写 (R2 always + Supabase best effort)
  */
-export async function runEntityProcess(env: Env): Promise<{ written: number; errors: number; finalized: number }> {
+export async function runEntityProcess(
+  env: Env
+): Promise<{ written: number; errors: number; finalized: number }> {
   let reviewed: EntityFinalized[] = [];
   try {
     reviewed = await loadReviewedCandidates(env);
@@ -60,10 +62,17 @@ export async function runEntityProcess(env: Env): Promise<{ written: number; err
   // Layer 1: R2 write (source of truth, always)
   // 30d+ 也能查 (viewer miss Supabase 时 fallback)
   try {
-    await env.csnews_raw.put(ENTITY_FINALIZED_R2_KEY, JSON.stringify({
-      generated_at: new Date().toISOString(),
-      entities: reviewed,
-    }, null, 2));
+    await env.csnews_raw.put(
+      ENTITY_FINALIZED_R2_KEY,
+      JSON.stringify(
+        {
+          generated_at: new Date().toISOString(),
+          entities: reviewed,
+        },
+        null,
+        2
+      )
+    );
   } catch (e: any) {
     console.error(`[entity-process] R2 put failed: ${e?.message || e}`);
     return { written: 0, errors: 1, finalized: 0 };
@@ -95,7 +104,10 @@ export async function runEntityProcess(env: Env): Promise<{ written: number; err
  *   - status 保留 (review 过的不会因 cron 跑改回 active)
  *   - 30d+ 自动归档: 由 scheduledArchiveOldEntities 跑 (独立 cron, 不在本函数)
  */
-export async function writeEntitiesHotLayer(env: Env, entities: EntityFinalized[]): Promise<{ written: number; errors: number }> {
+export async function writeEntitiesHotLayer(
+  env: Env,
+  entities: EntityFinalized[]
+): Promise<{ written: number; errors: number }> {
   if (entities.length === 0) return { written: 0, errors: 0 };
 
   const rows = entities.map((e) => ({
@@ -115,7 +127,7 @@ export async function writeEntitiesHotLayer(env: Env, entities: EntityFinalized[
       headers: {
         ...supabaseHeaders(env),
         'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates',
+        Prefer: 'resolution=merge-duplicates',
       },
       body: JSON.stringify(rows),
     });

@@ -37,7 +37,8 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     table: 'news_hotspots',
     defaultOrderBy: 'created_at',
     allowedOrderBy: ['created_at', 'published_at', 'hot_score', 'score', 'updated_at'],
-    defaultSelect: 'id, title, url, source, category, hot_score, published_at, summary, topic_id, level, score, is_stored_r2, created_at, updated_at',
+    defaultSelect:
+      'id, title, url, source, category, hot_score, published_at, summary, topic_id, level, score, is_stored_r2, created_at, updated_at',
     // fission_triggered 字段在 news_hotspots 表里没有,改走 fission-pending(type=news 的裂变标记需求 v0.32 加 migration)
     // stage 字段在 news_hotspots 表里没有,stage 只该在 trends 上用
     allowedFilters: ['level', 'category', 'topic_id', 'title_like'],
@@ -47,7 +48,8 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     table: 'topics',
     defaultOrderBy: 'score',
     allowedOrderBy: ['score', 'last_active_at', 'created_at', 'updated_at'],
-    defaultSelect: 'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
+    defaultSelect:
+      'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
     allowedFilters: ['level'],
     timeField: 'created_at',
   },
@@ -55,7 +57,8 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     table: 'warnings',
     defaultOrderBy: 'severity',
     allowedOrderBy: ['created_at', 'severity', 'updated_at'],
-    defaultSelect: 'id, topic_id, snapshot_id, warning_type, severity, reason, status, report_r2_key, validated, validated_at, created_at, updated_at',
+    defaultSelect:
+      'id, topic_id, snapshot_id, warning_type, severity, reason, status, report_r2_key, validated, validated_at, created_at, updated_at',
     allowedFilters: ['status', 'topic_id', 'level'],
     timeField: 'created_at',
   },
@@ -65,7 +68,8 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     table: 'topics',
     defaultOrderBy: 'score',
     allowedOrderBy: ['score', 'last_active_at'],
-    defaultSelect: 'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
+    defaultSelect:
+      'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
     allowedFilters: [],
     timeField: 'created_at',
   },
@@ -92,10 +96,10 @@ export interface PullResponse {
  */
 function projectFormat(items: any[], format: Format): any[] {
   if (format === 'ids') {
-    return items.map(item => ({ id: item.id }));
+    return items.map((item) => ({ id: item.id }));
   }
   if (format === 'summary') {
-    return items.map(item => {
+    return items.map((item) => {
       const { embedding, ...rest } = item; // eslint-disable-line @typescript-eslint/no-unused-vars
       if (rest.summary && typeof rest.summary === 'string' && rest.summary.length > 200) {
         rest.summary = rest.summary.slice(0, 200) + '…';
@@ -104,7 +108,7 @@ function projectFormat(items: any[], format: Format): any[] {
     });
   }
   // full: 排除 embedding(太大,没意义)
-  return items.map(item => {
+  return items.map((item) => {
     const { embedding, ...rest } = item; // eslint-disable-line @typescript-eslint/no-unused-vars
     return rest;
   });
@@ -149,13 +153,21 @@ function resolveRelativeTime(rel: string): string | null {
   return new Date(now - ms).toISOString();
 }
 
-export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | { ok: false; error: string } {
+export function parseFilters(
+  url: URL
+): { ok: true; filters: ParsedFilters } | { ok: false; error: string } {
   const type = url.searchParams.get('type') || '';
   if (!type) {
-    return { ok: false, error: 'missing type param. Valid: ' + Object.keys(TYPE_CONFIG).join(', ') };
+    return {
+      ok: false,
+      error: 'missing type param. Valid: ' + Object.keys(TYPE_CONFIG).join(', '),
+    };
   }
   if (!TYPE_CONFIG[type]) {
-    return { ok: false, error: `unknown type: ${type}. Valid: ${Object.keys(TYPE_CONFIG).join(', ')}` };
+    return {
+      ok: false,
+      error: `unknown type: ${type}. Valid: ${Object.keys(TYPE_CONFIG).join(', ')}`,
+    };
   }
 
   const config = TYPE_CONFIG[type];
@@ -186,7 +198,10 @@ export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | {
   // order_by
   const orderBy = url.searchParams.get('order_by') || config.defaultOrderBy;
   if (!config.allowedOrderBy.includes(orderBy)) {
-    return { ok: false, error: `order_by ${orderBy} not allowed for type=${type}. Valid: ${config.allowedOrderBy.join(', ')}` };
+    return {
+      ok: false,
+      error: `order_by ${orderBy} not allowed for type=${type}. Valid: ${config.allowedOrderBy.join(', ')}`,
+    };
   }
 
   // time window
@@ -287,12 +302,18 @@ export function parseFilters(url: URL): { ok: true; filters: ParsedFilters } | {
   // select
   const selectRaw = url.searchParams.get('select');
   if (selectRaw) {
-    const fields = selectRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const fields = selectRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     // 简单白名单: 必须是 config.defaultSelect 列表的子集(防泄漏未知字段)
-    const allowedFields = new Set(config.defaultSelect.split(',').map(s => s.trim()));
+    const allowedFields = new Set(config.defaultSelect.split(',').map((s) => s.trim()));
     for (const f of fields) {
       if (!allowedFields.has(f)) {
-        return { ok: false, error: `select field '${f}' not allowed. Valid: ${[...allowedFields].join(', ')}` };
+        return {
+          ok: false,
+          error: `select field '${f}' not allowed. Valid: ${[...allowedFields].join(', ')}`,
+        };
       }
     }
     filters.select = fields.join(',');
@@ -371,7 +392,10 @@ function buildPostgRestQuery(filters: ParsedFilters): string {
  * fission-pending 实际是 topics 满足条件:level='explosive' AND score>=6
  * 用 RPC 暴露更安全(避免拼 Or/And)
  */
-async function queryFissionPending(env: Env, filters: ParsedFilters): Promise<{ items: any[]; total: number }> {
+async function queryFissionPending(
+  env: Env,
+  filters: ParsedFilters
+): Promise<{ items: any[]; total: number }> {
   const config = TYPE_CONFIG['fission-pending'];
 
   // 用 PostgREST 查询 topics,加 level=eq.explosive 过滤
@@ -396,7 +420,7 @@ async function queryFissionPending(env: Env, filters: ParsedFilters): Promise<{ 
     const errText = await res.text();
     throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
   }
-  const items = (await safeJson(res)) as PullTopicRow[] || [];
+  const items = ((await safeJson(res)) as PullTopicRow[]) || [];
 
   // 客户端再过滤 score >= 6(避免 Or/And 拼接)
   // 实际生产应该用 RPC,但 v0.31 阶段先客户端过滤,简单且无 SQL 注入风险
@@ -452,7 +476,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
       const errText = await res.text();
       throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
     }
-    items = (await safeJson(res)) as PullTopicRow[] || [];
+    items = ((await safeJson(res)) as PullTopicRow[]) || [];
 
     // total: PostgREST 默认不在响应里;v0.31 阶段用 items.length 近似
     // 精确 count 留给 v0.32 (Prefer: count=exact 头)

@@ -43,12 +43,19 @@ export async function runEventProcess(env: Env): Promise<{
 
   try {
     // 暂存 R2 event-clusters.json (0 DDL 原则)
-    await env.csnews_raw.put(EVENT_CLUSTERS_R2_KEY, JSON.stringify({
-      generated_at: ts,
-      threshold: result.threshold,
-      jaccard_pairs: result.jaccard_pairs,
-      clusters: result.clusters,
-    }, null, 2));
+    await env.csnews_raw.put(
+      EVENT_CLUSTERS_R2_KEY,
+      JSON.stringify(
+        {
+          generated_at: ts,
+          threshold: result.threshold,
+          jaccard_pairs: result.jaccard_pairs,
+          clusters: result.clusters,
+        },
+        null,
+        2
+      )
+    );
 
     // 累积分页索引
     const indexEntry: EventClustersIndexEntry[] = result.clusters.map((c) => ({

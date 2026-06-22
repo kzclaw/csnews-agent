@@ -26,9 +26,7 @@ export interface MockSupabaseFetchOptions {
   headers?: Record<string, string>;
 }
 
-export function createMockSupabaseFetch(
-  options: MockSupabaseFetchOptions = {}
-): typeof fetch {
+export function createMockSupabaseFetch(options: MockSupabaseFetchOptions = {}): typeof fetch {
   const { json = {}, status = 200, headers = {} } = options;
   return vi.fn().mockResolvedValue(
     new Response(JSON.stringify(json), {
@@ -77,9 +75,7 @@ export function createMockR2Bucket(): {
 // Mock KV namespace
 // ============================================================
 
-export function createMockKVNamespace(
-  initial: Record<string, string> = {}
-): {
+export function createMockKVNamespace(initial: Record<string, string> = {}): {
   get: ReturnType<typeof vi.fn>;
   put: ReturnType<typeof vi.fn>;
   delete: ReturnType<typeof vi.fn>;
@@ -104,9 +100,7 @@ export function createMockKVNamespace(
 // Mock Workers AI
 // ============================================================
 
-export function createMockWorkersAI(
-  result: unknown = { response: 'mocked response' }
-): {
+export function createMockWorkersAI(result: unknown = { response: 'mocked response' }): {
   run: ReturnType<typeof vi.fn>;
 } {
   return {

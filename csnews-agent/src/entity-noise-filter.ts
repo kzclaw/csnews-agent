@@ -22,12 +22,35 @@ export const NOISE_THRESHOLD_MAX = 0.99;
 export const NOISE_ANCHORS_DEFAULT: string[] = [
   // 18:09 确定 batch incorrect 20 noise anchors
   // 17 通用词
-  '回应', '表示', '工作', '人员', '媒体', '当地', '协议', '报道',
-  '相关', '参与', '家属', '上市', '第三', '年初', '发现', '记者', '公司',
+  '回应',
+  '表示',
+  '工作',
+  '人员',
+  '媒体',
+  '当地',
+  '协议',
+  '报道',
+  '相关',
+  '参与',
+  '家属',
+  '上市',
+  '第三',
+  '年初',
+  '发现',
+  '记者',
+  '公司',
   // 2 数字片段
-  '0元', '0万',
+  '0元',
+  '0万',
   // 1 日期片段 cluster-0-8 拆解
-  '6月', '月1', '5日', '15日', '月15', '月15日', '6月15', '6月1',
+  '6月',
+  '月1',
+  '5日',
+  '15日',
+  '月15',
+  '月15日',
+  '6月15',
+  '6月1',
 ];
 
 export interface NoiseAnchorsData {
@@ -59,7 +82,9 @@ export function maxNoiseSimilarity(candidateEmb: number[], anchorEmbs: number[][
   let max = 0;
   for (const anchorEmb of anchorEmbs) {
     if (anchorEmb.length !== candidateEmb.length) continue;
-    let dot = 0, na = 0, nb = 0;
+    let dot = 0,
+      na = 0,
+      nb = 0;
     for (let i = 0; i < candidateEmb.length; i++) {
       dot += candidateEmb[i] * anchorEmb[i];
       na += candidateEmb[i] * candidateEmb[i];
@@ -79,7 +104,9 @@ export function maxNoiseSimilarity(candidateEmb: number[], anchorEmbs: number[][
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
-  let dot = 0, na = 0, nb = 0;
+  let dot = 0,
+    na = 0,
+    nb = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
     na += a[i] * a[i];
@@ -117,7 +144,7 @@ export function filterNoiseCandidates<T extends { name: string }>(
   candidates: T[],
   candidateEmbeddings: number[][],
   anchorEmbeddings: number[][],
-  threshold: number,
+  threshold: number
 ): FilterResult<T> {
   const kept: T[] = [];
   const noise: { candidate: T; max_noise_similarity: number }[] = [];

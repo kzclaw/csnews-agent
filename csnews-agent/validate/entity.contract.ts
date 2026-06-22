@@ -16,18 +16,33 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  ENTITY_CANDIDATES_R2_KEY, SELFLEARN_MIN_FREQUENCY, SELFLEARN_NGRAM_SIZES,
-  SELFLEARN_CONFIDENCE, SELFLEARN_MAX_CANDIDATES,
-  extractNgramFrequency, mergeNgramFrequency, inferEntityType, isValidGram,
-  cosineSimilarity, type EntityCandidate,
+  ENTITY_CANDIDATES_R2_KEY,
+  SELFLEARN_MIN_FREQUENCY,
+  SELFLEARN_NGRAM_SIZES,
+  SELFLEARN_CONFIDENCE,
+  SELFLEARN_MAX_CANDIDATES,
+  extractNgramFrequency,
+  mergeNgramFrequency,
+  inferEntityType,
+  isValidGram,
+  cosineSimilarity,
+  type EntityCandidate,
 } from '../src/entity-selflearn';
 import {
-  ENTITY_FINALIZED_R2_KEY, loadReviewedCandidates, runEntityProcess,
+  ENTITY_FINALIZED_R2_KEY,
+  loadReviewedCandidates,
+  runEntityProcess,
   type EntityFinalized,
 } from '../src/entity-process';
 import {
-  ENTITY_NOISE_ANCHORS_R2_KEY, NOISE_THRESHOLD_DEFAULT, NOISE_THRESHOLD_MIN, NOISE_THRESHOLD_MAX,
-  NOISE_ANCHORS_DEFAULT, loadNoiseAnchors, maxNoiseSimilarity, cosineSimilarity as noiseCosine,
+  ENTITY_NOISE_ANCHORS_R2_KEY,
+  NOISE_THRESHOLD_DEFAULT,
+  NOISE_THRESHOLD_MIN,
+  NOISE_THRESHOLD_MAX,
+  NOISE_ANCHORS_DEFAULT,
+  loadNoiseAnchors,
+  maxNoiseSimilarity,
+  cosineSimilarity as noiseCosine,
   filterNoiseCandidates,
 } from '../src/entity-noise-filter';
 
@@ -128,13 +143,7 @@ describe('extractNgramFrequency · n-gram 频率', () => {
   });
 
   it('mock news: 5 条 news 出现 "华为" 3 次 → 频率 3', () => {
-    const mockNews = [
-      '华为发布新产品',
-      '华为公司业绩亮眼',
-      '其他新闻',
-      '华为再次引领',
-      '无关内容',
-    ];
+    const mockNews = ['华为发布新产品', '华为公司业绩亮眼', '其他新闻', '华为再次引领', '无关内容'];
     const freqs = mockNews.map((n) => extractNgramFrequency(n));
     const merged = mergeNgramFrequency(freqs);
     expect(merged.get('华为')).toBe(3);
@@ -272,13 +281,19 @@ const mockSupabaseFetch = (status: number = 500, body: string = '{"message":"moc
     }
     return originalFetch(input);
   }) as any;
-  return () => { globalThis.fetch = originalFetch; };
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
 };
 
 describe('runEntityProcess · kzclaw 0 DDL = 暂存 R2', () => {
   let restoreFetch: () => void;
-  beforeEach(() => { restoreFetch = mockSupabaseFetch(); });
-  afterEach(() => { restoreFetch(); });
+  beforeEach(() => {
+    restoreFetch = mockSupabaseFetch();
+  });
+  afterEach(() => {
+    restoreFetch();
+  });
 
   it('R2 无 candidates → finalized=0, errors=0', async () => {
     const env: any = {
@@ -295,7 +310,13 @@ describe('runEntityProcess · kzclaw 0 DDL = 暂存 R2', () => {
 
   it('R2 有 candidates → 写 R2 entity-finalized.json', async () => {
     const candidates = [
-      { name: '华为', type: 'org', confidence: 0.5, source: 'selflearn', first_seen: '2026-06-16T00:00:00Z' },
+      {
+        name: '华为',
+        type: 'org',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '2026-06-16T00:00:00Z',
+      },
     ];
     let putCalled = false;
     let putKey = '';
@@ -320,7 +341,9 @@ describe('runEntityProcess · kzclaw 0 DDL = 暂存 R2', () => {
   it('R2 读失败 → errors=1 (兜底)', async () => {
     const env: any = {
       csnews_raw: {
-        get: async () => { throw new Error('R2 unavailable'); },
+        get: async () => {
+          throw new Error('R2 unavailable');
+        },
         put: async () => ({}),
       },
     };
@@ -346,7 +369,9 @@ describe('loadReviewedCandidates · kzclaw review 后读 R2', () => {
   it('R2 读失败 → 抛错 (runEntityProcess 接住返 errors=1)', async () => {
     const env: any = {
       csnews_raw: {
-        get: async () => { throw new Error('R2 error'); },
+        get: async () => {
+          throw new Error('R2 error');
+        },
       },
     };
     await expect(loadReviewedCandidates(env)).rejects.toThrow('R2 error');
@@ -378,8 +403,25 @@ describe('noise filter 业务常量 (kzclaw 18:22 确定)', () => {
   });
 
   it('NOISE_ANCHORS_DEFAULT 必须包含kzclaw 18:09 batch 确定的 17 通用词', () => {
-    const required = ['回应', '表示', '工作', '人员', '媒体', '当地', '协议', '报道',
-      '相关', '参与', '家属', '上市', '第三', '年初', '发现', '记者', '公司'];
+    const required = [
+      '回应',
+      '表示',
+      '工作',
+      '人员',
+      '媒体',
+      '当地',
+      '协议',
+      '报道',
+      '相关',
+      '参与',
+      '家属',
+      '上市',
+      '第三',
+      '年初',
+      '发现',
+      '记者',
+      '公司',
+    ];
     for (const w of required) {
       expect(NOISE_ANCHORS_DEFAULT).toContain(w);
     }
@@ -442,9 +484,9 @@ describe('maxNoiseSimilarity · candidate vs anchors 最大 cosine', () => {
   it('多 anchor 返最大 sim', () => {
     const candidate = [1, 0.5, 0];
     const anchors = [
-      [0, 1, 0],       // 0
-      [1, 0, 0],       // 0.89
-      [1, 1, 0],       // 0.94
+      [0, 1, 0], // 0
+      [1, 0, 0], // 0.89
+      [1, 1, 0], // 0.94
     ];
     const max = maxNoiseSimilarity(candidate, anchors);
     expect(max).toBeCloseTo(0.94, 1);
@@ -477,7 +519,7 @@ describe('filterNoiseCandidates · similarity ≥ threshold → noise', () => {
     const v = [1, 0.5, 0];
     const candidates = [{ name: '测试词', count: 5 }];
     const candidateEmbeddings = [v];
-    const anchorEmbeddings = [v];  // 相同 → similarity = 1.0 ≥ 0.85 → noise
+    const anchorEmbeddings = [v]; // 相同 → similarity = 1.0 ≥ 0.85 → noise
     const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
     expect(result.kept.length).toBe(0);
     expect(result.noise.length).toBe(1);
@@ -487,7 +529,7 @@ describe('filterNoiseCandidates · similarity ≥ threshold → noise', () => {
   it('candidate 跟 anchor 完全正交 → kept', () => {
     const candidates = [{ name: '真实实体', count: 5 }];
     const candidateEmbeddings = [[1, 0, 0]];
-    const anchorEmbeddings = [[0, 1, 0]];  // 正交 → 0
+    const anchorEmbeddings = [[0, 1, 0]]; // 正交 → 0
     const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
     expect(result.kept.length).toBe(1);
     expect(result.noise.length).toBe(0);
@@ -495,20 +537,20 @@ describe('filterNoiseCandidates · similarity ≥ threshold → noise', () => {
 
   it('kzclaw 18:22 确定 0.85 阈值实战 (mixed)', () => {
     const candidates = [
-      { name: '特朗普', count: 80 },     // 真实实体 (跟"回应"等通用词正交)
-      { name: '回应', count: 75 },       // 通用词 (跟 anchor "回应" 相同)
-      { name: '苹果', count: 60 },       // 真实实体 (跟"通用词" 正交)
-      { name: '表示', count: 65 },       // 通用词 (跟 anchor "表示" 相同)
+      { name: '特朗普', count: 80 }, // 真实实体 (跟"回应"等通用词正交)
+      { name: '回应', count: 75 }, // 通用词 (跟 anchor "回应" 相同)
+      { name: '苹果', count: 60 }, // 真实实体 (跟"通用词" 正交)
+      { name: '表示', count: 65 }, // 通用词 (跟 anchor "表示" 相同)
     ];
     const candidateEmbeddings = [
-      [1, 0, 0, 0],  // 特朗普
-      [0, 1, 0, 0],  // 回应 (跟 anchor 同)
-      [0, 0, 1, 0],  // 苹果
-      [0, 0, 0, 1],  // 表示 (跟 anchor 同)
+      [1, 0, 0, 0], // 特朗普
+      [0, 1, 0, 0], // 回应 (跟 anchor 同)
+      [0, 0, 1, 0], // 苹果
+      [0, 0, 0, 1], // 表示 (跟 anchor 同)
     ];
     const anchorEmbeddings = [
-      [0, 1, 0, 0],  // anchor 1 = 回应
-      [0, 0, 0, 1],  // anchor 2 = 表示
+      [0, 1, 0, 0], // anchor 1 = 回应
+      [0, 0, 0, 1], // anchor 2 = 表示
     ];
     const result = filterNoiseCandidates(candidates, candidateEmbeddings, anchorEmbeddings, 0.85);
     expect(result.kept.map((c) => c.name)).toEqual(['特朗普', '苹果']);
@@ -526,7 +568,7 @@ describe('filterNoiseCandidates · similarity ≥ threshold → noise', () => {
   it('threshold 边界 0.85 (>= 才 noise, < 才 kept)', () => {
     // similarity = 0.85 → noise
     const candidates = [{ name: 'a', count: 1 }];
-    const v = [0.85, 0.527, 0];  // 跟自身 1.0 相似度近似 0.85
+    const v = [0.85, 0.527, 0]; // 跟自身 1.0 相似度近似 0.85
     // 实际算法: similarity 0.85 → 命中 >= 阈值 → noise
     const result = filterNoiseCandidates(candidates, [v], [v], 0.85);
     expect(result.noise.length).toBe(1);

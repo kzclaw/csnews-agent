@@ -16,10 +16,11 @@
  */
 
 // ISO 8601 时间 regex (简化版, 接受 2026-06-16 / 2026-06-16T10:00:00Z / 2026-06-16T10:00:00+08:00)
-export const ISO8601_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+export const ISO8601_REGEX =
+  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 export const ALLOWED_TYPES = ['topics', 'velocity', 'acceleration'] as const;
-export type TrendType = typeof ALLOWED_TYPES[number];
+export type TrendType = (typeof ALLOWED_TYPES)[number];
 
 // 相对时间 regex: 24h / 7d / 30m
 export const RELATIVE_TIME_REGEX = /^(\d+)([mhd])$/;
@@ -57,7 +58,11 @@ export function resolveRelativeTime(rel: string): string | null {
  */
 export function validateType(type: string | null): ValidationResult {
   if (!type || typeof type !== 'string') {
-    return { ok: false, error: 'missing_type', reason: 'type 不能为空, 合法值: topics/velocity/acceleration' };
+    return {
+      ok: false,
+      error: 'missing_type',
+      reason: 'type 不能为空, 合法值: topics/velocity/acceleration',
+    };
   }
   const normalized = type.toLowerCase();
   if (!ALLOWED_TYPES.includes(normalized as TrendType)) {
@@ -73,7 +78,12 @@ export function validateType(type: string | null): ValidationResult {
 /**
  * 校验 since 参数 (ISO 8601 / 相对时间 / 默认 24h)
  */
-export function validateSince(since: string | null): { ok: boolean; since?: string; error?: string; reason?: string } {
+export function validateSince(since: string | null): {
+  ok: boolean;
+  since?: string;
+  error?: string;
+  reason?: string;
+} {
   if (!since) {
     return { ok: true, since: resolveRelativeTime('24h')! }; // 默认 24h
   }
@@ -88,20 +98,39 @@ export function validateSince(since: string | null): { ok: boolean; since?: stri
     }
     return { ok: true, since: d.toISOString() };
   }
-  return { ok: false, error: 'invalid_since', reason: `since 必须是 ISO 8601 或相对时间 (e.g. 24h / 7d / 30m), 实际: ${since}` };
+  return {
+    ok: false,
+    error: 'invalid_since',
+    reason: `since 必须是 ISO 8601 或相对时间 (e.g. 24h / 7d / 30m), 实际: ${since}`,
+  };
 }
 
 /**
  * 校验 limit 参数 (1-200, 默认 20)
  */
-export function validateLimit(limit: string | null): { ok: boolean; limit: number; error?: string; reason?: string } {
+export function validateLimit(limit: string | null): {
+  ok: boolean;
+  limit: number;
+  error?: string;
+  reason?: string;
+} {
   if (!limit) return { ok: true, limit: DEFAULT_LIMIT };
   const n = parseInt(limit, 10);
   if (isNaN(n)) {
-    return { ok: false, limit: DEFAULT_LIMIT, error: 'invalid_limit', reason: `limit 必须是整数, 实际: ${limit}` };
+    return {
+      ok: false,
+      limit: DEFAULT_LIMIT,
+      error: 'invalid_limit',
+      reason: `limit 必须是整数, 实际: ${limit}`,
+    };
   }
   if (n < LIMIT_MIN || n > LIMIT_MAX) {
-    return { ok: false, limit: DEFAULT_LIMIT, error: 'invalid_limit', reason: `limit 必须在 ${LIMIT_MIN}-${LIMIT_MAX} 之间, 实际: ${n}` };
+    return {
+      ok: false,
+      limit: DEFAULT_LIMIT,
+      error: 'invalid_limit',
+      reason: `limit 必须在 ${LIMIT_MIN}-${LIMIT_MAX} 之间, 实际: ${n}`,
+    };
   }
   return { ok: true, limit: n };
 }

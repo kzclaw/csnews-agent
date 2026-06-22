@@ -17,13 +17,14 @@
  */
 
 // ISO 8601 时间 regex (跟 trend 同款, 简化版)
-export const ISO8601_REGEX = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+export const ISO8601_REGEX =
+  /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 // UUID v4 regex (Postgres gen_random_uuid() 默认 v4)
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ALLOWED_TYPES = ['daily', 'topic'] as const;
-export type KnowledgeType = typeof ALLOWED_TYPES[number];
+export type KnowledgeType = (typeof ALLOWED_TYPES)[number];
 
 // 相对时间 regex: 24h / 7d / 30m (跟 trend 同款)
 export const RELATIVE_TIME_REGEX = /^(\d+)([mhd])$/;
@@ -77,7 +78,12 @@ export function validateType(type: string | null): ValidationResult {
 /**
  * 校验 since 参数 (ISO 8601 / 相对时间 / 默认 24h) (跟 trend 同款)
  */
-export function validateSince(since: string | null): { ok: boolean; since?: string; error?: string; reason?: string } {
+export function validateSince(since: string | null): {
+  ok: boolean;
+  since?: string;
+  error?: string;
+  reason?: string;
+} {
   if (!since) {
     return { ok: true, since: resolveRelativeTime('24h')! }; // 默认 24h (早晨日报默认看 24h)
   }
@@ -90,20 +96,39 @@ export function validateSince(since: string | null): { ok: boolean; since?: stri
     }
     return { ok: true, since: d.toISOString() };
   }
-  return { ok: false, error: 'invalid_since', reason: `since 必须是 ISO 8601 或相对时间 (e.g. 24h / 7d / 30m), 实际: ${since}` };
+  return {
+    ok: false,
+    error: 'invalid_since',
+    reason: `since 必须是 ISO 8601 或相对时间 (e.g. 24h / 7d / 30m), 实际: ${since}`,
+  };
 }
 
 /**
  * 校验 limit 参数 (1-200, 默认 20) (跟 trend 同款)
  */
-export function validateLimit(limit: string | null): { ok: boolean; limit: number; error?: string; reason?: string } {
+export function validateLimit(limit: string | null): {
+  ok: boolean;
+  limit: number;
+  error?: string;
+  reason?: string;
+} {
   if (!limit) return { ok: true, limit: DEFAULT_LIMIT };
   const n = parseInt(limit, 10);
   if (isNaN(n)) {
-    return { ok: false, limit: DEFAULT_LIMIT, error: 'invalid_limit', reason: `limit 必须是整数, 实际: ${limit}` };
+    return {
+      ok: false,
+      limit: DEFAULT_LIMIT,
+      error: 'invalid_limit',
+      reason: `limit 必须是整数, 实际: ${limit}`,
+    };
   }
   if (n < LIMIT_MIN || n > LIMIT_MAX) {
-    return { ok: false, limit: DEFAULT_LIMIT, error: 'invalid_limit', reason: `limit 必须在 ${LIMIT_MIN}-${LIMIT_MAX} 之间, 实际: ${n}` };
+    return {
+      ok: false,
+      limit: DEFAULT_LIMIT,
+      error: 'invalid_limit',
+      reason: `limit 必须在 ${LIMIT_MIN}-${LIMIT_MAX} 之间, 实际: ${n}`,
+    };
   }
   return { ok: true, limit: n };
 }
@@ -111,13 +136,20 @@ export function validateLimit(limit: string | null): { ok: boolean; limit: numbe
 /**
  * 校验 topic_id 参数 (UUID 格式, 仅 type=topic 时必填)
  */
-export function validateTopicId(topicId: string | null, type: string | null): { ok: boolean; topicId?: string; error?: string; reason?: string } {
+export function validateTopicId(
+  topicId: string | null,
+  type: string | null
+): { ok: boolean; topicId?: string; error?: string; reason?: string } {
   if (type === 'topic') {
     if (!topicId) {
       return { ok: false, error: 'missing_topic_id', reason: 'type=topic 时 topic_id 必填' };
     }
     if (!UUID_REGEX.test(topicId)) {
-      return { ok: false, error: 'invalid_topic_id', reason: `topic_id 必须是 UUID 格式, 实际: ${topicId}` };
+      return {
+        ok: false,
+        error: 'invalid_topic_id',
+        reason: `topic_id 必须是 UUID 格式, 实际: ${topicId}`,
+      };
     }
     return { ok: true, topicId: topicId.toLowerCase() };
   }

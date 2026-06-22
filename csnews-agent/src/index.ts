@@ -19,7 +19,12 @@
 import { Env } from './shared';
 import { authRequest } from './auth';
 import { handleCorsPreflight, dispatchAction } from './dispatch';
-import { scheduledProcess, scheduledEntity, scheduledEvent, scheduledArchiveOldEntities } from './scheduled';
+import {
+  scheduledProcess,
+  scheduledEntity,
+  scheduledEvent,
+  scheduledArchiveOldEntities,
+} from './scheduled';
 
 export default {
   // ====== HTTP fetch handler (v0.33 确定主入口) ======

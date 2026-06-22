@@ -7,9 +7,7 @@
  * 复用 entity-noise-filter.ts 80% 代码
  */
 import { Env } from './shared';
-import {
-  loadCategorySeeds, bgeM3BatchEmbedding,
-} from './category-seeds';
+import { loadCategorySeeds, bgeM3BatchEmbedding } from './category-seeds';
 import { cosineSimilarity } from './entity-noise-filter';
 
 /**
@@ -21,7 +19,7 @@ import { cosineSimilarity } from './entity-noise-filter';
  */
 export async function classifyBySemantic(
   title: string,
-  env: Env,
+  env: Env
 ): Promise<{
   category: string;
   confidence: number;
@@ -99,7 +97,7 @@ export async function classifyBySemantic(
  */
 export async function batchClassifyBySemantic(
   inputTexts: string[],
-  env: Env,
+  env: Env
 ): Promise<Array<{ category: string; confidence: number }>> {
   if (inputTexts.length === 0) return [];
 
@@ -117,11 +115,15 @@ export async function batchClassifyBySemantic(
 
   // 2. Workers AI seed embeddings (1 次 API call, 全部 seeds, bge 模型走独立池 0 Neurons)
   const seedTexts = allSeeds.map((s) => s.seed);
-  const seedEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: seedTexts })) as { data: number[][] };
+  const seedEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: seedTexts })) as {
+    data: number[][];
+  };
   const seedEmbeddings = seedEmbResp.data || [];
 
   // 3. Workers AI input embeddings (1 次 API call, 全部 input)
-  const inputEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: inputTexts })) as { data: number[][] };
+  const inputEmbResp = (await env.AI.run('@cf/baai/bge-m3', { text: inputTexts })) as {
+    data: number[][];
+  };
   const inputEmbeddings = inputEmbResp.data || [];
 
   // 4. 对每个 input 算 cosine 跟所有 seeds

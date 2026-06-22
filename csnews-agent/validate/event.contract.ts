@@ -10,15 +10,21 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  THRESHOLD_DEFAULT, THRESHOLD_STEP, THRESHOLD_MIN, THRESHOLD_MAX,
-  nextThreshold, loadThresholdHistory, recordReview, getCurrentThreshold,
+  THRESHOLD_DEFAULT,
+  THRESHOLD_STEP,
+  THRESHOLD_MIN,
+  THRESHOLD_MAX,
+  nextThreshold,
+  loadThresholdHistory,
+  recordReview,
+  getCurrentThreshold,
   type ThresholdHistory,
 } from '../src/event-threshold';
+import { entityOverlapJaccard, runEventClustering, type EventCluster } from '../src/event-cluster';
 import {
-  entityOverlapJaccard, runEventClustering, type EventCluster,
-} from '../src/event-cluster';
-import {
-  runEventProcess, EVENT_CLUSTERS_R2_KEY, EVENT_CLUSTERS_INDEX_R2_KEY,
+  runEventProcess,
+  EVENT_CLUSTERS_R2_KEY,
+  EVENT_CLUSTERS_INDEX_R2_KEY,
 } from '../src/event-process';
 import type { EntityFinalized } from '../src/entity-process';
 
@@ -134,7 +140,15 @@ describe('loadThresholdHistory · 读 R2 threshold history', () => {
   it('R2 返 history JSON → 透传', async () => {
     const stored: ThresholdHistory = {
       current: 0.5,
-      history: [{ ts: '2026-06-16T08:00:00Z', old_value: 0.4, new_value: 0.5, review_type: 'correct', reason: 'test' }],
+      history: [
+        {
+          ts: '2026-06-16T08:00:00Z',
+          old_value: 0.4,
+          new_value: 0.5,
+          review_type: 'correct',
+          reason: 'test',
+        },
+      ],
       updated_at: '2026-06-16T08:00:00Z',
     };
     const env: any = { csnews_raw: { get: async () => ({ json: async () => stored }) } };
@@ -208,7 +222,9 @@ describe('getCurrentThreshold · 0 确定点 = 自动从 R2 读', () => {
 
   it('R2 有 → 返最新 current', async () => {
     const env: any = {
-      csnews_raw: { get: async () => ({ json: async () => ({ current: 0.55, history: [], updated_at: '' }) }) },
+      csnews_raw: {
+        get: async () => ({ json: async () => ({ current: 0.55, history: [], updated_at: '' }) }),
+      },
     };
     const t = await getCurrentThreshold(env);
     expect(t).toBe(0.55);
@@ -229,7 +245,15 @@ describe('runEventClustering · Jaccard 聚类', () => {
   it('单 entity → 1 cluster', async () => {
     const env: any = { csnews_raw: { get: async () => null } };
     const entities: EntityFinalized[] = [
-      { name: '伊朗', type: 'place', confidence: 0.5, source: 'selflearn', first_seen: '2026-06-16T00:00:00Z', last_seen: '2026-06-16T00:00:00Z', mention_count: 1 },
+      {
+        name: '伊朗',
+        type: 'place',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '2026-06-16T00:00:00Z',
+        last_seen: '2026-06-16T00:00:00Z',
+        mention_count: 1,
+      },
     ];
     const result = await runEventClustering(env, entities);
     expect(result.clusters.length).toBe(1);
@@ -239,12 +263,36 @@ describe('runEventClustering · Jaccard 聚类', () => {
   it('多 entity → 多个 cluster + jaccard_pairs = N*(N-1)/2', async () => {
     const env: any = { csnews_raw: { get: async () => null } };
     const entities: EntityFinalized[] = [
-      { name: '伊朗', type: 'place', confidence: 0.5, source: 'selflearn', first_seen: '', last_seen: '', mention_count: 1 },
-      { name: '美国', type: 'place', confidence: 0.5, source: 'selflearn', first_seen: '', last_seen: '', mention_count: 1 },
-      { name: '日本', type: 'place', confidence: 0.5, source: 'selflearn', first_seen: '', last_seen: '', mention_count: 1 },
+      {
+        name: '伊朗',
+        type: 'place',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '',
+        last_seen: '',
+        mention_count: 1,
+      },
+      {
+        name: '美国',
+        type: 'place',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '',
+        last_seen: '',
+        mention_count: 1,
+      },
+      {
+        name: '日本',
+        type: 'place',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '',
+        last_seen: '',
+        mention_count: 1,
+      },
     ];
     const result = await runEventClustering(env, entities);
-    expect(result.jaccard_pairs).toBe(3);  // C(3,2) = 3
+    expect(result.jaccard_pairs).toBe(3); // C(3,2) = 3
     expect(result.threshold).toBe(0.4);
   });
 });
@@ -262,7 +310,15 @@ describe('runEventProcess · kzclaw 0 DDL = 暂存 R2 event-clusters.json', () =
 
   it('R2 有 candidates → 写 R2 event-clusters.json + index', async () => {
     const candidates = [
-      { name: '伊朗', type: 'place', confidence: 0.5, source: 'selflearn', first_seen: '2026-06-16T00:00:00Z', last_seen: '2026-06-16T00:00:00Z', mention_count: 1 },
+      {
+        name: '伊朗',
+        type: 'place',
+        confidence: 0.5,
+        source: 'selflearn',
+        first_seen: '2026-06-16T00:00:00Z',
+        last_seen: '2026-06-16T00:00:00Z',
+        mention_count: 1,
+      },
     ];
     const putCalls: { key: string; value: string }[] = [];
     const env: any = {
@@ -290,7 +346,9 @@ describe('runEventProcess · kzclaw 0 DDL = 暂存 R2 event-clusters.json', () =
   it('R2 读失败 → errors=1 (兜底)', async () => {
     const env: any = {
       csnews_raw: {
-        get: async () => { throw new Error('R2 unavailable'); },
+        get: async () => {
+          throw new Error('R2 unavailable');
+        },
         put: async () => ({}),
       },
     };

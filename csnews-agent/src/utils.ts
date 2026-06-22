@@ -11,8 +11,8 @@ import { Env } from './shared';
 // 替代 7 处 (scheduled×2, endpoints-core×2, entity-process×1, health-checks×2) 重复拼装
 export function supabaseHeaders(env: Env): Record<string, string> {
   return {
-    'apikey': env.SUPABASE_SERVICE_KEY,
-    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    apikey: env.SUPABASE_SERVICE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
   };
 }
 import { AI_ROUTE_R_THRESHOLD } from './score';
@@ -23,32 +23,32 @@ import type { LlamaAIResponse } from './types';
 //Workers AI响应解析
 // env.AI.run() 返回格式:{ response: string, usage: {...} }
 export function extractText(resp: any): string {
- if (typeof resp === 'string') return resp.trim();
- if (resp && typeof resp === 'object') {
- const text = (resp.response || '').trim();
- if (text) return text;
- }
- return '';
+  if (typeof resp === 'string') return resp.trim();
+  if (resp && typeof resp === 'object') {
+    const text = (resp.response || '').trim();
+    if (text) return text;
+  }
+  return '';
 }
 
 //Workers AI裂变报告生成
 // only call AI when R >= AI_ROUTE_R_THRESHOLD
 // NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
 export async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
- if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
- try {
-  // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-  const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-  messages: [
-  { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
-  ],
-  max_tokens:200,
-  temperature:0.3,
-  }) as LlamaAIResponse;
- return extractText(resp) || '(无AI输出)';
- } catch (e: any) {
- return `(AI错误: ${e.message})`;
- }
+  if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
+  try {
+    // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
+    const resp = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      messages: [
+        { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` },
+      ],
+      max_tokens: 200,
+      temperature: 0.3,
+    })) as LlamaAIResponse;
+    return extractText(resp) || '(无AI输出)';
+  } catch (e: any) {
+    return `(AI错误: ${e.message})`;
+  }
 }
 
 // ============================================================
@@ -85,7 +85,7 @@ export async function checkRateLimit(
   env: Env,
   ctx: ExecutionContext,
   rateKey: string,
-  limit: number,
+  limit: number
 ): Promise<{ exceeded: boolean; count: number }> {
   if (!env.PROCESS_STATE) return { exceeded: false, count: 0 };
   try {
@@ -103,13 +103,16 @@ export async function checkRateLimit(
 
 // Rate limit 429 响应 (跟 5 处原 code 完全一致, 含 Retry-After 头)
 export function rateLimitResponse(cors: Record<string, string>, limit: number): Response {
-  return new Response(JSON.stringify({
-    error: 'rate_limited',
-    reason: `单 IP ${limit} req/min 上限, 请稍后重试`,
-  }), {
-    status: 429,
-    headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-  });
+  return new Response(
+    JSON.stringify({
+      error: 'rate_limited',
+      reason: `单 IP ${limit} req/min 上限, 请稍后重试`,
+    }),
+    {
+      status: 429,
+      headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
+    }
+  );
 }
 
 // ============================================================
@@ -139,7 +142,10 @@ const DEFAULT_DOWN_HOURS = 50;
  *   - generated_at 缺失或不可解析 → status='unknown'
  *   - generated_at 可解析 → 计算 age_ms + 按阈值分类 status
  */
-async function readR2Freshness(env: Env, key: string): Promise<{ last_write: string | null; count: number | null }> {
+async function readR2Freshness(
+  env: Env,
+  key: string
+): Promise<{ last_write: string | null; count: number | null }> {
   try {
     const obj = await env.csnews_raw.get(key);
     if (!obj) return { last_write: null, count: null };
@@ -168,7 +174,7 @@ function classifyFreshness(
   data: { last_write: string | null; count: number | null },
   now: number,
   okHours: number,
-  downHours: number,
+  downHours: number
 ): FreshnessResult {
   if (!data.last_write) {
     return {
@@ -237,4 +243,3 @@ export async function checkEntityCronHealth(env: Env): Promise<{
     event_freshness: classifyFreshness(eventData, now, DEFAULT_OK_HOURS, DEFAULT_DOWN_HOURS),
   };
 }
-

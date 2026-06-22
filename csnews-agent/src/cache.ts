@@ -33,7 +33,7 @@ export async function stableHash(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest))
-    .map(b => b.toString(16).padStart(2, '0'))
+    .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, HASH_LENGTH);
 }
@@ -46,12 +46,12 @@ export async function stableHash(input: string): Promise<string> {
  */
 export async function makeCacheKey(
   namespace: string,
-  params: Record<string, any>,
+  params: Record<string, any>
 ): Promise<string> {
   const sortedKeys = Object.keys(params).sort();
   const normalized = sortedKeys
-    .filter(k => params[k] !== undefined && params[k] !== null)
-    .map(k => `${k}=${String(params[k])}`)
+    .filter((k) => params[k] !== undefined && params[k] !== null)
+    .map((k) => `${k}=${String(params[k])}`)
     .join('&');
   const hash = await stableHash(normalized);
   return `${CACHE_PREFIX}${namespace}:${hash}`;
@@ -120,7 +120,7 @@ export async function cacheSet(
   env: Env,
   key: string,
   value: any,
-  ttlSeconds: number = DEFAULT_TTL_SECONDS,
+  ttlSeconds: number = DEFAULT_TTL_SECONDS
 ): Promise<void> {
   if (!env.PROCESS_STATE) {
     metrics.store_failures++;

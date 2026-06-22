@@ -14,11 +14,18 @@
 
 import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import {
-  validateId, validateFormat, rateKeyForIp, dailyHitsKeyForToday,
-  escapeHtml, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES,
+  validateId,
+  validateFormat,
+  rateKeyForIp,
+  dailyHitsKeyForToday,
+  escapeHtml,
+  RATE_LIMIT_PER_MIN,
+  PAYLOAD_LIMIT_BYTES,
 } from './content-validation';
 import {
-  validateType, validateSince, validateLimit,
+  validateType,
+  validateSince,
+  validateLimit,
   rateKeyForIp as trendRateKeyForIp,
   dailyHitsKeyForToday as trendHitsKeyForToday,
   RATE_LIMIT_PER_MIN as TREND_RATE_LIMIT_PER_MIN,
@@ -33,7 +40,8 @@ import {
   dailyHitsKeyForToday as knowledgeHitsKeyForToday,
   RATE_LIMIT_PER_MIN as KNOWLEDGE_RATE_LIMIT_PER_MIN,
   PAYLOAD_LIMIT_BYTES as KNOWLEDGE_PAYLOAD_LIMIT_BYTES,
-  knowledgeR2Key, KNOWLEDGE_INDEX_KEY,
+  knowledgeR2Key,
+  KNOWLEDGE_INDEX_KEY,
 } from './knowledge-validation';
 import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
 import type { NewsHotspotRow, TopicRow, R2ContentData } from './types';
@@ -46,22 +54,36 @@ import type { NewsHotspotRow, TopicRow, R2ContentData } from './types';
 //   - text/html/json 三档格式
 // 反爬: 单 IP 60 req/min (复用 PROCESS_STATE KV)
 // 鉴权: index.ts fetch handler 入口已统一 authRequest
-export async function handleContentAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+export async function handleContentAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>,
+  ctx: ExecutionContext
+): Promise<Response> {
   // 1. 输入校验 (业务红线)
   const id = url.searchParams.get('id') || '';
   const idValidation = validateId(id);
   if (!idValidation.ok) {
-    return new Response(JSON.stringify({ error: idValidation.error, reason: idValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: idValidation.error, reason: idValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   const format = (url.searchParams.get('format') || 'json').toLowerCase();
   const formatValidation = validateFormat(format);
   if (!formatValidation.ok) {
-    return new Response(JSON.stringify({ error: formatValidation.error, reason: formatValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: formatValidation.error, reason: formatValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   // 2. 反爬限流 (单 IP 60 req/min, 复用 PROCESS_STATE KV)
@@ -70,12 +92,19 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
   if (exceeded) return rateLimitResponse(cors, RATE_LIMIT_PER_MIN);
 
   // 3. Supabase 查 news_hotspots (拿 url + r2_key + 基础摘要)
-  const newsRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${id}&select=id,title,url,source,category,hot_score,score,level,topic_id,r2_key,created_at&limit=1`);
-  const newsData = await safeJson(newsRes) as NewsHotspotRow[];
+  const newsRes = await supabaseFetch(
+    env,
+    `/rest/v1/news_hotspots?id=eq.${id}&select=id,title,url,source,category,hot_score,score,level,topic_id,r2_key,created_at&limit=1`
+  );
+  const newsData = (await safeJson(newsRes)) as NewsHotspotRow[];
   if (!newsData || newsData.length === 0) {
-    return new Response(JSON.stringify({ error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` }), {
-      status: 404, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` }),
+      {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const news = newsData[0];
 
@@ -102,9 +131,16 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
   // 5. 大小限制 (单条 ≤ PAYLOAD_LIMIT_BYTES)
   const contentLength = r2Data ? JSON.stringify(r2Data).length : 0;
   if (contentLength > PAYLOAD_LIMIT_BYTES) {
-    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `R2 content > ${PAYLOAD_LIMIT_BYTES} bytes, 请用 format=ids 分页` }), {
-      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'payload_too_large',
+        reason: `R2 content > ${PAYLOAD_LIMIT_BYTES} bytes, 请用 format=ids 分页`,
+      }),
+      {
+        status: 413,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   // 6. 监控计数 (r2_content_endpoint_hits_24h) - 复用 PROCESS_STATE
@@ -131,18 +167,24 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
       level: news.level,
       topic_id: news.topic_id,
       created_at: news.created_at,
-      r2: r2Data ? {
-        key: news.r2_key,
-        title: r2Data.title,
-        category: r2Data.category,
-        score: r2Data.score,
-        level: r2Data.level,
-        topic_id: r2Data.topic_id,
-        fission: r2Data.fission,
-        created_at: r2Data.created_at,
-        content_length: contentLength,
-      } : null,
-      ...(r2Error ? { notice: `该新闻仅存摘要 + 原始 URL · R2 不存正文 (原因: ${r2Error}) · 全文请访问 ${news.url}` } : {}),
+      r2: r2Data
+        ? {
+            key: news.r2_key,
+            title: r2Data.title,
+            category: r2Data.category,
+            score: r2Data.score,
+            level: r2Data.level,
+            topic_id: r2Data.topic_id,
+            fission: r2Data.fission,
+            created_at: r2Data.created_at,
+            content_length: contentLength,
+          }
+        : null,
+      ...(r2Error
+        ? {
+            notice: `该新闻仅存摘要 + 原始 URL · R2 不存正文 (原因: ${r2Error}) · 全文请访问 ${news.url}`,
+          }
+        : {}),
     };
     return new Response(JSON.stringify(responseBody), {
       headers: { 'Content-Type': 'application/json', ...cors },
@@ -153,7 +195,9 @@ export async function handleContentAction(request: Request, env: Env, url: URL, 
     const lines: string[] = [];
     lines.push(`标题: ${news.title}`);
     lines.push(`来源: ${news.source} · ${news.category || '未知分类'}`);
-    lines.push(`热度: hot_score=${news.hot_score ?? '?'} score=${news.score ?? '?'} level=${news.level ?? '?'}`);
+    lines.push(
+      `热度: hot_score=${news.hot_score ?? '?'} score=${news.score ?? '?'} level=${news.level ?? '?'}`
+    );
     if (news.topic_id) lines.push(`话题: ${news.topic_id}`);
     lines.push(`入库时间: ${news.created_at}`);
     if (r2Data) {
@@ -197,35 +241,58 @@ ${r2Data ? `<pre>${escapeHtml(JSON.stringify(r2Data, null, 2))}</pre>` : ''}
 //   - velocity: topic 1h 增量 / 24h 平均 = velocity ratio
 //   - acceleration: velocity 的 1h 增量 (二阶导)
 // 反爬: 单 IP 60 req/min (独立 KV prefix trend_rate:<ip>)
-export async function handleTrendAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+export async function handleTrendAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>,
+  ctx: ExecutionContext
+): Promise<Response> {
   // 1. 输入校验
   const typeValidation = validateType(url.searchParams.get('type'));
   if (!typeValidation.ok) {
-    return new Response(JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const type = typeValidation.reason!;
 
   const sinceValidation = validateSince(url.searchParams.get('since'));
   if (!sinceValidation.ok) {
-    return new Response(JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const sinceIso = sinceValidation.since!;
 
   const limitValidation = validateLimit(url.searchParams.get('limit'));
   if (!limitValidation.ok) {
-    return new Response(JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const limit = limitValidation.limit;
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { exceeded: trendExceeded } = await checkRateLimit(env, ctx, trendRateKeyForIp(ip), TREND_RATE_LIMIT_PER_MIN);
+  const { exceeded: trendExceeded } = await checkRateLimit(
+    env,
+    ctx,
+    trendRateKeyForIp(ip),
+    TREND_RATE_LIMIT_PER_MIN
+  );
   if (trendExceeded) return rateLimitResponse(cors, TREND_RATE_LIMIT_PER_MIN);
 
   // 3. 计算时间窗边界
@@ -238,70 +305,122 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
   let description = '';
 
   if (type === 'topics') {
-    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at,first_news_id&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as TopicRow[];
+    const topicsRes = await supabaseFetch(
+      env,
+      `/rest/v1/topics?select=id,topic_key,level,score,last_active_at,first_news_id&order=last_active_at.desc&limit=${limit}`
+    );
+    const topics = (await safeJson(topicsRes)) as TopicRow[];
     if (topics && topics.length > 0) {
-      items = await Promise.all(topics.map(async (t) => {
-        const countRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const totalHeader = countRes.headers.get('content-range');
-        const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
-        return {
-          topic_id: t.id,
-          topic_key: t.topic_key,
-          level: t.level,
-          score: t.score,
-          last_active_at: t.last_active_at,
-          first_news_id: t.first_news_id,
-          total_news_count: total,
-        };
-      }));
+      items = await Promise.all(
+        topics.map(async (t) => {
+          const countRes = await supabaseFetch(
+            env,
+            `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`,
+            { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+          );
+          const totalHeader = countRes.headers.get('content-range');
+          const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
+          return {
+            topic_id: t.id,
+            topic_key: t.topic_key,
+            level: t.level,
+            score: t.score,
+            last_active_at: t.last_active_at,
+            first_news_id: t.first_news_id,
+            total_news_count: total,
+          };
+        })
+      );
     }
     description = '当前所有 active topic (按 last_active_at 倒序)';
   } else if (type === 'velocity' || type === 'acceleration') {
     // 公共: 拉取 topic 列表 (velocity / acceleration 共用)
-    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`);
-    const topics = await safeJson(topicsRes) as TopicRow[];
+    const topicsRes = await supabaseFetch(
+      env,
+      `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=${limit}`
+    );
+    const topics = (await safeJson(topicsRes)) as TopicRow[];
     if (topics && topics.length > 0) {
       if (type === 'velocity') {
-        items = await Promise.all(topics.map(async (t) => {
-          const nowMs = Date.now();
-          const nowMinus1h = new Date(nowMs - 3600 * 1000);
-          const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-          const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-          const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { headers: { 'Prefer': 'count=exact' } });
-          const sinceTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-          const hourlyAvg = sinceTotal / 24;
-          const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
-          return {
-            topic_id: t.id,
-            topic_key: t.topic_key,
-            level: t.level,
-            score: t.score,
-            last_1h_count: last1hTotal,
-            hourly_avg: Math.round(hourlyAvg * 100) / 100,
-            velocity_ratio: Math.round(velocityRatio * 100) / 100,
-            trend: velocityRatio > 2 ? 'explosive' : velocityRatio > 1 ? 'rising' : velocityRatio < 0.5 ? 'declining' : 'stable',
-          };
-        }));
+        items = await Promise.all(
+          topics.map(async (t) => {
+            const nowMs = Date.now();
+            const nowMinus1h = new Date(nowMs - 3600 * 1000);
+            const last1hRes = await supabaseFetch(
+              env,
+              `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`,
+              { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+            );
+            const last1hTotal = parseInt(
+              last1hRes.headers.get('content-range')?.split('/')[1] || '0',
+              10
+            );
+            const sinceRes = await supabaseFetch(
+              env,
+              `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`,
+              { headers: { Prefer: 'count=exact' } }
+            );
+            const sinceTotal = parseInt(
+              sinceRes.headers.get('content-range')?.split('/')[1] || '0',
+              10
+            );
+            const hourlyAvg = sinceTotal / 24;
+            const velocityRatio = hourlyAvg > 0 ? last1hTotal / hourlyAvg : 0;
+            return {
+              topic_id: t.id,
+              topic_key: t.topic_key,
+              level: t.level,
+              score: t.score,
+              last_1h_count: last1hTotal,
+              hourly_avg: Math.round(hourlyAvg * 100) / 100,
+              velocity_ratio: Math.round(velocityRatio * 100) / 100,
+              trend:
+                velocityRatio > 2
+                  ? 'explosive'
+                  : velocityRatio > 1
+                    ? 'rising'
+                    : velocityRatio < 0.5
+                      ? 'declining'
+                      : 'stable',
+            };
+          })
+        );
         description = 'topic velocity (1h 增量 / 24h 均值)';
       } else {
-        items = await Promise.all(topics.map(async (t) => {
-          const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-          const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-          const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-          const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
-          const acceleration = last1hTotal - between1h2hTotal;
-          return {
-            topic_id: t.id,
-            topic_key: t.topic_key,
-            level: t.level,
-            score: t.score,
-            last_1h_count: last1hTotal,
-            previous_1h_count: between1h2hTotal,
-            acceleration: acceleration,
-            trend: acceleration > 0 ? 'accelerating' : acceleration < 0 ? 'decelerating' : 'stable',
-          };
-        }));
+        items = await Promise.all(
+          topics.map(async (t) => {
+            const last1hRes = await supabaseFetch(
+              env,
+              `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`,
+              { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+            );
+            const last1hTotal = parseInt(
+              last1hRes.headers.get('content-range')?.split('/')[1] || '0',
+              10
+            );
+            const between1h2hRes = await supabaseFetch(
+              env,
+              `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`,
+              { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+            );
+            const between1h2hTotal = parseInt(
+              between1h2hRes.headers.get('content-range')?.split('/')[1] || '0',
+              10
+            );
+            const acceleration = last1hTotal - between1h2hTotal;
+            return {
+              topic_id: t.id,
+              topic_key: t.topic_key,
+              level: t.level,
+              score: t.score,
+              last_1h_count: last1hTotal,
+              previous_1h_count: between1h2hTotal,
+              acceleration: acceleration,
+              trend:
+                acceleration > 0 ? 'accelerating' : acceleration < 0 ? 'decelerating' : 'stable',
+            };
+          })
+        );
         description = 'topic acceleration (二阶导, 1h 增量 - 上一小时增量)';
       }
     }
@@ -318,9 +437,16 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
   };
   const responseStr = JSON.stringify(responseBody);
   if (responseStr.length > TREND_PAYLOAD_LIMIT_BYTES) {
-    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `trend response > ${TREND_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小` }), {
-      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'payload_too_large',
+        reason: `trend response > ${TREND_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
+      }),
+      {
+        status: 413,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   // 6. 监控计数
@@ -345,43 +471,70 @@ export async function handleTrendAction(request: Request, env: Env, url: URL, co
 //   - knowledge 数据全在 R2 持久化
 //   - 累积 job 在 cron inline 跑, 遍历 active topics → 写 knowledge/yyyymm/<topic_id>-<ts>.md
 //   - 端点读 R2 索引 + 单 topic 详情 (跟 trend endpoint 模式同款)
-export async function handleKnowledgeAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+export async function handleKnowledgeAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>,
+  ctx: ExecutionContext
+): Promise<Response> {
   // 1. 输入校验 (跟 trend 同款, 独立 validation import)
   const typeValidation = knowledgeValidateType(url.searchParams.get('type'));
   if (!typeValidation.ok) {
-    return new Response(JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const type = typeValidation.reason!;
 
   const sinceValidation = knowledgeValidateSince(url.searchParams.get('since'));
   if (!sinceValidation.ok) {
-    return new Response(JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const sinceIso = sinceValidation.since!;
 
   const limitValidation = knowledgeValidateLimit(url.searchParams.get('limit'));
   if (!limitValidation.ok) {
-    return new Response(JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const limit = limitValidation.limit;
 
   const topicIdValidation = validateTopicId(url.searchParams.get('topic_id'), type);
   if (!topicIdValidation.ok) {
-    return new Response(JSON.stringify({ error: topicIdValidation.error, reason: topicIdValidation.reason }), {
-      status: 400, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: topicIdValidation.error, reason: topicIdValidation.reason }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
   const topicId = topicIdValidation.topicId;
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { exceeded: knowledgeExceeded } = await checkRateLimit(env, ctx, knowledgeRateKeyForIp(ip), KNOWLEDGE_RATE_LIMIT_PER_MIN);
+  const { exceeded: knowledgeExceeded } = await checkRateLimit(
+    env,
+    ctx,
+    knowledgeRateKeyForIp(ip),
+    KNOWLEDGE_RATE_LIMIT_PER_MIN
+  );
   if (knowledgeExceeded) return rateLimitResponse(cors, KNOWLEDGE_RATE_LIMIT_PER_MIN);
 
   // 3. 根据 type 查数据
@@ -398,9 +551,16 @@ export async function handleKnowledgeAction(request: Request, env: Env, url: URL
     description = 'knowledge daily 索引 (早晨日报入口, 跨 topic 累积)';
   } else if (type === 'topic') {
     if (!topicId) {
-      return new Response(JSON.stringify({ error: 'internal_logic', reason: 'topic_id 缺失 (validateTopicId 应已拦截)' }), {
-        status: 500, headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return new Response(
+        JSON.stringify({
+          error: 'internal_logic',
+          reason: 'topic_id 缺失 (validateTopicId 应已拦截)',
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...cors },
+        }
+      );
     }
     const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
     const sinceMs = new Date(sinceIso).getTime();
@@ -424,9 +584,16 @@ export async function handleKnowledgeAction(request: Request, env: Env, url: URL
   };
   const responseStr = JSON.stringify(responseBody);
   if (responseStr.length > KNOWLEDGE_PAYLOAD_LIMIT_BYTES) {
-    return new Response(JSON.stringify({ error: 'payload_too_large', reason: `knowledge response > ${KNOWLEDGE_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小` }), {
-      status: 413, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'payload_too_large',
+        reason: `knowledge response > ${KNOWLEDGE_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
+      }),
+      {
+        status: 413,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   // 5. 监控计数 (跟 trend 同模式, 独立 prefix)
@@ -448,13 +615,19 @@ export async function handleKnowledgeAction(request: Request, env: Env, url: URL
 // ===================== runKnowledgeAccumulation (cron inline 调用) =====================
 // 整点 process 跑完调, 遍历 active topics → 累积 24h trend → 写 1 条 knowledge 记录
 // 不调 LLM, 纯 SQL + 模板 + R2 only (0 Supabase DDL)
-export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext): Promise<{ written: number; errors: number }> {
+export async function runKnowledgeAccumulation(
+  env: Env,
+  ctx: ExecutionContext
+): Promise<{ written: number; errors: number }> {
   let written = 0;
   let errors = 0;
   try {
     // 1. 拉所有 active topics (跟 trend 同款, last_active_at desc, limit 50 = 早晨日报默认覆盖)
-    const topicsRes = await supabaseFetch(env, `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=50`);
-    const topics = await safeJson(topicsRes) as TopicRow[];
+    const topicsRes = await supabaseFetch(
+      env,
+      `/rest/v1/topics?select=id,topic_key,level,score,last_active_at&order=last_active_at.desc&limit=50`
+    );
+    const topics = (await safeJson(topicsRes)) as TopicRow[];
     if (!topics || topics.length === 0) {
       return { written: 0, errors: 0 };
     }
@@ -471,23 +644,45 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
     for (const t of topics) {
       try {
         // 4.1 24h news count
-        const sinceRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const since24hTotal = parseInt(sinceRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        const sinceRes = await supabaseFetch(
+          env,
+          `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`,
+          { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+        );
+        const since24hTotal = parseInt(
+          sinceRes.headers.get('content-range')?.split('/')[1] || '0',
+          10
+        );
         // 4.2 1h 增量
-        const last1hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const last1hTotal = parseInt(last1hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        const last1hRes = await supabaseFetch(
+          env,
+          `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo}&select=news_id&limit=0`,
+          { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+        );
+        const last1hTotal = parseInt(
+          last1hRes.headers.get('content-range')?.split('/')[1] || '0',
+          10
+        );
         // 4.3 2h 增量
-        const between1h2hRes = await supabaseFetch(env, `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo}&joined_at=lt.${oneHourAgo}&select=news_id&limit=0`, { method: 'HEAD', headers: { 'Prefer': 'count=exact' } });
-        const between1h2hTotal = parseInt(between1h2hRes.headers.get('content-range')?.split('/')[1] || '0', 10);
+        const between1h2hRes = await supabaseFetch(
+          env,
+          `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo}&joined_at=lt.${oneHourAgo}&select=news_id&limit=0`,
+          { method: 'HEAD', headers: { Prefer: 'count=exact' } }
+        );
+        const between1h2hTotal = parseInt(
+          between1h2hRes.headers.get('content-range')?.split('/')[1] || '0',
+          10
+        );
         // 4.4 计算 velocity + acceleration
         const hourlyAvg = since24hTotal / 24;
-        const velocityRatio = hourlyAvg > 0 ? (last1hTotal / hourlyAvg) : 0;
+        const velocityRatio = hourlyAvg > 0 ? last1hTotal / hourlyAvg : 0;
         const acceleration = last1hTotal - between1h2hTotal;
 
         // 4.5 写 R2 knowledge Markdown (早晨日报金句)
         const ts = new Date();
         const r2Key = knowledgeR2Key(t.id, ts);
-        const markdown = `# ${t.topic_key}\n\n` +
+        const markdown =
+          `# ${t.topic_key}\n\n` +
           `> 累积时间: ${ts.toISOString()}\n` +
           `> 等级: ${t.level} · 分数: ${t.score}\n\n` +
           `## 24h 累积数据\n\n` +
@@ -503,7 +698,9 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
           `## 早晨金句模板 (待接 AI 摘要)\n\n` +
           `_本 topic 在过去 24h 累积 ${since24hTotal} 条新闻, 1h 增量 ${last1hTotal} (${velocityRatio > 1 ? '高于' : '低于'} 24h 均值 ${Math.round(hourlyAvg * 100) / 100}), ` +
           `${acceleration > 0 ? '呈加速上升' : acceleration < 0 ? '呈减速下降' : '保持稳定'}._\n`;
-        await env.csnews_raw.put(r2Key, markdown, { httpMetadata: { contentType: 'text/markdown' } });
+        await env.csnews_raw.put(r2Key, markdown, {
+          httpMetadata: { contentType: 'text/markdown' },
+        });
 
         // 4.6 append 索引
         const indexEntry = {
@@ -534,7 +731,9 @@ export async function runKnowledgeAccumulation(env: Env, ctx: ExecutionContext):
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 1000);
       }
-      await env.csnews_raw.put(KNOWLEDGE_INDEX_KEY, JSON.stringify(allIndex), { httpMetadata: { contentType: 'application/json' } });
+      await env.csnews_raw.put(KNOWLEDGE_INDEX_KEY, JSON.stringify(allIndex), {
+        httpMetadata: { contentType: 'application/json' },
+      });
     }
 
     return { written, errors };

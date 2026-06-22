@@ -17,7 +17,13 @@
  * 详见：tasks/csnews-agent-okr.md v0.33+sweep·FT-KR0
  */
 import { describe, it, expect } from 'vitest';
-import { hashStr, scoreRule, AI_ROUTE_R_THRESHOLD, TOPIC_MATCH_THRESHOLD, R2_DUP_THRESHOLD } from '../src/score';
+import {
+  hashStr,
+  scoreRule,
+  AI_ROUTE_R_THRESHOLD,
+  TOPIC_MATCH_THRESHOLD,
+  R2_DUP_THRESHOLD,
+} from '../src/score';
 import { classifyRule } from '../src/classify';
 import {
   TYPE_CONFIG,
@@ -87,9 +93,9 @@ describe('_structure · scoreRule', () => {
   it('isHigh 必须等于 score >= AI_ROUTE_R_THRESHOLD', () => {
     // 业务契约：AI routing 路由决策完全基于 score vs 阈值
     const samples = [
-      '普通新闻',                          // 无热词 → score < 7.0
-      'OpenAI 发布 GPT-5',                  // 命中 OpenAI + AI → 普通热词
-      '突发：OpenAI 紧急发布 GPT-5',        // 命中 OpenAI + 突发/紧急（超热）
+      '普通新闻', // 无热词 → score < 7.0
+      'OpenAI 发布 GPT-5', // 命中 OpenAI + AI → 普通热词
+      '突发：OpenAI 紧急发布 GPT-5', // 命中 OpenAI + 突发/紧急（超热）
     ];
     for (const s of samples) {
       const { score, isHigh } = scoreRule(s);
@@ -197,14 +203,23 @@ describe('_structure · TYPE_CONFIG', () => {
 
   it('每个 type 的 allowedOrderBy 必须是 string[]', () => {
     for (const [type, config] of Object.entries(TYPE_CONFIG)) {
-      expect(Array.isArray(config.allowedOrderBy), `TYPE_CONFIG[${type}].allowedOrderBy 不是数组`).toBe(true);
-      expect(config.allowedOrderBy.length, `TYPE_CONFIG[${type}].allowedOrderBy 不能为空`).toBeGreaterThan(0);
+      expect(
+        Array.isArray(config.allowedOrderBy),
+        `TYPE_CONFIG[${type}].allowedOrderBy 不是数组`
+      ).toBe(true);
+      expect(
+        config.allowedOrderBy.length,
+        `TYPE_CONFIG[${type}].allowedOrderBy 不能为空`
+      ).toBeGreaterThan(0);
     }
   });
 
   it('每个 type 的 allowedFilters 必须是 string[]', () => {
     for (const [type, config] of Object.entries(TYPE_CONFIG)) {
-      expect(Array.isArray(config.allowedFilters), `TYPE_CONFIG[${type}].allowedFilters 不是数组`).toBe(true);
+      expect(
+        Array.isArray(config.allowedFilters),
+        `TYPE_CONFIG[${type}].allowedFilters 不是数组`
+      ).toBe(true);
     }
   });
 

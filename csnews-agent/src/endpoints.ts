@@ -38,11 +38,7 @@ export {
 } from './endpoints-core';
 
 // process (3)
-export {
-  handleProcessAction,
-  handleHealthAction,
-  handleLogsAction,
-} from './endpoints-process';
+export { handleProcessAction, handleHealthAction, handleLogsAction } from './endpoints-process';
 
 // trend (3) + helper
 export {
@@ -53,7 +49,4 @@ export {
 } from './endpoints-trend';
 
 // entity (2)
-export {
-  handleEntityAction,
-  handleEventAction,
-} from './endpoints-entity';
+export { handleEntityAction, handleEventAction } from './endpoints-entity';

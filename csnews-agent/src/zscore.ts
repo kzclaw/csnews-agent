@@ -64,7 +64,8 @@ export function zScore(currentValue: number, historyValues: number[]): number {
   const mean = validHistory.reduce((sum, v) => sum + v, 0) / validHistory.length;
 
   // 计算 σ (标准差, 总体标准差 = 除以 N)
-  const variance = validHistory.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / validHistory.length;
+  const variance =
+    validHistory.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / validHistory.length;
   const stddev = Math.sqrt(variance);
 
   // 边界 4: σ=0 (所有 history 相等) → NaN
@@ -85,8 +86,8 @@ export function zScore(currentValue: number, historyValues: number[]): number {
  */
 export function isAnomaly(z: number): boolean {
   if (Number.isNaN(z)) return false;
-  if (!Number.isFinite(z)) return true;  // ±Infinity 算异常
-  return Math.abs(z) > Z_THRESHOLD;  // 双向 |z| > 3
+  if (!Number.isFinite(z)) return true; // ±Infinity 算异常
+  return Math.abs(z) > Z_THRESHOLD; // 双向 |z| > 3
 }
 
 /**
@@ -94,7 +95,10 @@ export function isAnomaly(z: number): boolean {
  *
  * @returns { z, isAnomaly }
  */
-export function calculateZScore(currentValue: number, historyValues: number[]): { z: number; isAnomaly: boolean } {
+export function calculateZScore(
+  currentValue: number,
+  historyValues: number[]
+): { z: number; isAnomaly: boolean } {
   const z = zScore(currentValue, historyValues);
   return { z, isAnomaly: isAnomaly(z) };
 }

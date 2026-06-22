@@ -16,9 +16,13 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  zScore, isAnomaly, calculateZScore,
-  calculateZScoreFromSnapshots, countAnomalySignals,
-  Z_THRESHOLD, ZSCORE_REASON_PREFIX,
+  zScore,
+  isAnomaly,
+  calculateZScore,
+  calculateZScoreFromSnapshots,
+  countAnomalySignals,
+  Z_THRESHOLD,
+  ZSCORE_REASON_PREFIX,
 } from '../src/zscore';
 
 // ============================================================
@@ -210,7 +214,13 @@ describe('calculateZScoreFromSnapshots · KR0 health 端点用', () => {
 
   it('velocity 字段算 z-score', () => {
     const current = { velocity: 5 };
-    const history = [{ velocity: 0.5 }, { velocity: 1 }, { velocity: 0.8 }, { velocity: 0.3 }, { velocity: 0.7 }];
+    const history = [
+      { velocity: 0.5 },
+      { velocity: 1 },
+      { velocity: 0.8 },
+      { velocity: 0.3 },
+      { velocity: 0.7 },
+    ];
     const r = calculateZScoreFromSnapshots(current, history, 'velocity');
     expect(r.isAnomaly).toBe(true);
     expect(r.field).toBe('velocity');
@@ -218,7 +228,13 @@ describe('calculateZScoreFromSnapshots · KR0 health 端点用', () => {
 
   it('acceleration 字段算 z-score', () => {
     const current = { acceleration: 100 };
-    const history = [{ acceleration: 1 }, { acceleration: 2 }, { acceleration: 0 }, { acceleration: -1 }, { acceleration: 3 }];
+    const history = [
+      { acceleration: 1 },
+      { acceleration: 2 },
+      { acceleration: 0 },
+      { acceleration: -1 },
+      { acceleration: 3 },
+    ];
     const r = calculateZScoreFromSnapshots(current, history, 'acceleration');
     expect(r.isAnomaly).toBe(true);
     expect(r.field).toBe('acceleration');
@@ -242,11 +258,7 @@ describe('countAnomalySignals · KR0 health 端点批量计算', () => {
   });
 
   it('3 元素全异常必须返 3', () => {
-    const snapshots = [
-      { score: 100 },
-      { score: 1 },
-      { score: 2 },
-    ];
+    const snapshots = [{ score: 100 }, { score: 1 }, { score: 2 }];
     // 算 score 字段
     // 3 个 snapshot, 每个对其他 2 个算 z-score
     // snapshot 1: x=100, history=[1,2] μ=1.5, σ=0.5, z=(100-1.5)/0.5=197 → 异常
@@ -260,35 +272,19 @@ describe('countAnomalySignals · KR0 health 端点批量计算', () => {
   });
 
   it('标准 5 元素无异常 (值都接近) 必须返 0', () => {
-    const snapshots = [
-      { score: 10 },
-      { score: 11 },
-      { score: 12 },
-      { score: 9 },
-      { score: 10 },
-    ];
+    const snapshots = [{ score: 10 }, { score: 11 }, { score: 12 }, { score: 9 }, { score: 10 }];
     expect(countAnomalySignals(snapshots, 'score')).toBe(0);
   });
 
   it('snapshot 缺字段 (NaN) 必须跳过', () => {
-    const snapshots = [
-      { score: 10 },
-      { score: NaN },
-      { score: 11 },
-      { score: 12 },
-    ];
+    const snapshots = [{ score: 10 }, { score: NaN }, { score: 11 }, { score: 12 }];
     // 过滤 NaN 后, 3 个有限数: 10, 11, 12
     // 算每个对其他 2 个的 z-score, 全部不异常
     expect(countAnomalySignals(snapshots, 'score')).toBe(0);
   });
 
   it('velocity 字段批量算', () => {
-    const snapshots = [
-      { velocity: 0.5 },
-      { velocity: 0.6 },
-      { velocity: 0.7 },
-      { velocity: 100 },
-    ];
+    const snapshots = [{ velocity: 0.5 }, { velocity: 0.6 }, { velocity: 0.7 }, { velocity: 100 }];
     const count = countAnomalySignals(snapshots, 'velocity');
     // 算每个对其他 3 个的 z-score
     // 100 对 [0.5, 0.6, 0.7] μ=0.6, σ=0.0816, z=(100-0.6)/0.0816≈1218 → 异常

@@ -50,7 +50,7 @@ describe('scheduledProcess · 真实流程 (env 缺 SUPABASE_URL, 触发失败�
     // v0.36.5 mini 确定: scheduledProcess 内部 try/catch 兜底
     // env 缺 SUPABASE_URL, handleProcessAction 内部 fetch Supabase 失败 = 5xx
     // scheduledProcess catch 这个, 不抛
-    const env: any = { BEARER_TOKEN: 'test-token' };  // 缺 SUPABASE_URL + SUPABASE_SERVICE_KEY
+    const env: any = { BEARER_TOKEN: 'test-token' }; // 缺 SUPABASE_URL + SUPABASE_SERVICE_KEY
     const ctx: any = { waitUntil: vi.fn() };
     const controller: any = { cron: '0 * * * *' };
     // 限制 3s timeout (避免 fetch timeout 阻塞)
@@ -64,7 +64,7 @@ describe('scheduledProcess · 真实流程 (env 缺 SUPABASE_URL, 触发失败�
   it('controller 无 cron 字段, scheduledProcess 必须不抛 (默认 cron=unknown)', async () => {
     const env: any = { BEARER_TOKEN: 'test-token' };
     const ctx: any = { waitUntil: vi.fn() };
-    const controller: any = {};  // 无 cron
+    const controller: any = {}; // 无 cron
     await Promise.race([
       scheduled.scheduledProcess(env, ctx, controller),
       new Promise((resolve) => setTimeout(() => resolve(undefined), 3000)),
@@ -79,7 +79,8 @@ describe('scheduledProcess · KR0 累积 job 集成契约 (mock 验证)', () => 
   it('scheduledProcess 必须调 process + runKnowledgeAccumulation 顺序执行 (用 spy 验证)', async () => {
     // 用 vi.mock 模拟 handleProcessAction + runKnowledgeAccumulation
     // 验证 scheduledProcess 调用顺序
-    const { handleProcessAction: origProcess, runKnowledgeAccumulation: origKnowledge } = await import('../src/endpoints');
+    const { handleProcessAction: origProcess, runKnowledgeAccumulation: origKnowledge } =
+      await import('../src/endpoints');
     const processSpy = vi.fn(origProcess);
     const knowledgeSpy = vi.fn(origKnowledge);
 
@@ -126,7 +127,7 @@ describe('scheduledProcess · KR0 累积 job 集成契约 (mock 验证)', () => 
 describe('scheduledProcess · v0.36.5 mini 不 fetch selfUrl 行为契约', () => {
   it('scheduledProcess 接受 env 无 WORKER_SELF_URL (不依赖 selfUrl)', async () => {
     // 关键: env 故意没 WORKER_SELF_URL, 验证不 fetch selfUrl
-    const env: any = { BEARER_TOKEN: 'test-token' };  // 缺 WORKER_SELF_URL
+    const env: any = { BEARER_TOKEN: 'test-token' }; // 缺 WORKER_SELF_URL
     const ctx: any = { waitUntil: vi.fn() };
     const controller: any = { cron: '0 * * * *' };
     // 不抛 = 满足不依赖 selfUrl

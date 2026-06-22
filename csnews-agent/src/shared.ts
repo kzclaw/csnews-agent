@@ -38,14 +38,18 @@ export function getSupabaseHost(env: Env): string {
 /**
  * Supabase fetch wrapper(带 apikey + Authorization)
  */
-export async function supabaseFetch(env: Env, path: string, options?: RequestInit): Promise<Response> {
+export async function supabaseFetch(
+  env: Env,
+  path: string,
+  options?: RequestInit
+): Promise<Response> {
   return fetch(`${getSupabaseHost(env)}${path}`, {
     ...options,
     // 用户 headers 先 spread, 硬编码 apikey/Authorization 后 fallback = 用户 Prefer 头不丢失
     headers: {
       ...options?.headers,
-      'apikey': env.SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json',
     },
   });

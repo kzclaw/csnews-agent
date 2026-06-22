@@ -17,7 +17,7 @@
  */
 import { Env } from './shared';
 
-export type LogLevel = "info" | "warn" | "error" | "debug";
+export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 export interface LogEntry {
   ts: string;
@@ -27,13 +27,13 @@ export interface LogEntry {
   source: string;
 }
 
-const DEBUG_SKIP = true;  // level=debug 跳过写 R2, 避免配额爆
+const DEBUG_SKIP = true; // level=debug 跳过写 R2, 避免配额爆
 
 /**
  * 格式化单行 JSON log (末尾带 \n)
  */
 export function formatLogLine(entry: LogEntry): string {
-  return JSON.stringify(entry) + "\n";
+  return JSON.stringify(entry) + '\n';
 }
 
 /**
@@ -42,14 +42,14 @@ export function formatLogLine(entry: LogEntry): string {
  * - 毫秒级时间戳 + 随机数保证每条 log 独立 key（防覆盖）
  * - 末尾 source 标签方便过滤
  */
-export function getLogKey(date: Date, source: string = "worker"): string {
+export function getLogKey(date: Date, source: string = 'worker'): string {
   const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const hh = String(date.getUTCHours()).padStart(2, "0");
-  const min = String(date.getUTCMinutes()).padStart(2, "0");
-  const ss = String(date.getUTCSeconds()).padStart(2, "0");
-  const fff = String(date.getUTCMilliseconds()).padStart(3, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  const hh = String(date.getUTCHours()).padStart(2, '0');
+  const min = String(date.getUTCMinutes()).padStart(2, '0');
+  const ss = String(date.getUTCSeconds()).padStart(2, '0');
+  const fff = String(date.getUTCMilliseconds()).padStart(3, '0');
   return `logs/${yyyy}-${mm}-${dd}/${hh}/${min}-${ss}-${fff}-${source}.log`;
 }
 
@@ -64,11 +64,11 @@ export async function logEvent(
   level: LogLevel,
   msg: string,
   ctx?: Record<string, any>,
-  source: string = "worker"
+  source: string = 'worker'
 ): Promise<void> {
-  if (DEBUG_SKIP && level === "debug") return;
+  if (DEBUG_SKIP && level === 'debug') return;
   if (!env.csnews_raw) {
-    console.error("[log] csnews_raw binding missing");
+    console.error('[log] csnews_raw binding missing');
     return;
   }
   try {
@@ -83,8 +83,7 @@ export async function logEvent(
     const key = getLogKey(now, source);
     await env.csnews_raw.put(key, formatLogLine(entry));
   } catch (e: any) {
-    console.error("[log] logEvent failed", e?.message || e);
+    console.error('[log] logEvent failed', e?.message || e);
     // 降级: 不抛
   }
 }
-

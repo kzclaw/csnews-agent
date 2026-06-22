@@ -26,7 +26,11 @@ interface R2Object {
 }
 
 interface R2Bucket {
-  put(key: string, value: string | ReadableStream | ArrayBuffer | Blob, options?: any): Promise<any>;
+  put(
+    key: string,
+    value: string | ReadableStream | ArrayBuffer | Blob,
+    options?: any
+  ): Promise<any>;
   get(key: string): Promise<any>;
   list(options?: any): Promise<any>;
   delete(key: string): Promise<void>;

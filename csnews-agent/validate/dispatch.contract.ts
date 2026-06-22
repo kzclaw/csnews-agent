@@ -14,7 +14,12 @@
  * 详见：tasks/csnews-agent-okr.md KR0
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ALLOWED_ACTIONS, DEFAULT_ACTION, handleCorsPreflight, dispatchAction } from '../src/dispatch';
+import {
+  ALLOWED_ACTIONS,
+  DEFAULT_ACTION,
+  handleCorsPreflight,
+  dispatchAction,
+} from '../src/dispatch';
 
 // ============================================================
 // 业务常量
@@ -65,7 +70,7 @@ describe('handleCorsPreflight · CORS preflight 处理', () => {
   it('OPTIONS 请求必须带 Access-Control-Allow-Origin 头 (origin 来自请求)', () => {
     const req = new Request('https://example.com/', {
       method: 'OPTIONS',
-      headers: { 'Origin': 'https://app.example.com' },
+      headers: { Origin: 'https://app.example.com' },
     });
     const res = handleCorsPreflight(req);
     expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('https://app.example.com');
@@ -155,11 +160,25 @@ describe('dispatchAction · 19 action 路由正确性 (mock handler 路径)', ()
   // 但若 handler 抛错, dispatch 仍会接到错误响应 (401/500), 这不是 dispatch 责任
   // 所以更安全: 只验证 action 字符串在 ALLOWED_ACTIONS 内
   const actionsToTest = [
-    'pull', 'ping', 'model-test', 'ai-test',
-    'score', 'classify', 'batch-score',
-    'fission', 'save', 'list', 'embed', 'zaker-hot', 'rescore',
-    'process', 'health', 'logs',
-    'content', 'trend', 'knowledge',
+    'pull',
+    'ping',
+    'model-test',
+    'ai-test',
+    'score',
+    'classify',
+    'batch-score',
+    'fission',
+    'save',
+    'list',
+    'embed',
+    'zaker-hot',
+    'rescore',
+    'process',
+    'health',
+    'logs',
+    'content',
+    'trend',
+    'knowledge',
   ];
 
   for (const action of actionsToTest) {

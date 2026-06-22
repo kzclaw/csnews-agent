@@ -66,7 +66,7 @@ class UnionFind {
  */
 export async function runEventClustering(
   env: Env,
-  entities: EntityFinalized[],
+  entities: EntityFinalized[]
 ): Promise<{ clusters: EventCluster[]; threshold: number; jaccard_pairs: number }> {
   const threshold = await getCurrentThreshold(env);
 
@@ -80,7 +80,7 @@ export async function runEventClustering(
   // 2. 简化聚类: 包含共同高频 entity 名字 (e.g. 月份/数字) 的归一类
   //    16:48 确定: 启发式聚类 + 0 硬编码 = 用 entity 名字字符重叠做粗聚类
   const uf = new UnionFind();
-  for (const name of uniqueNames) uf.find(name);  // 初始化
+  for (const name of uniqueNames) uf.find(name); // 初始化
 
   let jaccardPairs = 0;
   for (let i = 0; i < uniqueNames.length; i++) {
@@ -88,10 +88,7 @@ export async function runEventClustering(
       const a = uniqueNames[i];
       const b = uniqueNames[j];
       // 简化 Jaccard: 2 个 entity 名字的字符集重叠
-      const jaccard = entityOverlapJaccard(
-        Array.from(new Set(a)),
-        Array.from(new Set(b)),
-      );
+      const jaccard = entityOverlapJaccard(Array.from(new Set(a)), Array.from(new Set(b)));
       jaccardPairs++;
       if (jaccard >= threshold) {
         uf.union(a, b);

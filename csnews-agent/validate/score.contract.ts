@@ -20,11 +20,7 @@ import { hashStr, scoreRule } from '../src/score';
 // ============================================================
 describe('hashStr · 业务红线', () => {
   it('同输入必须返回同结果（确定性）', () => {
-    const samples = [
-      'CSNEWS-AGENT-v0.33+sweep',
-      'topic-key-12345',
-      '今日 OpenAI 发布 GPT-5',
-    ];
+    const samples = ['CSNEWS-AGENT-v0.33+sweep', 'topic-key-12345', '今日 OpenAI 发布 GPT-5'];
     for (const s of samples) {
       expect(hashStr(s)).toBe(hashStr(s));
     }
@@ -36,11 +32,7 @@ describe('hashStr · 业务红线', () => {
   });
 
   it('中文标题不能 throw（中文 2 字节/字符不影响 imul）', () => {
-    const samples = [
-      '今日头条',
-      '突发：OpenAI 发布 GPT-5',
-      '联合国大会讨论气候变化',
-    ];
+    const samples = ['今日头条', '突发：OpenAI 发布 GPT-5', '联合国大会讨论气候变化'];
     for (const s of samples) {
       expect(() => hashStr(s)).not.toThrow();
       expect(typeof hashStr(s)).toBe('number');
@@ -59,12 +51,7 @@ describe('hashStr · 业务红线', () => {
   });
 
   it('特殊字符不能 throw（\\n \\t \\ " 都不影响）', () => {
-    const samples = [
-      'line1\nline2',
-      'tab\there',
-      'quote"inside',
-      'backslash\\path',
-    ];
+    const samples = ['line1\nline2', 'tab\there', 'quote"inside', 'backslash\\path'];
     for (const s of samples) {
       expect(() => hashStr(s)).not.toThrow();
     }
@@ -82,7 +69,7 @@ describe('hashStr · 业务红线', () => {
   it('不同输入大概率返回不同 hash（避免高频碰撞）', () => {
     // 业务契约：topic_key 生成必须分散
     const samples = ['a', 'b', 'c', 'd', 'e', 'topic-1', 'topic-2', 'topic-3'];
-    const hashes = new Set(samples.map(s => hashStr(s)));
+    const hashes = new Set(samples.map((s) => hashStr(s)));
     expect(hashes.size).toBe(samples.length); // 8 个不同输入 → 8 个不同 hash
   });
 });

@@ -14,7 +14,24 @@
  * 详见：tasks/csnews-agent-okr.md KR0
  */
 import { describe, it, expect } from 'vitest';
-import { validateType, validateSince, validateLimit, resolveRelativeTime, rateKeyForIp, dailyHitsKeyForToday, ISO8601_REGEX, ALLOWED_TYPES, RELATIVE_TIME_REGEX, RATE_LIMIT_PER_MIN, PAYLOAD_LIMIT_BYTES, RATE_KEY_PREFIX, TREND_HITS_KEY_PREFIX, LIMIT_MIN, LIMIT_MAX, DEFAULT_LIMIT } from '../src/trend-validation';
+import {
+  validateType,
+  validateSince,
+  validateLimit,
+  resolveRelativeTime,
+  rateKeyForIp,
+  dailyHitsKeyForToday,
+  ISO8601_REGEX,
+  ALLOWED_TYPES,
+  RELATIVE_TIME_REGEX,
+  RATE_LIMIT_PER_MIN,
+  PAYLOAD_LIMIT_BYTES,
+  RATE_KEY_PREFIX,
+  TREND_HITS_KEY_PREFIX,
+  LIMIT_MIN,
+  LIMIT_MAX,
+  DEFAULT_LIMIT,
+} from '../src/trend-validation';
 
 // ============================================================
 // resolveRelativeTime

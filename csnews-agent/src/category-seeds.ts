@@ -21,36 +21,16 @@ export const CATEGORY_SEEDS_R2_KEY = 'category-seeds.json';
  * (5h 配额期外 review R2 增删 seeds 即可生效, 0 维护成本)
  */
 export const DEFAULT_CATEGORY_SEEDS: Record<string, string[]> = {
-  '科技': [
-    '人工智能发布', '开源代码', '芯片量产', '算法升级', '技术突破',
-  ],
-  '财经': [
-    '股市涨跌', '汇率波动', '央行利率', '财报数据', 'GDP 增长',
-  ],
-  '国际': [
-    '外交峰会', '联合国决议', '制裁措施', '军事演习', '贸易协定',
-  ],
-  '社会': [
-    '交通事故', '疫情防控', '自然灾害', '食品安全', '教育改革',
-  ],
-  '娱乐': [
-    '电影首映', '演唱会', '颁奖典礼', '综艺官宣', '明星绯闻',
-  ],
-  '体育': [
-    '世界杯决赛', '奥运会', 'NBA 总决赛', '欧冠比赛', '中超联赛',
-  ],
-  '房产': [
-    '房价涨跌', '限购政策', '房贷利率', '土拍成交', '楼盘交付',
-  ],
-  '汽车': [
-    '新能源车', '自动驾驶', '汽车召回', '新车发布', '碰撞测试',
-  ],
-  '消费': [
-    '电商促销', '涨价', '食品安全', '购物节', '海淘代购',
-  ],
-  '法律': [
-    '法院判决', '警方通报', '检方公诉', '立法修改', '司法解释',
-  ],
+  科技: ['人工智能发布', '开源代码', '芯片量产', '算法升级', '技术突破'],
+  财经: ['股市涨跌', '汇率波动', '央行利率', '财报数据', 'GDP 增长'],
+  国际: ['外交峰会', '联合国决议', '制裁措施', '军事演习', '贸易协定'],
+  社会: ['交通事故', '疫情防控', '自然灾害', '食品安全', '教育改革'],
+  娱乐: ['电影首映', '演唱会', '颁奖典礼', '综艺官宣', '明星绯闻'],
+  体育: ['世界杯决赛', '奥运会', 'NBA 总决赛', '欧冠比赛', '中超联赛'],
+  房产: ['房价涨跌', '限购政策', '房贷利率', '土拍成交', '楼盘交付'],
+  汽车: ['新能源车', '自动驾驶', '汽车召回', '新车发布', '碰撞测试'],
+  消费: ['电商促销', '涨价', '食品安全', '购物节', '海淘代购'],
+  法律: ['法院判决', '警方通报', '检方公诉', '立法修改', '司法解释'],
 };
 
 export interface CategorySeedsData {
@@ -102,7 +82,7 @@ export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<nu
 export async function addSeedToCategory(
   env: Env,
   category: string,
-  seed: string,
+  seed: string
 ): Promise<CategorySeedsData> {
   const data = await loadCategorySeeds(env);
   if (!data.categories[category]) {
@@ -123,7 +103,7 @@ export async function addSeedToCategory(
 export async function removeSeedFromCategory(
   env: Env,
   category: string,
-  seed: string,
+  seed: string
 ): Promise<CategorySeedsData> {
   const data = await loadCategorySeeds(env);
   if (data.categories[category]) {

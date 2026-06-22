@@ -180,7 +180,9 @@ describe('cache · cacheSet', () => {
     const fakeKV: any = { put: putSpy };
     const env = mockEnv({ PROCESS_STATE: fakeKV });
     await cacheSet(env, 'cache:foo', { x: 1 });
-    expect(putSpy).toHaveBeenCalledWith('cache:foo', JSON.stringify({ x: 1 }), { expirationTtl: 60 * 60 });
+    expect(putSpy).toHaveBeenCalledWith('cache:foo', JSON.stringify({ x: 1 }), {
+      expirationTtl: 60 * 60,
+    });
     expect(getCacheMetrics().stores).toBe(1);
   });
 
@@ -189,7 +191,9 @@ describe('cache · cacheSet', () => {
     const fakeKV: any = { put: putSpy };
     const env = mockEnv({ PROCESS_STATE: fakeKV });
     await cacheSet(env, 'cache:foo', { x: 1 }, 300);
-    expect(putSpy).toHaveBeenCalledWith('cache:foo', JSON.stringify({ x: 1 }), { expirationTtl: 300 });
+    expect(putSpy).toHaveBeenCalledWith('cache:foo', JSON.stringify({ x: 1 }), {
+      expirationTtl: 300,
+    });
   });
 
   it('oversized (>25MB) 拒绝 → recordStoreFailure + 不调 KV.put', async () => {
@@ -242,12 +246,20 @@ describe('cache · metrics', () => {
 
   it('reset 后: 全部 0, hit_rate = 0', () => {
     const m = getCacheMetrics();
-    expect(m).toEqual({ hits: 0, misses: 0, stores: 0, store_failures: 0, total_requests: 0, hit_rate: 0 });
+    expect(m).toEqual({
+      hits: 0,
+      misses: 0,
+      stores: 0,
+      store_failures: 0,
+      total_requests: 0,
+      hit_rate: 0,
+    });
   });
 
   it('total_requests = hits + misses (派生字段自动算)', async () => {
     const fakeKV: any = {
-      get: vi.fn()
+      get: vi
+        .fn()
         .mockResolvedValueOnce(JSON.stringify({ a: 1 }))
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(JSON.stringify({ b: 2 })),
@@ -264,7 +276,8 @@ describe('cache · metrics', () => {
 
   it('hit_rate = hits / (hits + misses)', async () => {
     const fakeKV: any = {
-      get: vi.fn()
+      get: vi
+        .fn()
         .mockResolvedValueOnce(JSON.stringify({ a: 1 }))
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(JSON.stringify({ b: 2 })),

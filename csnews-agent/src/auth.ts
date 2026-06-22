@@ -20,7 +20,7 @@ export function authRequest(request: Request, env: Env): Response | null {
   if (expected.length !== provided.length) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 
@@ -33,7 +33,7 @@ export function authRequest(request: Request, env: Env): Response | null {
   if (!subtle.timingSafeEqual(expected, provided)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
     });
   }
   return null;

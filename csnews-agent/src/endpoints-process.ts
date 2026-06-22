@@ -14,8 +14,13 @@ import { Env } from './shared';
 import { scoreRule, hashStr } from './score';
 import { classify } from './classify';
 import {
-  cleanupStaleTopics, findSimilarNews, updateTopicScore,
-  createTopic, insertNewsHotspotsBatch, recordTrendWithMember, saveToR2,
+  cleanupStaleTopics,
+  findSimilarNews,
+  updateTopicScore,
+  createTopic,
+  insertNewsHotspotsBatch,
+  recordTrendWithMember,
+  saveToR2,
 } from './news-process';
 import { logEvent } from './log';
 import { resetCacheMetrics } from './cache';
@@ -41,7 +46,13 @@ import {
 } from './health-checks';
 
 // ===================== process (News Self Growth 主流程) =====================
-export async function handleProcessAction(request: Request, env: Env, url: URL, cors: Record<string, string>, ctx: ExecutionContext): Promise<Response> {
+export async function handleProcessAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>,
+  ctx: ExecutionContext
+): Promise<Response> {
   // try/finally 包裹整个函数体, finally 写 KV last_process_at
   // 即使 throw (subrequest 超限 / 网络失败 / SQL 错) 也能记录 cron 最后运行时间, cron_health 派生真实状态
   try {
@@ -51,16 +62,18 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
     resetCacheMetrics();
 
     // Step 0: 清理过期话题簇 (1 subrequest)
-    const cleaned = await cleanupStaleTopics(env) as CleanupStaleTopicsResult;
+    const cleaned = (await cleanupStaleTopics(env)) as CleanupStaleTopicsResult;
 
     // Step 1: 拉 ZAKER 热点 (1 subrequest)
     const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3', {
       signal: AbortSignal.timeout(10_000), // 10s 超时
     });
-    const json = await r.json() as ZakerHotResponse;
+    const json = (await r.json()) as ZakerHotResponse;
     const list: any[] = json?.data?.list || [];
     if (list.length === 0) {
-      return new Response(JSON.stringify({ error: 'no news' }), { headers: { 'Content-Type': 'application/json', ...cors } });
+      return new Response(JSON.stringify({ error: 'no news' }), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
     }
 
     const results = [];
@@ -97,20 +110,28 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
       if (i < FULL_COUNT) {
         try {
           // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-          const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as BgeEmbeddingResponse;
+          const embResp = (await env.AI.run('@cf/baai/bge-m3', {
+            text: [title],
+          })) as BgeEmbeddingResponse;
           const raw = embResp as BgeEmbeddingResponse;
           if (Array.isArray(raw?.data) && raw.data.length > 0) {
             const it = raw.data[0];
             embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
           }
-        } catch { /* 向量化失败不影响 */ }
+        } catch {
+          /* 向量化失败不影响 */
+        }
 
         if (embedding.length > 0) {
           const similar = await findSimilarNews(env, embedding, 0.85, 3);
           if (similar.length > 0 && similar[0].topic_id) {
             const top = similar[0];
             topicId = top.topic_id;
-            const updated = await updateTopicScore(env, top.topic_id, 1) as UpdateTopicScoreResult;
+            const updated = (await updateTopicScore(
+              env,
+              top.topic_id,
+              1
+            )) as UpdateTopicScoreResult;
             newsScore = updated.new_score || 0;
             newsLevel = updated.new_level || 'follow';
             fission = updated.fission_triggered || false;
@@ -119,8 +140,14 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
             matchedSimilarity = simScore;
             if (simScore < 0.95) {
               r2Key = await saveToR2(env, 'news/zaker', {
-                title, category, score: rule.score, source: 'zaker',
-                topic_id: topicId, level: newsLevel, fission, similarity: simScore,
+                title,
+                category,
+                score: rule.score,
+                source: 'zaker',
+                topic_id: topicId,
+                level: newsLevel,
+                fission,
+                similarity: simScore,
                 created_at: new Date().toISOString(),
               });
               isStoredR2 = true;
@@ -137,15 +164,20 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
           // 改为纯 hashStr, 兼容中文; 加 't-' 前缀便于辨识
           const titleHash = Math.abs(hashStr(title)).toString(36);
           const topicKey = `t-${titleHash}`;
-          const created = await createTopic(env, topicKey, 'follow') as CreatedTopicRow;
+          const created = (await createTopic(env, topicKey, 'follow')) as CreatedTopicRow;
           if (created?.id) {
             topicId = created.id;
             newsScore = 0;
             newsLevel = 'follow';
             isNewTopic = true;
             r2Key = await saveToR2(env, 'news/zaker', {
-              title, category, score: rule.score, source: 'zaker',
-              topic_id: topicId, level: newsLevel, fission: false,
+              title,
+              category,
+              score: rule.score,
+              source: 'zaker',
+              topic_id: topicId,
+              level: newsLevel,
+              fission: false,
               created_at: new Date().toISOString(),
             });
             isStoredR2 = true;
@@ -156,14 +188,26 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 
       // Step 4-5: 收集新闻对象, 循环结束批量插入 + record_trend_with_member 合并 RPC
       pendingNews.push({
-        item, topicId, isNewTopic, newsLevel, newsScore, fission,
-        matchedSimilarity, isStoredR2, storedReason, r2Key, embedding, title, category, rule,
+        item,
+        topicId,
+        isNewTopic,
+        newsLevel,
+        newsScore,
+        fission,
+        matchedSimilarity,
+        isStoredR2,
+        storedReason,
+        r2Key,
+        embedding,
+        title,
+        category,
+        rule,
       });
       if (fission) console.log(`[FISSION] ${title}`);
     }
 
     // batch insert: 10 条新闻 1 个 subrequest
-    const batchNewsArray = pendingNews.map(p => ({
+    const batchNewsArray = pendingNews.map((p) => ({
       title: p.title,
       url: p.item.url || '',
       source: 'zaker',
@@ -195,14 +239,16 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
           level: p.newsLevel,
           is_stored_r2: p.isStoredR2,
           stored_reason: p.storedReason,
-          trend: trendSnapshot ? {
-            snapshot_id: trendSnapshot.snapshot_id,
-            warning_id: trendSnapshot.warning_id,
-            velocity: trendSnapshot.out_velocity,
-            acceleration: trendSnapshot.out_acceleration,
-            stage: trendSnapshot.out_stage,
-            warning_created: trendSnapshot.out_warning_created,
-          } : null,
+          trend: trendSnapshot
+            ? {
+                snapshot_id: trendSnapshot.snapshot_id,
+                warning_id: trendSnapshot.warning_id,
+                velocity: trendSnapshot.out_velocity,
+                acceleration: trendSnapshot.out_acceleration,
+                stage: trendSnapshot.out_stage,
+                warning_created: trendSnapshot.out_warning_created,
+              }
+            : null,
           fission: p.fission,
         });
       } else {
@@ -222,16 +268,21 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
       }
     }
 
-    return new Response(JSON.stringify({
-      processed: results.length,
-      cleaned: cleaned?.deleted_topic_count || 0,
-      items: results,
-    }), { headers: { 'Content-Type': 'application/json', ...cors } });
+    return new Response(
+      JSON.stringify({
+        processed: results.length,
+        cleaned: cleaned?.deleted_topic_count || 0,
+        items: results,
+      }),
+      { headers: { 'Content-Type': 'application/json', ...cors } }
+    );
   } finally {
     // finally 写 KV last_process_at
     // 不管 try 块成功/失败都跑, 任何 throw 都不会丢 cron 健康指标
     if (env.PROCESS_STATE) {
-      await env.PROCESS_STATE.put("last_process_at", new Date().toISOString(), { expirationTtl: 86400 * 7 });
+      await env.PROCESS_STATE.put('last_process_at', new Date().toISOString(), {
+        expirationTtl: 86400 * 7,
+      });
     }
   }
 }
@@ -252,11 +303,17 @@ export async function handleProcessAction(request: Request, env: Env, url: URL, 
 // 12. entity_freshness             - entity cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 13. event_freshness              - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 14. cache_metrics                - pull KV 缓存 hit rate (per-isolate, hit_rate≥50%=ok)
-export async function handleHealthAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+export async function handleHealthAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>
+): Promise<Response> {
   const ts = Date.now();
-  const checks: Record<string, { status: "ok" | "degraded" | "down" | "unknown"; detail: any }> = {};
+  const checks: Record<string, { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: any }> =
+    {};
   const result: any = {
-    status: "ok",
+    status: 'ok',
     ts,
   };
 
@@ -319,10 +376,10 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
 
   // 整体 status 聚合
   const statuses = Object.values(checks).map((c) => c.status);
-  if (statuses.includes("down")) result.status = "down";
-  else if (statuses.includes("degraded")) result.status = "degraded";
-  else if (statuses.every((s) => s === "ok" || s === "unknown")) result.status = "ok";
-  else result.status = "degraded";
+  if (statuses.includes('down')) result.status = 'down';
+  else if (statuses.includes('degraded')) result.status = 'degraded';
+  else if (statuses.every((s) => s === 'ok' || s === 'unknown')) result.status = 'ok';
+  else result.status = 'degraded';
 
   result.checks = checks;
 
@@ -339,44 +396,52 @@ export async function handleHealthAction(request: Request, env: Env, url: URL, c
 // ===================== logs =====================
 // ?action=logs&date=YYYY-MM-DD&hour=HH&limit=N 端点
 // 读 R2 `logs/YYYY-MM-DD/HH.log` 按 ts 倒序返回
-export async function handleLogsAction(request: Request, env: Env, url: URL, cors: Record<string, string>): Promise<Response> {
+export async function handleLogsAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>
+): Promise<Response> {
   const params = url.searchParams;
   const now = new Date();
-  const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+  const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
 
   // 1. 解析 + 校验
-  const rawDate = params.get("date") || "today";
+  const rawDate = params.get('date') || 'today';
   let date: string;
-  if (rawDate === "today") {
+  if (rawDate === 'today') {
     date = todayUtc;
   } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
     date = rawDate;
   } else {
     return new Response(JSON.stringify({ error: "date must be YYYY-MM-DD or 'today'" }), {
-      status: 400, headers: { "Content-Type": "application/json", ...cors },
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...cors },
     });
   }
 
-  const hourParam = params.get("hour");
+  const hourParam = params.get('hour');
   let hour: number | null = null;
   if (hourParam !== null) {
     hour = parseInt(hourParam, 10);
     if (isNaN(hour) || hour < 0 || hour > 23) {
-      return new Response(JSON.stringify({ error: "hour must be 0-23" }), {
-        status: 400, headers: { "Content-Type": "application/json", ...cors },
+      return new Response(JSON.stringify({ error: 'hour must be 0-23' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...cors },
       });
     }
   }
 
-  const limit = Math.min(Math.max(parseInt(params.get("limit") || "100", 10), 1), 500);
+  const limit = Math.min(Math.max(parseInt(params.get('limit') || '100', 10), 1), 500);
 
   // 2. date range ≤ 7d 校验
-  const requestedDate = new Date(date + "T00:00:00Z");
-  const todayDate = new Date(todayUtc + "T00:00:00Z");
+  const requestedDate = new Date(date + 'T00:00:00Z');
+  const todayDate = new Date(todayUtc + 'T00:00:00Z');
   const diffDays = (todayDate.getTime() - requestedDate.getTime()) / 86400_000;
   if (diffDays > 7 || diffDays < 0) {
-    return new Response(JSON.stringify({ error: "date range max 7 days (0-7 days back)" }), {
-      status: 400, headers: { "Content-Type": "application/json", ...cors },
+    return new Response(JSON.stringify({ error: 'date range max 7 days (0-7 days back)' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...cors },
     });
   }
 
@@ -389,19 +454,19 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
     const list = await env.csnews_raw.list({ prefix, limit: 1000 });
     for (const obj of list.objects) {
       // 旧格式兼容: HH.log (无子目录)
-      if (/^\d{2}\.log$/.test(obj.key.split("/").pop() || "")) {
-        if (hour !== null && !obj.key.endsWith(`/${String(hour).padStart(2, "0")}.log`)) continue;
+      if (/^\d{2}\.log$/.test(obj.key.split('/').pop() || '')) {
+        if (hour !== null && !obj.key.endsWith(`/${String(hour).padStart(2, '0')}.log`)) continue;
       } else {
         // 新格式: HH/MM-SS-fff-source.log
-        const parts = obj.key.split("/");
+        const parts = obj.key.split('/');
         if (parts.length < 3) continue;
         const hh = parts[parts.length - 2];
-        if (hour !== null && hh !== String(hour).padStart(2, "0")) continue;
+        if (hour !== null && hh !== String(hour).padStart(2, '0')) continue;
       }
       const body = await env.csnews_raw.get(obj.key);
       if (!body) continue;
       const text = await body.text();
-      for (const line of text.split("\n")) {
+      for (const line of text.split('\n')) {
         const t = line.trim();
         if (!t) continue;
         try {
@@ -412,27 +477,33 @@ export async function handleLogsAction(request: Request, env: Env, url: URL, cor
       }
     }
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: "r2 unavailable", detail: e?.message || String(e) }), {
-      status: 503, headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return new Response(
+      JSON.stringify({ error: 'r2 unavailable', detail: e?.message || String(e) }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      }
+    );
   }
 
   // 4. 按 ts 倒序
-  entries.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+  entries.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
 
   // 5. 取 limit
   const items = entries.slice(0, limit);
   const truncated = entries.length > items.length;
 
-  return new Response(JSON.stringify({
-    date,
-    hour: hour,
-    count: items.length,
-    total: entries.length,
-    truncated,
-    items,
-  }), {
-    headers: { "Content-Type": "application/json", ...cors },
-  });
+  return new Response(
+    JSON.stringify({
+      date,
+      hour: hour,
+      count: items.length,
+      total: entries.length,
+      truncated,
+      items,
+    }),
+    {
+      headers: { 'Content-Type': 'application/json', ...cors },
+    }
+  );
 }
-

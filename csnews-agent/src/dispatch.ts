@@ -19,14 +19,27 @@ import { Env } from './shared';
 import { corsHeaders } from './auth';
 import { logEvent } from './log';
 import {
-  handlePullAction, handlePingAction,
-  handleModelTestAction, handleAiTestAction,
-  handleScoreAction, handleClassifyAction, handleBatchScoreAction,
-  handleFissionAction, handleSaveAction, handleListAction,
-  handleEmbedAction, handleZakerHotAction, handleRescoreAction,
-  handleProcessAction, handleHealthAction, handleLogsAction,
-  handleContentAction, handleTrendAction, handleKnowledgeAction,
-  handleEntityAction, handleEventAction,
+  handlePullAction,
+  handlePingAction,
+  handleModelTestAction,
+  handleAiTestAction,
+  handleScoreAction,
+  handleClassifyAction,
+  handleBatchScoreAction,
+  handleFissionAction,
+  handleSaveAction,
+  handleListAction,
+  handleEmbedAction,
+  handleZakerHotAction,
+  handleRescoreAction,
+  handleProcessAction,
+  handleHealthAction,
+  handleLogsAction,
+  handleContentAction,
+  handleTrendAction,
+  handleKnowledgeAction,
+  handleEntityAction,
+  handleEventAction,
 } from './endpoints';
 
 /**
@@ -34,14 +47,29 @@ import {
  * 加新 action 时: ALLOWED_ACTIONS 加 + 此文件 describe 块补 1 个 it
  */
 export const ALLOWED_ACTIONS = [
-  'pull', 'ping', 'model-test', 'ai-test',
-  'score', 'classify', 'batch-score',
-  'fission', 'save', 'list', 'embed', 'zaker-hot', 'rescore',
-  'process', 'health', 'logs',
-  'content', 'trend', 'knowledge',
-  'entity', 'event',
+  'pull',
+  'ping',
+  'model-test',
+  'ai-test',
+  'score',
+  'classify',
+  'batch-score',
+  'fission',
+  'save',
+  'list',
+  'embed',
+  'zaker-hot',
+  'rescore',
+  'process',
+  'health',
+  'logs',
+  'content',
+  'trend',
+  'knowledge',
+  'entity',
+  'event',
 ] as const;
-export type Action = typeof ALLOWED_ACTIONS[number];
+export type Action = (typeof ALLOWED_ACTIONS)[number];
 
 /**
  * 默认 action (空 action 时的 fallback, v0.33 确定 'ping' = 健康检查)
@@ -69,14 +97,22 @@ export async function dispatchAction(
   env: Env,
   ctx: ExecutionContext,
   action: string,
-  request: Request,
+  request: Request
 ): Promise<Response> {
   const url = new URL(request.url);
   const origin = request.headers.get('Origin');
   const cors = corsHeaders(origin);
 
   // 写一条 endpoint-level log (fire-and-forget with ctx.waitUntil so R2 put completes)
-  ctx.waitUntil(logEvent(env, "info", "endpoint called", { endpoint: action, method: request.method }, "dispatcher").catch(() => {}));
+  ctx.waitUntil(
+    logEvent(
+      env,
+      'info',
+      'endpoint called',
+      { endpoint: action, method: request.method },
+      'dispatcher'
+    ).catch(() => {})
+  );
 
   // 20 action dispatch
   if (action === 'pull') return await handlePullAction(request, env, url, cors, ctx);

@@ -138,12 +138,7 @@ describe('classifyRule · 边界', () => {
 // ============================================================
 describe('classifyRule · 稳定性', () => {
   it('同输入必须返回同结果（确定性）', () => {
-    const samples = [
-      'OpenAI 发布 GPT-5',
-      '联合国大会',
-      '股市行情',
-      'xxx',
-    ];
+    const samples = ['OpenAI 发布 GPT-5', '联合国大会', '股市行情', 'xxx'];
     for (const s of samples) {
       expect(classifyRule(s)).toBe(classifyRule(s));
     }
