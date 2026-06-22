@@ -9,7 +9,7 @@ import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
 import { checkEntityCronHealth, supabaseHeaders } from './utils';
-import { getCacheMetrics } from './cache';
+import { getCacheMetrics, CACHE_PREFIX, getSeedMeta } from './cache';
 import type { TrendSnapshotRow } from './types';
 
 // ============================================================
@@ -29,12 +29,37 @@ export async function checkLastProcessAt(
   const checks: any = {};
   let lastProcessAt: string | null | { error: string } = null;
 
-  // last_process_at
+  // last_process_at — 支持 SeedEnvelope 和旧版裸字符串
   try {
     if (env.PROCESS_STATE) {
-      const last = await env.PROCESS_STATE.get('last_process_at');
-      lastProcessAt = last;
-      checks.last_process_at = { status: last ? 'ok' : 'degraded', detail: last || 'KV empty' };
+      const raw = await env.PROCESS_STATE.get('last_process_at');
+      if (!raw) {
+        lastProcessAt = null;
+        checks.last_process_at = { status: 'degraded', detail: 'KV empty' };
+      } else {
+        // 尝试解析 SeedEnvelope
+        try {
+          const parsed = JSON.parse(raw);
+          const seed = getSeedMeta(parsed);
+          if (seed && seed.state !== 'error') {
+            // SeedEnvelope 格式: 从 data.last_process_at 取时间戳
+            const inner = parsed.data as { last_process_at?: string } | undefined;
+            lastProcessAt = inner?.last_process_at ?? null;
+            checks.last_process_at = {
+              status: 'ok',
+              detail: `envelope: state=${seed.state} age=${Math.round((ts - Date.parse(seed.fetchedAt)) / 60000)}min`,
+            };
+          } else {
+            // 旧版裸字符串
+            lastProcessAt = raw;
+            checks.last_process_at = { status: 'ok', detail: raw };
+          }
+        } catch {
+          // JSON parse 失败, 当作旧版裸字符串
+          lastProcessAt = raw;
+          checks.last_process_at = { status: 'ok', detail: raw };
+        }
+      }
     } else {
       lastProcessAt = null;
       checks.last_process_at = { status: 'down', detail: 'PROCESS_STATE KV binding missing' };
@@ -44,7 +69,7 @@ export async function checkLastProcessAt(
     checks.last_process_at = { status: 'down', detail: e?.message };
   }
 
-  // cron_health (派生)
+  // cron_health (派生) — 优先用 SeedEnvelope.fetchedAt
   let cronHealth: 'ok' | 'degraded' | 'down' = 'ok';
   if (typeof lastProcessAt === 'string') {
     const lastMs = Date.parse(lastProcessAt);
@@ -653,4 +678,127 @@ export function checkCacheMetrics(): {
     cache_metrics: cacheMetrics,
     checks: { cache_metrics: checks.cache_metrics },
   };
+}
+
+// ============================================================
+// 12. pull_cache_freshness — 按 news / entity / event 分组检查 pull 缓存新鲜度
+// ============================================================
+export async function checkPullCacheFreshness(
+  env: Env,
+  ts: number
+): Promise<{
+  pull_cache_freshness: {
+    news: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
+    entity: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
+    event: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
+    unknown: { count: number };
+  };
+  checks: {
+    pull_cache_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+  };
+}> {
+  const groups = {
+    news: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
+    entity: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
+    event: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
+    unknown: { count: 0 },
+  };
+  const checks: any = {};
+
+  try {
+    if (!env.PROCESS_STATE) {
+      return {
+        pull_cache_freshness: groups,
+        checks: { pull_cache_freshness: { status: 'down', detail: 'PROCESS_STATE KV missing' } },
+      };
+    }
+
+    // 列出所有 cache:pull:* keys
+    const list = await env.PROCESS_STATE.list({ prefix: CACHE_PREFIX + 'pull:' });
+    const keys = list.keys || [];
+
+    for (const kvKey of keys) {
+      try {
+        const raw = await env.PROCESS_STATE.get(kvKey.name);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const seed = getSeedMeta(parsed);
+        if (!seed || seed.state === 'error') {
+          groups.unknown.count++;
+          continue;
+        }
+        const data = parsed.data as { type?: string } | undefined;
+        const type = data?.type ?? 'unknown';
+        const fetchedAtMs = Date.parse(seed.fetchedAt);
+        const ageMin = seed.maxContentAgeMin >= 0 ? seed.maxContentAgeMin : -1;
+
+        if (type === 'news' || type === 'trends' || type === 'fission-pending') {
+          groups.news.count++;
+          if (ageMin > groups.news.maxAgeMin) groups.news.maxAgeMin = ageMin;
+          if (
+            fetchedAtMs > 0 &&
+            (groups.news.oldestCachedAt === null ||
+              fetchedAtMs < Date.parse(groups.news.oldestCachedAt))
+          ) {
+            groups.news.oldestCachedAt = seed.fetchedAt;
+          }
+        } else if (type === 'entity') {
+          groups.entity.count++;
+          if (ageMin > groups.entity.maxAgeMin) groups.entity.maxAgeMin = ageMin;
+          if (
+            fetchedAtMs > 0 &&
+            (groups.entity.oldestCachedAt === null ||
+              fetchedAtMs < Date.parse(groups.entity.oldestCachedAt))
+          ) {
+            groups.entity.oldestCachedAt = seed.fetchedAt;
+          }
+        } else if (type === 'event') {
+          groups.event.count++;
+          if (ageMin > groups.event.maxAgeMin) groups.event.maxAgeMin = ageMin;
+          if (
+            fetchedAtMs > 0 &&
+            (groups.event.oldestCachedAt === null ||
+              fetchedAtMs < Date.parse(groups.event.oldestCachedAt))
+          ) {
+            groups.event.oldestCachedAt = seed.fetchedAt;
+          }
+        } else {
+          groups.unknown.count++;
+        }
+      } catch {
+        groups.unknown.count++;
+      }
+    }
+
+    // 健康判断: news 表是核心, stale > 3h = down, > 1.5h = degraded
+    const newsAge = groups.news.maxAgeMin;
+    let overallStatus: 'ok' | 'degraded' | 'down' | 'unknown' = 'ok';
+    if (newsAge < 0) {
+      overallStatus = 'unknown';
+    } else if (newsAge > 180) {
+      overallStatus = 'down';
+    } else if (newsAge > 90) {
+      overallStatus = 'degraded';
+    }
+
+    checks.pull_cache_freshness = {
+      status: overallStatus,
+      detail:
+        newsAge >= 0
+          ? `news=${groups.news.count} entries, oldest content ${newsAge}min old`
+          : `${groups.news.count} entries, maxContentAgeMin unavailable (legacy)`,
+    };
+
+    return {
+      pull_cache_freshness: groups,
+      checks: { pull_cache_freshness: checks.pull_cache_freshness },
+    };
+  } catch (e: any) {
+    return {
+      pull_cache_freshness: groups,
+      checks: {
+        pull_cache_freshness: { status: 'unknown', detail: `list failed: ${e?.message}` },
+      },
+    };
+  }
 }

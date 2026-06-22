@@ -12,7 +12,7 @@
  */
 
 import { Env, supabaseFetch, safeJson } from './shared';
-import { cacheGet, cacheSet, makeCacheKey } from './cache';
+import { cacheGet, cacheSet, makeCacheKey, DEFAULT_TTL_SECONDS } from './cache';
 import type { NewsHotspotRow, PullTopicRow } from './types';
 
 // ====== Type 白名单配置(v0.31) ======
@@ -430,6 +430,27 @@ async function queryFissionPending(
   return { items: filtered, total: filtered.length };
 }
 
+// ====== Seed Envelope helpers ======
+
+/**
+ * 计算 items 数组中最新内容的年龄(分钟)
+ * 用于 SeedEnvelope.maxContentAgeMin, health 端点判断 pull 缓存新鲜度
+ * - 有 created_at 字段: 取最新一条的 age
+ * - 无 created_at: 返回 -1 (未知, 不参与 freshness 检查)
+ */
+function computeMaxContentAgeMin(items: any[]): number {
+  if (!items || items.length === 0) return -1;
+  let newestMs = 0;
+  for (const item of items) {
+    if (item && typeof item === 'object' && item.created_at) {
+      const ms = Date.parse(item.created_at);
+      if (Number.isFinite(ms) && ms > newestMs) newestMs = ms;
+    }
+  }
+  if (newestMs === 0) return -1;
+  return Math.round((Date.now() - newestMs) / 60000);
+}
+
 // ====== 入口 ======
 
 /**
@@ -510,11 +531,21 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
   };
 
   // fire-and-forget 写缓存 (ctx.waitUntil 让 KV put 在响应后继续)
+  // 传入 recordCount + maxContentAgeMin, 自动包装 SeedEnvelope
+  const maxContentAgeMin = computeMaxContentAgeMin(items);
   if (ctx && typeof ctx.waitUntil === 'function') {
-    ctx.waitUntil(cacheSet(env, cacheKey, response));
+    ctx.waitUntil(
+      cacheSet(env, cacheKey, response, DEFAULT_TTL_SECONDS, {
+        recordCount: projected.length,
+        maxContentAgeMin,
+      })
+    );
   } else {
     // 无 ctx (如测试) → 同步写
-    await cacheSet(env, cacheKey, response);
+    await cacheSet(env, cacheKey, response, DEFAULT_TTL_SECONDS, {
+      recordCount: projected.length,
+      maxContentAgeMin,
+    });
   }
 
   return response;

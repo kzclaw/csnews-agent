@@ -6,7 +6,7 @@
 //
 // 业务契约:
 //   - process: News Self Growth 主流程, cron 整点跑
-//   - health: 11 维度 worker 可观测性检查
+//   - health: 15 维度 worker 可观测性检查
 //   - logs: 读 R2 logs 端点
 // ============================================================
 
@@ -43,6 +43,7 @@ import {
   checkAiBudget,
   checkEntityAndEventFreshness,
   checkCacheMetrics,
+  checkPullCacheFreshness,
 } from './health-checks';
 
 // ===================== process (News Self Growth 主流程) =====================
@@ -279,8 +280,19 @@ export async function handleProcessAction(
   } finally {
     // finally 写 KV last_process_at
     // 不管 try 块成功/失败都跑, 任何 throw 都不会丢 cron 健康指标
+    // 包装 SeedEnvelope, maxContentAgeMin = 0 (process 刚跑完, 最新鲜)
     if (env.PROCESS_STATE) {
-      await env.PROCESS_STATE.put('last_process_at', new Date().toISOString(), {
+      const ts = new Date().toISOString();
+      const envelope = {
+        _seed: {
+          fetchedAt: ts,
+          recordCount: 1,
+          state: 'ok' as const,
+          maxContentAgeMin: 0,
+        },
+        data: { last_process_at: ts },
+      };
+      await env.PROCESS_STATE.put('last_process_at', JSON.stringify(envelope), {
         expirationTtl: 86400 * 7,
       });
     }
@@ -303,6 +315,7 @@ export async function handleProcessAction(
 // 12. entity_freshness             - entity cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 13. event_freshness              - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 14. cache_metrics                - pull KV 缓存 hit rate (per-isolate, hit_rate≥50%=ok)
+// 15. pull_cache_freshness         - 按 news/entity/event 分组检查 pull 缓存新鲜度
 export async function handleHealthAction(
   request: Request,
   env: Env,
@@ -373,6 +386,11 @@ export async function handleHealthAction(
   const cacheResult = checkCacheMetrics();
   result.cache_metrics = cacheResult.cache_metrics;
   checks.cache_metrics = cacheResult.checks.cache_metrics;
+
+  // 15. pull_cache_freshness — 按 news/entity/event 分组检查 pull 缓存新鲜度
+  const pullCacheFreshnessResult = await checkPullCacheFreshness(env, ts);
+  result.pull_cache_freshness = pullCacheFreshnessResult.pull_cache_freshness;
+  checks.pull_cache_freshness = pullCacheFreshnessResult.checks.pull_cache_freshness;
 
   // 整体 status 聚合
   const statuses = Object.values(checks).map((c) => c.status);

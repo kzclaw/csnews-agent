@@ -10,9 +10,76 @@
  * - cache: prefix 隔离: 跟 PROCESS_STATE 现有 prefix 区分 (ai-budget, rate-limit, cron_health)
  * - Silent failure: cache miss / KV 错不阻塞主流程 (缓存是优化, 不是依赖)
  * - Per-isolate metrics: hits / misses / stores / store_failures / hit_rate
+ * - Seed Envelope (v0.36.x): 所有 KV 缓存数据统一包装 _seed 元数据包, 用于 health 判断新鲜度
  */
 
 import { Env } from './shared';
+
+/**
+ * Seed Envelope — 所有 KV 缓存数据的统一元数据包
+ * 用于 health 端点判断数据新鲜度, 支持区分"news 表有数据但 trends 表空了"等局部故障
+ */
+export interface SeedEnvelope<T> {
+  _seed: {
+    /** ISO 8601 时间戳, 本次写入时间 */
+    fetchedAt: string;
+    /** 本次写入的记录数 */
+    recordCount: number;
+    /** 数据状态 */
+    state: 'ok' | 'error' | 'empty';
+    /**
+     * 内容最大年龄(分钟), 用于 health 判断新鲜度
+     * - pull 缓存: fetchedAt 到 items 中最新内容的年龄
+     * - last_process_at: fetchedAt 的年龄
+     * - 原子计数器(rate-limit/ai-budget): -1 (不参与 freshness 检查)
+     */
+    maxContentAgeMin: number;
+  };
+  /** 原有数据 */
+  data: T;
+}
+
+/**
+ * 构造 Seed Envelope (内部用)
+ */
+function buildSeedEnvelope<T>(
+  data: T,
+  recordCount: number,
+  state: SeedEnvelope<T>['_seed']['state'],
+  maxContentAgeMin: number
+): SeedEnvelope<T> {
+  return {
+    _seed: {
+      fetchedAt: new Date().toISOString(),
+      recordCount,
+      state,
+      maxContentAgeMin,
+    },
+    data,
+  };
+}
+
+/**
+ * 尝试从 Seed Envelope 提取 data (向后兼容旧数据)
+ * - 有 _seed 字段 → 返回 data
+ * - 无 _seed 字段 → 返回原数据 (兼容 v0.36.25 之前的裸数据)
+ */
+function unwrapSeedEnvelope<T>(value: any): T {
+  if (value && typeof value === 'object' && '_seed' in value && 'data' in value) {
+    return value.data as T;
+  }
+  return value as T;
+}
+
+/**
+ * 从 Seed Envelope 提取 _seed 元数据 (无 _seed 返回 null)
+ */
+export function getSeedMeta(value: any): SeedEnvelope<unknown>['_seed'] | null {
+  if (value && typeof value === 'object' && '_seed' in value && 'data' in value) {
+    return value._seed as SeedEnvelope<unknown>['_seed'];
+  }
+  return null;
+}
 
 /** 缓存键前缀 (跟 PROCESS_STATE 现有 prefix 隔离) */
 export const CACHE_PREFIX = 'cache:';
@@ -91,8 +158,9 @@ export function resetCacheMetrics(): void {
 
 /**
  * 读缓存
- * - 命中: parse + recordHit + return
+ * - 命中: parse + unwrap SeedEnvelope + recordHit + return
  * - 未命中 / 解析错: recordMiss + return null (静默, 不阻塞主流程)
+ * - 向后兼容: 无 _seed 字段返回原数据 (v0.36.25 之前裸数据)
  */
 export async function cacheGet(env: Env, key: string): Promise<any | null> {
   if (!env.PROCESS_STATE) {
@@ -106,7 +174,8 @@ export async function cacheGet(env: Env, key: string): Promise<any | null> {
       return null;
     }
     metrics.hits++;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return unwrapSeedEnvelope(parsed);
   } catch (e) {
     metrics.misses++;
     return null;
@@ -115,19 +184,31 @@ export async function cacheGet(env: Env, key: string): Promise<any | null> {
 
 /**
  * 写缓存 (静默失败)
+ * - 有 recordCount 时自动包装 SeedEnvelope
+ * - 无 recordCount 时写裸数据 (rate-limit 等原子计数器场景)
  */
 export async function cacheSet(
   env: Env,
   key: string,
   value: any,
-  ttlSeconds: number = DEFAULT_TTL_SECONDS
+  ttlSeconds: number = DEFAULT_TTL_SECONDS,
+  opts?: {
+    /** 本次写入的记录数 (pull 缓存场景) */
+    recordCount?: number;
+    /** 内容最大年龄(分钟), 用于 health freshness 判断 */
+    maxContentAgeMin?: number;
+  }
 ): Promise<void> {
   if (!env.PROCESS_STATE) {
     metrics.store_failures++;
     return;
   }
   try {
-    const serialized = JSON.stringify(value);
+    const toStore =
+      opts?.recordCount !== undefined
+        ? buildSeedEnvelope(value, opts.recordCount, 'ok', opts.maxContentAgeMin ?? -1)
+        : value;
+    const serialized = JSON.stringify(toStore);
     const bytes = new TextEncoder().encode(serialized).length;
     if (bytes > MAX_VALUE_SIZE_BYTES) {
       metrics.store_failures++;
