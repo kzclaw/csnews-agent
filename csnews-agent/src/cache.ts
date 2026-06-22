@@ -84,6 +84,12 @@ export function getSeedMeta(value: any): SeedEnvelope<unknown>['_seed'] | null {
 /** 缓存键前缀 (跟 PROCESS_STATE 现有 prefix 隔离) */
 export const CACHE_PREFIX = 'cache:';
 
+/** Negative Sentinel key 前缀 (标记上游故障, 30s 内跳过重试) */
+export const NEG_SENTINEL_PREFIX = '__CSNEWS_NEG__';
+
+/** Negative Sentinel TTL = 30s (上游故障时保护 AI budget) */
+export const NEG_SENTINEL_TTL = 30;
+
 /** 默认 TTL = 1h (跟 cron 整点对齐) */
 export const DEFAULT_TTL_SECONDS = 60 * 60;
 
@@ -230,5 +236,74 @@ export async function cacheDelete(env: Env, key: string): Promise<void> {
     await env.PROCESS_STATE.delete(key);
   } catch (e) {
     // 静默
+  }
+}
+
+// ============================================================
+// Negative Sentinel
+// ============================================================
+
+/**
+ * Negative Sentinel key 构造
+ * 格式: __CSNEWS_NEG__<original_key>
+ */
+function negSentinelKey(key: string): string {
+  return `${NEG_SENTINEL_PREFIX}${key}`;
+}
+
+/**
+ * 检查是否有 Negative Sentinel (上游故障标记)
+ * - 有 sentinel → 返回 true (跳过重试)
+ * - 无 sentinel / 错 → 返回 false (正常 fetch)
+ */
+export async function isNegativeSentinel(env: Env, key: string): Promise<boolean> {
+  if (!env.PROCESS_STATE) return false;
+  try {
+    const value = await env.PROCESS_STATE.get(negSentinelKey(key));
+    return value !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 写入 Negative Sentinel (上游故障时调用)
+ * 30s 内相同 key 的 fetch 会被跳过, 保护 AI budget
+ */
+export async function setNegativeSentinel(env: Env, key: string): Promise<void> {
+  if (!env.PROCESS_STATE) return;
+  try {
+    await env.PROCESS_STATE.put(negSentinelKey(key), '1', {
+      expirationTtl: NEG_SENTINEL_TTL,
+    });
+  } catch {
+    // 静默
+  }
+}
+
+/**
+ * 清除 Negative Sentinel (fetch 成功时调用)
+ * 成功获取数据后清理标记, 允许下次正常 fetch
+ */
+export async function clearNegativeSentinel(env: Env, key: string): Promise<void> {
+  if (!env.PROCESS_STATE) return;
+  try {
+    await env.PROCESS_STATE.delete(negSentinelKey(key));
+  } catch {
+    // 静默
+  }
+}
+
+/**
+ * 统计当前生效的 Negative Sentinel 数量
+ * 用于 health 端点 neg_sentinel_count 指标
+ */
+export async function countNegativeSentinels(env: Env): Promise<number> {
+  if (!env.PROCESS_STATE) return 0;
+  try {
+    const list = await env.PROCESS_STATE.list({ prefix: NEG_SENTINEL_PREFIX });
+    return list.keys?.length ?? 0;
+  } catch {
+    return 0;
   }
 }

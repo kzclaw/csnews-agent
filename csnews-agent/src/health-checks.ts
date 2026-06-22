@@ -9,7 +9,13 @@ import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { countAnomalySignals } from './zscore';
 import { getBudgetStatus } from './ai-budget';
 import { checkEntityCronHealth, supabaseHeaders } from './utils';
-import { getCacheMetrics, CACHE_PREFIX, getSeedMeta } from './cache';
+import {
+  getCacheMetrics,
+  CACHE_PREFIX,
+  NEG_SENTINEL_PREFIX,
+  getSeedMeta,
+  countNegativeSentinels,
+} from './cache';
 import type { TrendSnapshotRow } from './types';
 
 // ============================================================
@@ -801,4 +807,28 @@ export async function checkPullCacheFreshness(
       },
     };
   }
+}
+
+// ============================================================
+// 13. neg_sentinel_count — 当前生效的 Negative Sentinel 数量
+// ============================================================
+export async function checkNegativeSentinel(env: Env): Promise<{
+  neg_sentinel_count: number;
+  checks: {
+    neg_sentinel: { status: 'ok' | 'degraded'; detail: string };
+  };
+}> {
+  const count = await countNegativeSentinels(env);
+  return {
+    neg_sentinel_count: count,
+    checks: {
+      neg_sentinel: {
+        status: count === 0 ? 'ok' : 'degraded',
+        detail:
+          count === 0
+            ? 'no active sentinels (upstream healthy)'
+            : `${count} sentinel${count > 1 ? 's' : ''} active (${count} endpoint${count > 1 ? 's' : ''} skipping upstream)`,
+      },
+    },
+  };
 }

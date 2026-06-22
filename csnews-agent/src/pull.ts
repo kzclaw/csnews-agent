@@ -12,7 +12,15 @@
  */
 
 import { Env, supabaseFetch, safeJson } from './shared';
-import { cacheGet, cacheSet, makeCacheKey, DEFAULT_TTL_SECONDS } from './cache';
+import {
+  cacheGet,
+  cacheSet,
+  makeCacheKey,
+  DEFAULT_TTL_SECONDS,
+  isNegativeSentinel,
+  setNegativeSentinel,
+  clearNegativeSentinel,
+} from './cache';
 import type { NewsHotspotRow, PullTopicRow } from './types';
 
 // ====== Type 白名单配置(v0.31) ======
@@ -481,27 +489,63 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
     return cached as PullResponse;
   }
 
+  // Negative Sentinel 检查: 上游故障时跳过重试, 保护 AI budget
+  if (await isNegativeSentinel(env, cacheKey)) {
+    return {
+      type: filters.type,
+      count: 0,
+      total: 0,
+      truncated: false,
+      filters: {
+        limit: filters.limit,
+        order: filters.order,
+        order_by: filters.orderBy,
+        since: filters.since,
+        until: filters.until,
+        level: filters.level,
+        category: filters.category,
+        topic_id: filters.topicId,
+        status: filters.status,
+        stage: filters.stage,
+        fission_triggered: filters.fissionTriggered,
+        title_like: filters.titleLike,
+        select: filters.select,
+        format: filters.format,
+      },
+      items: [],
+    };
+  }
+
   let items: any[];
   let total: number;
 
-  if (filters.type === 'fission-pending') {
-    // 衍生视图,走专用查询
-    const result = await queryFissionPending(env, filters);
-    items = result.items;
-    total = result.total;
-  } else {
-    // 普通表查询(PostgREST)
-    const query = buildPostgRestQuery(filters);
-    const res = await supabaseFetch(env, `/rest/v1/${config.table}?${query}`);
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
-    }
-    items = ((await safeJson(res)) as PullTopicRow[]) || [];
+  try {
+    if (filters.type === 'fission-pending') {
+      // 衍生视图,走专用查询
+      const result = await queryFissionPending(env, filters);
+      items = result.items;
+      total = result.total;
+    } else {
+      // 普通表查询(PostgREST)
+      const query = buildPostgRestQuery(filters);
+      const res = await supabaseFetch(env, `/rest/v1/${config.table}?${query}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
+      }
+      items = ((await safeJson(res)) as PullTopicRow[]) || [];
 
-    // total: PostgREST 默认不在响应里;v0.31 阶段用 items.length 近似
-    // 精确 count 留给 v0.32 (Prefer: count=exact 头)
-    total = items.length;
+      // total: PostgREST 默认不在响应里;v0.31 阶段用 items.length 近似
+      // 精确 count 留给 v0.32 (Prefer: count=exact 头)
+      total = items.length;
+    }
+
+    // 成功: 清除 Negative Sentinel (cleanup)
+    await clearNegativeSentinel(env, cacheKey);
+  } catch (e: any) {
+    // 失败: 写入 Negative Sentinel, 30s 内跳过重试
+    await setNegativeSentinel(env, cacheKey);
+    throw e;
   }
 
   const projected = projectFormat(items, filters.format);
