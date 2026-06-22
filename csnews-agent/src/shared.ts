@@ -29,6 +29,10 @@ export interface Env {
    * 本次实施不绑 (handler 中 env.PROCESS_STATE 判空跳过, 后续 KR 启用)。
    */
   PROCESS_STATE?: KVNamespace;
+  /**
+   * Vectorize index for news_hotspots embedding vector storage.
+   */
+  VECTORIZE?: Vectorize;
 }
 
 export function getSupabaseHost(env: Env): string {

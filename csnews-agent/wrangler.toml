@@ -22,6 +22,10 @@ binding = "PROCESS_STATE"
 id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
 preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "csnews-news-vectors"
+
 [vars]
 # 2026-06-12 确定: WORKER_SELF_URL 真值走 CF Secret
 # (wrangler secret put WORKER_SELF_URL) — 不入 wrangler.toml / 不入 git

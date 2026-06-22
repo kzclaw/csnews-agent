@@ -35,3 +35,35 @@ interface R2Bucket {
   list(options?: any): Promise<any>;
   delete(key: string): Promise<void>;
 }
+
+// Vectorize binding interface (Cloudflare Workers)
+// Based on @cloudflare/workers-types Vectorize binding
+interface VectorizeVector {
+  id: string;
+  values: number[];
+  metadata?: Record<string, string | number | boolean>;
+}
+
+interface VectorizeQueryResult {
+  matches: Array<{
+    id: string;
+    score: number;
+    vector?: VectorizeVector;
+  }>;
+}
+
+// VectorizeAsyncMutation is returned by insert/upsert operations
+interface VectorizeAsyncMutation {
+  count?: number;
+}
+
+interface Vectorize {
+  insert(vectors: VectorizeVector[]): Promise<VectorizeAsyncMutation>;
+  query(options: {
+    vector: number[];
+    topK: number;
+    returnMetadata?: boolean;
+  }): Promise<VectorizeQueryResult>;
+  upsert(vectors: VectorizeVector[]): Promise<VectorizeAsyncMutation>;
+  deleteByIds(ids: string[]): Promise<void>;
+}

@@ -21,6 +21,7 @@ import {
   insertNewsHotspotsBatch,
   recordTrendWithMember,
   saveToR2,
+  dualWriteEmbeddingsToVectorize,
 } from './news-process';
 import { logEvent } from './log';
 import { resetCacheMetrics } from './cache';
@@ -225,6 +226,12 @@ export async function handleProcessAction(
       is_stored_r2: p.isStoredR2,
     }));
     const batchIds = await insertNewsHotspotsBatch(env, batchNewsArray);
+
+    // Dual-write embeddings to Vectorize
+    // Fire-and-forget: Vectorize failure should not block process flow
+    dualWriteEmbeddingsToVectorize(env, batchNewsArray, batchIds).catch((err) => {
+      console.error('[Vectorize] dual-write failed:', err);
+    });
 
     // record_trend_with_member: 合并 joinTopicMember + recordTrendSnapshot 为 1 RPC
     for (let i = 0; i < pendingNews.length; i++) {
