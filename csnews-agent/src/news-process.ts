@@ -4,6 +4,7 @@
 //用途：News Self Growth 流水线核心 · 9 个函数实现话题簇/新闻/查重/趋势/存储
 import { Env, supabaseFetch, safeJson } from './shared';
 import { logEvent } from './log';
+import { VectorizeClient } from './vectorize';
 import type {
   CleanupStaleTopicsResult,
   SimilarNewsItem,
@@ -24,13 +25,49 @@ export async function cleanupStaleTopics(env: Env) {
   return json[0] || { deleted_topic_count: 0, deleted_news_count: 0 };
 }
 
-//向量查重:查相似新闻
+//向量查重:查相似新闻 (Vectorize-first with Supabase fallback)
 export async function findSimilarNews(
   env: Env,
   embedding: number[],
   threshold = 0.88,
   matchCount = 5
-) {
+): Promise<SimilarNewsItem[]> {
+  // Try Vectorize first
+  const vectorClient = new VectorizeClient(env.VECTORIZE);
+  if (vectorClient.isAvailable()) {
+    try {
+      const vectorResults = await vectorClient.query(embedding, matchCount);
+      if (vectorResults.length > 0) {
+        // Fetch topic_ids from Supabase for the Vectorize results
+        const ids = vectorResults.map((r) => r.id);
+        const idsParam = ids.map((id) => `"${id}"`).join(',');
+        const res = await supabaseFetch(
+          env,
+          `/rest/v1/news_hotspots?id=in.(${idsParam})&select=id,topic_id`,
+          { method: 'GET' }
+        );
+        if (res.ok) {
+          const newsItems = (await safeJson(res)) as Array<{ id: string; topic_id: string | null }>;
+          // Map scores back to results
+          const scoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
+          const results: SimilarNewsItem[] = newsItems
+            .filter((n) => n.topic_id)
+            .map((n) => ({
+              topic_id: n.topic_id!,
+              similarity: scoreMap.get(n.id) || 0,
+            }));
+          console.log(`[findSimilarNews] Vectorize hit: ${results.length} results`);
+          return results;
+        }
+        console.warn('[findSimilarNews] Failed to fetch topic_ids from Supabase');
+      }
+    } catch (err) {
+      console.warn('[findSimilarNews] Vectorize query failed, falling back to Supabase:', err);
+    }
+  }
+
+  // Phase 2: Fall back to Supabase pgvector
+  console.log('[findSimilarNews] Using Supabase fallback');
   const res = await supabaseFetch(env, '/rest/v1/rpc/find_similar_news', {
     method: 'POST',
     body: JSON.stringify({ query_embedding: embedding, threshold, match_count: matchCount }),
@@ -118,6 +155,18 @@ export async function insertNewsHotspot(
     method: 'POST',
     body: JSON.stringify(newsWithId),
   });
+
+  // Dual-write embedding to Vectorize
+  if (news.embedding && news.embedding.length > 0) {
+    const vectorClient = new VectorizeClient(env.VECTORIZE);
+    vectorClient.upsert(news.embedding, id, {
+      title: news.title,
+      category: news.category || '',
+    }).catch((err) => {
+      console.error('[Vectorize] dual-write failed:', err);
+    });
+  }
+
   return id;
 }
 
@@ -241,6 +290,53 @@ export async function insertNewsHotspotsBatch(
   );
   //返 ids 按输入顺序 (Supabase PostgREST 保证 RETURNING 顺序 = INSERT 顺序)
   return Array.isArray(data) ? data.map((r) => r.id) : [];
+}
+
+// Dual-write embeddings to Vectorize after batch insert
+// Called after insertNewsHotspotsBatch returns successfully
+export async function dualWriteEmbeddingsToVectorize(
+  env: Env,
+  newsList: Array<{
+    title: string;
+    category?: string;
+    embedding?: number[];
+  }>,
+  ids: string[]
+): Promise<void> {
+  const vectorClient = new VectorizeClient(env.VECTORIZE);
+  if (!vectorClient.isAvailable()) {
+    console.warn('[Vectorize] binding not available, skipping dual-write');
+    return;
+  }
+
+  const vectors: Array<{ id: string; values: number[]; metadata?: Record<string, string | number | boolean> }> = [];
+
+  for (let i = 0; i < newsList.length; i++) {
+    const news = newsList[i];
+    const id = ids[i];
+    if (news.embedding && news.embedding.length > 0 && id) {
+      vectors.push({
+        id,
+        values: news.embedding,
+        metadata: {
+          title: news.title,
+          category: news.category || '',
+        },
+      });
+    }
+  }
+
+  if (vectors.length === 0) {
+    return;
+  }
+
+  try {
+    await env.VECTORIZE!.upsert(vectors);
+    console.log(`[Vectorize] dual-write batch upserted ${vectors.length} vectors`);
+  } catch (err) {
+    console.error('[Vectorize] dual-write batch failed:', err);
+    // Don't throw — Vectorize failure should not block process flow
+  }
 }
 
 //合并 join_topic_member + record_trend_snapshot 为 1 个 RPC

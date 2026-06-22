@@ -353,24 +353,40 @@ export async function scheduledArchiveOldEntities(
 
   try {
     // Step 1: 查 30d+ entity_hot (cutoff = now - 30 days)
+    // Loop to fetch all old entities (fix: 30d+ 超过 1000 行时也要全部拉回来)
     const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-    const selectRes = await fetch(
-      `${getSupabaseHost(env)}/rest/v1/entity_hot?created_at=lt.${cutoff}&limit=1000`,
-      {
-        headers: supabaseHeaders(env),
-      }
-    );
-    if (!selectRes.ok) {
-      const errText = await selectRes.text();
-      throw new Error(`SELECT failed HTTP ${selectRes.status}: ${errText.slice(0, 200)}`);
-    }
-    const oldEntities = (await selectRes.json()) as Array<{
+    const allOldEntities: Array<{
       id: string;
       name: string;
       type: string;
       status: string;
-      // ... 其他字段
-    }>;
+    }> = [];
+    let page = 0;
+    const PAGE_SIZE = 1000;
+    while (true) {
+      const offset = page * PAGE_SIZE;
+      const selectRes = await fetch(
+        `${getSupabaseHost(env)}/rest/v1/entity_hot?created_at=lt.${cutoff}&limit=${PAGE_SIZE}&offset=${offset}&order=created_at`,
+        {
+          headers: supabaseHeaders(env),
+        }
+      );
+      if (!selectRes.ok) {
+        const errText = await selectRes.text();
+        throw new Error(`SELECT failed HTTP ${selectRes.status}: ${errText.slice(0, 200)}`);
+      }
+      const batch = (await selectRes.json()) as Array<{
+        id: string;
+        name: string;
+        type: string;
+        status: string;
+      }>;
+      if (batch.length === 0) break;
+      allOldEntities.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+      page++;
+    }
+    const oldEntities = allOldEntities;
 
     if (oldEntities.length === 0) {
       const elapsed = Date.now() - start;
