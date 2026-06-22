@@ -12,6 +12,8 @@
  *
  * 加新 action 时: ALLOWED_ACTIONS 加 + dispatchAction 加 1 行 + 此文件 describe 块补 1 个 it
  * 详见：tasks/csnews-agent-okr.md KR0
+ *
+ * v0.36.26 O13-MCP: 新增 2 个 MCP action (mcp / mcp-list) → 总计 23 个
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -29,8 +31,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 21 个 action', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(21);
+  it('ALLOWED_ACTIONS 必须含 23 个 action (v0.36.26 新增 mcp / mcp-list)', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(23);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {
@@ -53,6 +55,8 @@ describe('业务常量', () => {
     expect(ALLOWED_ACTIONS).toContain('content');
     expect(ALLOWED_ACTIONS).toContain('trend');
     expect(ALLOWED_ACTIONS).toContain('knowledge');
+    expect(ALLOWED_ACTIONS).toContain('mcp');
+    expect(ALLOWED_ACTIONS).toContain('mcp-list');
   });
 });
 
@@ -147,7 +151,7 @@ describe('dispatchAction · unknown action 处理', () => {
 // ============================================================
 // dispatchAction · action 路由正确性
 // ============================================================
-describe('dispatchAction · 19 action 路由正确性 (mock handler 路径)', () => {
+describe('dispatchAction · 21 action 路由正确性 (mock handler 路径)', () => {
   function makeMocks() {
     const env: any = { BEARER_TOKEN: 'test-token' };
     const ctx: any = { waitUntil: vi.fn() };
@@ -179,6 +183,8 @@ describe('dispatchAction · 19 action 路由正确性 (mock handler 路径)', ()
     'content',
     'trend',
     'knowledge',
+    'mcp',
+    'mcp-list',
   ];
 
   for (const action of actionsToTest) {

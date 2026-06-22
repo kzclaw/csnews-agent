@@ -13,10 +13,13 @@
 //                                 runKnowledgeAccumulation)
 //   - endpoints-entity.ts  ·  2 handler (entity/event)
 //
+// v0.36.26: 新增 MCP Server (O13-MCP)
+//   - mcp-handler.ts · 6 个 MCP 工具 (stateless HTTP + JSON-RPC 2.0)
+//
 // 业务契约：
 //   - 公开 API 不变：所有 handler 仍从 './endpoints' 导入
 //   - dispatch.ts 0 改动 · scheduled.ts 0 改动
-//   - 新代码应直接 import 对应子文件 (core/process/trend/entity)
+//   - 新代码应直接 import 对应子文件 (core/process/trend/entity/mcp)
 //   - 本文件仅 re-export, 0 业务逻辑
 // ============================================================
 
@@ -50,3 +53,6 @@ export {
 
 // entity (2)
 export { handleEntityAction, handleEventAction } from './endpoints-entity';
+
+// mcp (2) — O13-MCP MCP Server
+export { handleMCPAction, handleMCPListAction } from './mcp-handler';

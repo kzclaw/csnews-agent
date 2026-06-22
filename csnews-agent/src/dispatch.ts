@@ -40,6 +40,8 @@ import {
   handleKnowledgeAction,
   handleEntityAction,
   handleEventAction,
+  handleMCPAction,
+  handleMCPListAction,
 } from './endpoints';
 
 /**
@@ -68,6 +70,8 @@ export const ALLOWED_ACTIONS = [
   'knowledge',
   'entity',
   'event',
+  'mcp',
+  'mcp-list',
 ] as const;
 export type Action = (typeof ALLOWED_ACTIONS)[number];
 
@@ -136,6 +140,8 @@ export async function dispatchAction(
   if (action === 'knowledge') return await handleKnowledgeAction(request, env, url, cors, ctx);
   if (action === 'entity') return await handleEntityAction(request, env, url, cors, ctx);
   if (action === 'event') return await handleEventAction(request, env, url, cors, ctx);
+  if (action === 'mcp') return await handleMCPAction(request, env, url, cors, ctx);
+  if (action === 'mcp-list') return handleMCPListAction(request, cors);
 
   // unknown action
   return new Response(JSON.stringify({ error: 'unknown action' }), {

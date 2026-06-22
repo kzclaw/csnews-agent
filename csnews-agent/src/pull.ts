@@ -81,6 +81,24 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     allowedFilters: [],
     timeField: 'created_at',
   },
+  // trends: 趋势快照查询 trend_snapshots 表,用于 get_trending_velocity 和 get_topic_acceleration
+  trends: {
+    table: 'trend_snapshots',
+    defaultOrderBy: 'velocity',
+    allowedOrderBy: ['velocity', 'acceleration', 'score', 'created_at'],
+    defaultSelect: 'id, topic_id, score, velocity, acceleration, stage, created_at',
+    allowedFilters: ['topic_id'],
+    timeField: 'created_at',
+  },
+  // stats: 统计汇总视图,查询 news_hotspots / topics / warnings 各表 count
+  stats: {
+    table: 'news_hotspots',
+    defaultOrderBy: 'created_at',
+    allowedOrderBy: ['created_at'],
+    defaultSelect: 'id, created_at',
+    allowedFilters: [],
+    timeField: 'created_at',
+  },
 };
 
 // ====== format 三档投影 ======
@@ -146,6 +164,9 @@ export interface ParsedFilters {
 export const VALID_LEVELS = ['follow', 'important', 'explosive'];
 export const VALID_STATUS = ['open', 'acknowledged', 'validated', 'dismissed', 'closed'];
 export const VALID_STAGES = ['emerging', 'growing', 'hot', 'mature', 'declining'];
+
+// Add stage to trends filters
+TYPE_CONFIG.trends.allowedFilters.push('stage');
 export const VALID_FORMATS: Format[] = ['ids', 'summary', 'full'];
 
 /**
