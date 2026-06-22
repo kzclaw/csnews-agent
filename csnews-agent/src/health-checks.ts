@@ -687,126 +687,278 @@ export function checkCacheMetrics(): {
 }
 
 // ============================================================
-// 12. pull_cache_freshness — 按 news / entity / event 分组检查 pull 缓存新鲜度
+// 12. pull_cache_freshness — 按 news / entity / event / trend / knowledge 分组检查 pull 缓存新鲜度
+// 按数据源分组 + per-key 新鲜度
 // ============================================================
+
+/** 单个缓存 key 的健康信息 */
+export interface CacheKeyHealth {
+  key: string;
+  recordCount: number;
+  maxContentAgeMin: number;
+  fetchedAt: string;
+  state: 'ok' | 'error' | 'empty';
+  /** 根据 maxContentAgeMin 计算的 key 级别状态 */
+  keyStatus: 'ok' | 'stale' | 'down';
+}
+
+/** 单个分组的健康信息 */
+export interface HealthGroup {
+  status: 'ok' | 'degraded' | 'down' | 'unknown';
+  keys: CacheKeyHealth[];
+  cascadedFrom?: string; // 上游组名 (cascade 降级时填充)
+}
+
+/** 计算单个 key 的状态 */
+function calcKeyStatus(maxContentAgeMin: number): 'ok' | 'stale' | 'down' {
+  if (maxContentAgeMin < 0) return 'ok'; // 未知, 不降级
+  if (maxContentAgeMin > 360) return 'down'; // > 6h = down
+  if (maxContentAgeMin > 180) return 'stale'; // > 3h = stale (degraded)
+  return 'ok';
+}
+
+/** 计算分组的综合状态 (基于所有 keys) */
+function calcGroupStatus(keys: CacheKeyHealth[]): 'ok' | 'degraded' | 'down' | 'unknown' {
+  if (keys.length === 0) return 'unknown';
+  let hasDown = false;
+  let hasStale = false;
+  for (const k of keys) {
+    if (k.keyStatus === 'down') hasDown = true;
+    if (k.keyStatus === 'stale') hasStale = true;
+  }
+  if (hasDown) return 'down';
+  if (hasStale) return 'degraded';
+  return 'ok';
+}
+
+/**
+ * 按 type 字段映射到数据源分组
+ * - news: news_hotspots 相关缓存
+ * - entity: entity 表缓存
+ * - event: event 表缓存
+ * - trend: trend_snapshots 相关缓存
+ * - knowledge: knowledge 累积缓存
+ */
+function mapTypeToGroup(type: string): string {
+  if (type === 'news' || type === 'topics' || type === 'warnings' || type === 'fission-pending') {
+    return 'news';
+  }
+  if (type === 'entity') return 'entity';
+  if (type === 'event') return 'event';
+  if (type === 'trend') return 'trend';
+  if (type === 'knowledge') return 'knowledge';
+  return 'unknown';
+}
+
 export async function checkPullCacheFreshness(
   env: Env,
   ts: number
 ): Promise<{
   pull_cache_freshness: {
-    news: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
-    entity: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
-    event: { count: number; maxAgeMin: number; oldestCachedAt: string | null };
-    unknown: { count: number };
+    groups: Record<string, HealthGroup>;
+    /** 全局综合状态 */
+    overallStatus: 'ok' | 'degraded' | 'down' | 'unknown';
   };
   checks: {
     pull_cache_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
   };
 }> {
-  const groups = {
-    news: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
-    entity: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
-    event: { count: 0, maxAgeMin: 0, oldestCachedAt: null as string | null },
-    unknown: { count: 0 },
+  // 初始化所有组
+  const groupKeys: Record<string, CacheKeyHealth[]> = {
+    news: [],
+    entity: [],
+    event: [],
+    trend: [],
+    knowledge: [],
+    unknown: [],
   };
+
   const checks: any = {};
 
   try {
     if (!env.PROCESS_STATE) {
+      const emptyGroups = Object.fromEntries(
+        Object.keys(groupKeys).map((k) => [k, { status: 'down' as const, keys: [] }])
+      );
       return {
-        pull_cache_freshness: groups,
+        pull_cache_freshness: { groups: emptyGroups, overallStatus: 'down' },
         checks: { pull_cache_freshness: { status: 'down', detail: 'PROCESS_STATE KV missing' } },
       };
     }
 
     // 列出所有 cache:pull:* keys
     const list = await env.PROCESS_STATE.list({ prefix: CACHE_PREFIX + 'pull:' });
-    const keys = list.keys || [];
+    const kvKeys = list.keys || [];
 
-    for (const kvKey of keys) {
+    for (const kvKey of kvKeys) {
       try {
         const raw = await env.PROCESS_STATE.get(kvKey.name);
         if (!raw) continue;
         const parsed = JSON.parse(raw);
         const seed = getSeedMeta(parsed);
         if (!seed || seed.state === 'error') {
-          groups.unknown.count++;
+          // 无 seed 元数据, 归入 unknown
+          groupKeys.unknown.push({
+            key: kvKey.name,
+            recordCount: 0,
+            maxContentAgeMin: -1,
+            fetchedAt: '',
+            state: 'error',
+            keyStatus: 'ok',
+          });
           continue;
         }
         const data = parsed.data as { type?: string } | undefined;
         const type = data?.type ?? 'unknown';
-        const fetchedAtMs = Date.parse(seed.fetchedAt);
-        const ageMin = seed.maxContentAgeMin >= 0 ? seed.maxContentAgeMin : -1;
+        const groupName = mapTypeToGroup(type);
+        const maxContentAgeMin = seed.maxContentAgeMin >= 0 ? seed.maxContentAgeMin : -1;
 
-        if (type === 'news' || type === 'trends' || type === 'fission-pending') {
-          groups.news.count++;
-          if (ageMin > groups.news.maxAgeMin) groups.news.maxAgeMin = ageMin;
-          if (
-            fetchedAtMs > 0 &&
-            (groups.news.oldestCachedAt === null ||
-              fetchedAtMs < Date.parse(groups.news.oldestCachedAt))
-          ) {
-            groups.news.oldestCachedAt = seed.fetchedAt;
-          }
-        } else if (type === 'entity') {
-          groups.entity.count++;
-          if (ageMin > groups.entity.maxAgeMin) groups.entity.maxAgeMin = ageMin;
-          if (
-            fetchedAtMs > 0 &&
-            (groups.entity.oldestCachedAt === null ||
-              fetchedAtMs < Date.parse(groups.entity.oldestCachedAt))
-          ) {
-            groups.entity.oldestCachedAt = seed.fetchedAt;
-          }
-        } else if (type === 'event') {
-          groups.event.count++;
-          if (ageMin > groups.event.maxAgeMin) groups.event.maxAgeMin = ageMin;
-          if (
-            fetchedAtMs > 0 &&
-            (groups.event.oldestCachedAt === null ||
-              fetchedAtMs < Date.parse(groups.event.oldestCachedAt))
-          ) {
-            groups.event.oldestCachedAt = seed.fetchedAt;
-          }
-        } else {
-          groups.unknown.count++;
-        }
+        groupKeys[groupName].push({
+          key: kvKey.name,
+          recordCount: seed.recordCount,
+          maxContentAgeMin,
+          fetchedAt: seed.fetchedAt,
+          state: seed.state,
+          keyStatus: calcKeyStatus(maxContentAgeMin),
+        });
       } catch {
-        groups.unknown.count++;
+        groupKeys.unknown.push({
+          key: kvKey.name,
+          recordCount: 0,
+          maxContentAgeMin: -1,
+          fetchedAt: '',
+          state: 'error',
+          keyStatus: 'ok',
+        });
       }
     }
 
-    // 健康判断: news 表是核心, stale > 3h = down, > 1.5h = degraded
-    const newsAge = groups.news.maxAgeMin;
-    let overallStatus: 'ok' | 'degraded' | 'down' | 'unknown' = 'ok';
-    if (newsAge < 0) {
-      overallStatus = 'unknown';
-    } else if (newsAge > 180) {
-      overallStatus = 'down';
-    } else if (newsAge > 90) {
-      overallStatus = 'degraded';
+    // 构建带状态的 groups 对象
+    const groups: Record<string, HealthGroup> = {};
+    for (const [name, keys] of Object.entries(groupKeys)) {
+      groups[name] = {
+        status: calcGroupStatus(keys),
+        keys,
+      };
     }
 
+    // 全局状态 = news 组状态 (核心数据源)
+    const overallStatus = groups.news?.status ?? 'unknown';
+
+    const newsCount = groups.news?.keys.length ?? 0;
+    const newsMaxAge =
+      groups.news?.keys.reduce((max, k) => Math.max(max, k.maxContentAgeMin), -1) ?? -1;
     checks.pull_cache_freshness = {
       status: overallStatus,
       detail:
-        newsAge >= 0
-          ? `news=${groups.news.count} entries, oldest content ${newsAge}min old`
-          : `${groups.news.count} entries, maxContentAgeMin unavailable (legacy)`,
+        newsCount > 0 && newsMaxAge >= 0
+          ? `news=${newsCount} entries, oldest content ${newsMaxAge}min old`
+          : `${newsCount} entries, maxContentAgeMin unavailable (legacy)`,
     };
 
     return {
-      pull_cache_freshness: groups,
+      pull_cache_freshness: { groups, overallStatus },
       checks: { pull_cache_freshness: checks.pull_cache_freshness },
     };
   } catch (e: any) {
+    const emptyGroups = Object.fromEntries(
+      Object.keys(groupKeys).map((k) => [k, { status: 'unknown' as const, keys: [] }])
+    );
     return {
-      pull_cache_freshness: groups,
+      pull_cache_freshness: { groups: emptyGroups, overallStatus: 'unknown' },
       checks: {
         pull_cache_freshness: { status: 'unknown', detail: `list failed: ${e?.message}` },
       },
     };
   }
+}
+
+// ============================================================
+// 12b. cascade_dependency_chain — cascade 依赖降级
+// ============================================================
+
+/**
+ * Cascade 依赖链定义
+ * 上游 down → 下游自动降级为 degraded (即使自身 key 正常)
+ *
+ * 依赖链:
+ *   news (core)
+ *     ↓
+ *   entity (依赖 news)
+ *     ↓
+ *   event (依赖 entity)
+ *
+ *   trend (依赖 entity)
+ *     ↓
+ *   knowledge (依赖 trend)
+ */
+export const CASCADE_DEPENDENCY_CHAIN: Record<string, string | undefined> = {
+  news: undefined, // 顶层, 无上游
+  entity: 'news',
+  event: 'entity',
+  trend: 'entity',
+  knowledge: 'trend',
+};
+
+/**
+ * 应用 cascade 依赖降级
+ * - 上游组 down → 下游组降级为 degraded (保留 keys 信息, 标记 cascadedFrom)
+ * - 上游组 degraded → 下游组不降级 (只影响自身)
+ */
+export function applyCascadeDependencies(
+  groups: Record<string, HealthGroup>
+): Record<string, HealthGroup> {
+  const result: Record<string, HealthGroup> = {};
+
+  // 按依赖顺序处理 (news → entity → event/trend → knowledge)
+  const order = ['news', 'entity', 'event', 'trend', 'knowledge'];
+  const processed = new Set<string>();
+
+  for (const name of order) {
+    if (!groups[name]) continue;
+    const group = { ...groups[name] };
+    const upstream = CASCADE_DEPENDENCY_CHAIN[name];
+
+    if (upstream && groups[upstream] && groups[upstream].status === 'down') {
+      // 上游 down, 当前组降级为 degraded
+      group.status = 'degraded';
+      group.cascadedFrom = upstream;
+    }
+
+    result[name] = group;
+    processed.add(name);
+  }
+
+  // 复制未处理组 (unknown 等)
+  for (const [name, group] of Object.entries(groups)) {
+    if (!processed.has(name)) {
+      result[name] = group;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 计算 cascade 后的全局状态
+ * - 任意组 down → 全局 down
+ * - 任意组 degraded (包括 cascade 降级) → 全局 degraded
+ * - 全部 ok → ok
+ */
+export function calcOverallStatusWithCascade(
+  groups: Record<string, HealthGroup>
+): 'ok' | 'degraded' | 'down' {
+  let hasDown = false;
+  let hasDegraded = false;
+
+  for (const group of Object.values(groups)) {
+    if (group.status === 'down') hasDown = true;
+    if (group.status === 'degraded') hasDegraded = true;
+  }
+
+  if (hasDown) return 'down';
+  if (hasDegraded) return 'degraded';
+  return 'ok';
 }
 
 // ============================================================
