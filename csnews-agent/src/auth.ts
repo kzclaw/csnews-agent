@@ -12,7 +12,25 @@ import { Env } from './shared';
 export function authRequest(request: Request, env: Env): Response | null {
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.replace('Bearer ', '');
-  if (token !== env.BEARER_TOKEN) {
+  const encoder = new TextEncoder();
+  const expected = encoder.encode(env.BEARER_TOKEN);
+  const provided = encoder.encode(token);
+
+  // Length check first to prevent timing leak on length mismatch
+  if (expected.length !== provided.length) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Constant-time comparison to prevent timing attacks
+  // timingSafeEqual is part of Web Crypto API (available in CF Workers runtime)
+  // TypeScript lib may not include it; cast to bypass incomplete type definition
+  const subtle = crypto.subtle as SubtleCrypto & {
+    timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
+  };
+  if (!subtle.timingSafeEqual(expected, provided)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
