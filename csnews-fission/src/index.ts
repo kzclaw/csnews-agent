@@ -4,7 +4,7 @@
  * Cloudflare Workers + Workers AI + Supabase + R2
  *
  * 职责：
- *   - Cron Trigger：每 30 分钟扫描 explosive + score=9 的 topic，执行裂变
+ *   - Cron Trigger：每 6 小时扫描 explosive + score=9 的 topic，执行裂变
  *   - HTTP fetch：健康检查 + 手动触发裂变
  *
  * 架构（monorepo 子目录）：
@@ -22,7 +22,9 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';
-  if (action !== 'ping') {
+  if (action === 'ping') {
+    // ping 无需鉴权
+  } else {
     const deny = authRequest(request, env);
     if (deny) return deny;
   }
