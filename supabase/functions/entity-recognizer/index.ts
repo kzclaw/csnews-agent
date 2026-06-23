@@ -1,9 +1,10 @@
 /**
  * entity-recognizer Edge Function
- * O4KR1 Entity Engine — Phase 2: Keyword-based NER
+ * Keyword-based NER — scans news titles/summaries,
+ * upserts entities (name_hash dedup), computes co-occurrence relations.
  *
- * v0.34 placeholder: keyword match against entity_keyword_dict
- * v0.35+: upgrade to Workers AI NER (Kimi K2.5) for L4+ signals
+ * Phase 1: keyword match against entity_keyword_dict
+ * Phase 2: upgrade to Workers AI NER for high-confidence signals
  *
  * Input:  { news_item_id: string }
  * Output: { entity_ids: string[], entities: {id, name, type}[] }
@@ -92,7 +93,7 @@ serve(async (req: Request) => {
     }
 
     // ── Step 4: Upsert entities into entity table ────────────────────
-    // Build hashStr for dedup (consistent with O5KR2 topic_key approach)
+    // Build hashStr for dedup (consistent with topic_key dedup approach)
     const entityUpserts = matchedKeywords.map((kw: { keyword: string; type: string }) => ({
       name: kw.keyword,
       name_hash: hashStr(kw.keyword),
@@ -143,7 +144,7 @@ serve(async (req: Request) => {
       .eq('id', news_item_id)
 
     // ── Step 7: Compute co-occurrence entity relations ─────────────────
-    // O4KR1 placeholder: co-occurrence only (Signal Engine in O11)
+    // Phase 1 placeholder: co-occurrence only (Signal Engine in future phase)
     await computeCoOccurrenceRels(supabase, entityIds, news_item_id)
 
     return new Response(
@@ -183,8 +184,8 @@ function hashStr(str: string): string {
 /**
  * Compute co-occurrence entity relations.
  * For entities appearing in the same news item, increment co-occurrence count.
- * v0.34: simple co-occurrence only
- * v0.35+: Signal Engine will enrich with weight/confidence
+ * Phase 1: simple co-occurrence only
+ * Phase 2: Signal Engine will enrich with weight/confidence
  */
 async function computeCoOccurrenceRels(
   supabase: ReturnType<typeof createClient>,
