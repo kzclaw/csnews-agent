@@ -1,10 +1,10 @@
 /**
  * CSNEWS Agent · dispatch utility 业务契约 (v0.36.10 · KR0)
  *
- * 唯一目标：守住"16 action dispatch 路由表就是这样"（当前实现的 snapshot）
+ * 唯一目标：守住"24 action dispatch 路由表就是这样"（当前实现的 snapshot）
  *
  * 业务红线:
- *   - 16 个支持 action 白名单 (ALLOWED_ACTIONS): pull/diag/ping/model-test/ai-test/score/classify/batch-score/fission/save/list/embed/zaker-hot/process/health/logs/content/trend/knowledge
+ *   - 24 个支持 action 白名单 (ALLOWED_ACTIONS): pull/ping/model-test/ai-test/score/classify/batch-score/fission/save/list/embed/zaker-hot/rescore/process/health/logs/content/trend/knowledge/entity/event/mcp/mcp-list/feedback-check
  *   - DEFAULT_ACTION = 'ping' (空 action fallback)
  *   - handleCorsPreflight: OPTIONS 请求返 200 + CORS 头, 其他 method 返 null
  *   - dispatchAction: unknown action 返 400 + { error: "unknown action" }
@@ -13,7 +13,8 @@
  * 加新 action 时: ALLOWED_ACTIONS 加 + dispatchAction 加 1 行 + 此文件 describe 块补 1 个 it
  * 详见：tasks/csnews-agent-okr.md KR0
  *
- * v0.36.26 O13-MCP: 新增 2 个 MCP action (mcp / mcp-list) → 总计 23 个
+ * v0.36.26 O13-MCP: 新增 2 个 MCP action (mcp / mcp-list)
+ * O11 KR1: 新增 1 个 feedback-check action → 总计 24 个
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -31,8 +32,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 23 个 action (v0.36.26 新增 mcp / mcp-list)', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(23);
+  it('ALLOWED_ACTIONS 必须含 24 个 action (v0.36.26 新增 mcp/mcp-list + O11 KR1 feedback-check)', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(24);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {

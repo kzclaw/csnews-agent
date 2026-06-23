@@ -23,6 +23,7 @@ import { handleProcessAction, runKnowledgeAccumulation } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
 import { runEventProcess } from './event-process';
+import { runFeedbackCheck } from './feedback';
 
 /**
  * 整点 cron 触发后的完整流程
@@ -499,6 +500,74 @@ export async function scheduledArchiveOldEntities(
         env,
         'error',
         '[cron] archive failed',
+        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        'scheduler'
+      ).catch(() => {})
+    );
+  }
+}
+
+
+/**
+ * 每日 04:00 UTC cron 触发 O11 Feedback Loop (v0.36.22)
+ *
+ * 流程:
+ *   1. 写 [cron] feedback triggered log
+ *   2. inline 调 runFeedbackCheck (查 open warnings → RPC → 调权 → R2)
+ *   3. 写 [cron] feedback done/error log
+ *
+ * 失败处理:
+ *   - runFeedbackCheck 抛错 → log error + 不阻塞
+ *   - log 写失败 → catch 兜底
+ *
+ * 频率: 每日 1 次 (04:00 UTC, 错开 process/entity/event cron)
+ * 0 Neurons (纯 SQL + R2 操作)
+ * 占用 CF Free Plan cron slot: 5→4 (4 existing + 1 this)
+ */
+export async function scheduledFeedback(
+  env: Env,
+  ctx: ExecutionContext,
+  controller: ScheduledController
+): Promise<void> {
+  const start = Date.now();
+  const ts = new Date().toISOString();
+  const cron = controller?.cron || 'unknown';
+
+  console.log(`[cron] feedback triggered at ${ts} cron=${cron}`);
+  ctx.waitUntil(
+    logEvent(env, 'info', '[cron] feedback triggered', { cron, ts }, 'scheduler').catch(() => {})
+  );
+
+  try {
+    const result = await runFeedbackCheck(env);
+    const elapsed = Date.now() - start;
+    console.log(
+      `[cron] feedback done processed=${result.processed} validated=${result.validated} dismissed=${result.dismissed} pending=${result.pending} errors=${result.errors} elapsed=${elapsed}ms`
+    );
+    ctx.waitUntil(
+      logEvent(
+        env,
+        'info',
+        '[cron] feedback done',
+        {
+          processed: result.processed,
+          validated: result.validated,
+          dismissed: result.dismissed,
+          pending: result.pending,
+          errors: result.errors,
+          elapsed_ms: elapsed,
+        },
+        'scheduler'
+      ).catch(() => {})
+    );
+  } catch (e: any) {
+    const elapsed = Date.now() - start;
+    console.error(`[cron] feedback failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    ctx.waitUntil(
+      logEvent(
+        env,
+        'error',
+        '[cron] feedback failed',
         { elapsed_ms: elapsed, err: e?.message || String(e) },
         'scheduler'
       ).catch(() => {})

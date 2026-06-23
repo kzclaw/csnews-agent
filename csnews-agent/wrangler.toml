@@ -57,8 +57,12 @@ index_name = "csnews-news-vectors"
 #   - 频率设计:每月 1 次(数据量稳态 150-300 行,1 个月归档 1 次够)
 #   - 0 Neurons(纯 SQL + R2 操作)
 #   - 业务: active 30d+ → R2 entity-archive-YYYY-MM.json / reviewed 30d+ → R2 entity-reviewed-YYYY.json (永久保留)
+# 每日 04:00(UTC)跑 O11 Feedback Loop — warning 24/48/72h 复查 + accuracy-based 调权 (v0.36.22)
+#   - 频率设计:每日 1 次(错开 process/entity/event cron)
+#   - 0 Neurons(纯 SQL + R2 操作)
+#   - 业务: 查 open warnings → record_feedback RPC → 调 score_rule_weights → 写 R2 accuracy
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *", "0 0 1 * *" ]
+crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *", "0 0 1 * *", "0 4 * * *" ]
 
 

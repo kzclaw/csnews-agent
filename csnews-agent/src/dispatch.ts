@@ -43,6 +43,7 @@ import {
   handleMCPAction,
   handleMCPListAction,
 } from './endpoints';
+import { handleFeedbackCheckAction } from './feedback';
 
 /**
  * 20 个支持 action（白名单）
@@ -72,6 +73,7 @@ export const ALLOWED_ACTIONS = [
   'event',
   'mcp',
   'mcp-list',
+  'feedback-check',
 ] as const;
 export type Action = (typeof ALLOWED_ACTIONS)[number];
 
@@ -142,6 +144,13 @@ export async function dispatchAction(
   if (action === 'event') return await handleEventAction(request, env, url, cors, ctx);
   if (action === 'mcp') return await handleMCPAction(request, env, url, cors, ctx);
   if (action === 'mcp-list') return handleMCPListAction(request, cors);
+  if (action === 'feedback-check') {
+    const { ok, result, elapsed_ms } = await handleFeedbackCheckAction(env);
+    return new Response(JSON.stringify({ ok, result, elapsed_ms }), {
+      status: ok ? 200 : 500,
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
 
   // unknown action
   return new Response(JSON.stringify({ error: 'unknown action' }), {
