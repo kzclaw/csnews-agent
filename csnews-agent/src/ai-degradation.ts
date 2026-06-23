@@ -24,7 +24,7 @@ export interface DegradedInsight {
   level: DegradationLevel;
   neurons_used: number;
   reason: string;
-  topic_title?: string;
+  topic_title: string;
   record_id: string;
 }
 
@@ -63,20 +63,20 @@ export function getDegradationMessage(level: string): string {
  * @param env         - Worker Env (含 csnews_raw R2 binding + AI_USAGE_KV)
  * @param warning_id  - 记录 ID (作为文件名和内容标识)
  * @param level       - 降级档位 (warning | critical | shutdown)
- * @param topic_title - 可选，topic 标题
+ * @param topic_title - topic 标题
  * @returns void (写入失败静默，不阻断主流程)
  *
  * 占位文档内容包含:
  *   - 触发时间 (UTC)
  *   - 当前 Neurons 用量
  *   - 降级原因
- *   - topic 标题 (如有)
+ *   - topic 标题
  */
 export async function writeDegradedInsight(
   env: Env,
   warning_id: string,
   level: string,
-  topic_title?: string
+  topic_title: string
 ): Promise<void> {
   if (!env.csnews_raw) {
     console.warn('[degradation] csnews_raw binding missing, skip R2 write');
@@ -111,7 +111,7 @@ export async function writeDegradedInsight(
     `| level | ${insight.level} |`,
     `| neurons_used | ${insight.neurons_used} |`,
     `| reason | ${insight.reason} |`,
-    topic_title ? `| topic_title | ${topic_title} |` : null,
+    `| topic_title | ${topic_title} |`,
     `| record_id | ${insight.record_id} |`,
     '',
     '---',
