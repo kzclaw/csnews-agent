@@ -538,7 +538,6 @@ export async function handleLogsAction(
   );
 }
 
-
 // ===================== tavily (Tavily News API ingestion) =====================
 // Scheduled cron every 2 hours (CF cron slot 6 of 5 — runs as HTTP action).
 // Design: separate from ZAKER process to keep AI embedding budget predictable.
@@ -561,10 +560,7 @@ export async function handleTavilyAction(
 ): Promise<Response> {
   const start = Date.now();
   const apiKey = env.TAVILY_API_KEY;
-  const maxPerQuery = Math.max(
-    1,
-    Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
-  );
+  const maxPerQuery = Math.max(1, Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10));
 
   // Aggregate all fetched articles across queries
   const allArticles: import('./tavily').NormalizedArticle[] = [];
@@ -640,7 +636,9 @@ export async function handleTavilyAction(
 
     if (i < EMBED_COUNT) {
       try {
-        const embResp = (await env.AI.run('@cf/baai/bge-m3', { text: [title] })) as import('./types').BgeEmbeddingResponse;
+        const embResp = (await env.AI.run('@cf/baai/bge-m3', {
+          text: [title],
+        })) as import('./types').BgeEmbeddingResponse;
         if (Array.isArray(embResp?.data) && embResp.data.length > 0) {
           const it = embResp.data[0];
           embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
@@ -654,7 +652,11 @@ export async function handleTavilyAction(
         if (similar.length > 0 && similar[0].topic_id) {
           const top = similar[0];
           topicId = top.topic_id;
-          const updated = (await updateTopicScore(env, top.topic_id, 1)) as import('./types').UpdateTopicScoreResult;
+          const updated = (await updateTopicScore(
+            env,
+            top.topic_id,
+            1
+          )) as import('./types').UpdateTopicScoreResult;
           newsScore = updated.new_score || 0;
           newsLevel = updated.new_level || 'follow';
           matchedSimilarity = top.similarity || null;
@@ -670,7 +672,11 @@ export async function handleTavilyAction(
       if (!topicId) {
         const titleHash = Math.abs(hashStr(title)).toString(36);
         const topicKey = `t-${titleHash}`;
-        const created = (await createTopic(env, topicKey, 'follow')) as import('./types').CreatedTopicRow;
+        const created = (await createTopic(
+          env,
+          topicKey,
+          'follow'
+        )) as import('./types').CreatedTopicRow;
         if (created?.id) {
           topicId = created.id;
           newsScore = 0;

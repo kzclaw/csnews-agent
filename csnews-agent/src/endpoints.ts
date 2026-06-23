@@ -41,7 +41,12 @@ export {
 } from './endpoints-core';
 
 // process (4)
-export { handleProcessAction, handleHealthAction, handleLogsAction, handleTavilyAction } from './endpoints-process';
+export {
+  handleProcessAction,
+  handleHealthAction,
+  handleLogsAction,
+  handleTavilyAction,
+} from './endpoints-process';
 
 // trend (3) + helper
 export {

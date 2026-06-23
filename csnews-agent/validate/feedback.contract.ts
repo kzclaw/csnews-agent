@@ -24,7 +24,18 @@ import * as feedback from '../src/feedback';
 // ============================================================
 describe('loadWeights · 业务契约', () => {
   it('DEFAULT_HOT_WORD_WEIGHTS 必须包含所有 10 个热词', () => {
-    const expected = ['突发', '震惊', '重磅', '紧急', '首次', '史上', '最新', '突破', '革命', '创历史'];
+    const expected = [
+      '突发',
+      '震惊',
+      '重磅',
+      '紧急',
+      '首次',
+      '史上',
+      '最新',
+      '突破',
+      '革命',
+      '创历史',
+    ];
     for (const w of expected) {
       expect(DEFAULT_HOT_WORD_WEIGHTS).toHaveProperty(w);
     }

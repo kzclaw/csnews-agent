@@ -159,12 +159,14 @@ export async function insertNewsHotspot(
   // Dual-write embedding to Vectorize
   if (news.embedding && news.embedding.length > 0) {
     const vectorClient = new VectorizeClient(env.VECTORIZE);
-    vectorClient.upsert(news.embedding, id, {
-      title: news.title,
-      category: news.category || '',
-    }).catch((err) => {
-      console.error('[Vectorize] dual-write failed:', err);
-    });
+    vectorClient
+      .upsert(news.embedding, id, {
+        title: news.title,
+        category: news.category || '',
+      })
+      .catch((err) => {
+        console.error('[Vectorize] dual-write failed:', err);
+      });
   }
 
   return id;
@@ -309,7 +311,11 @@ export async function dualWriteEmbeddingsToVectorize(
     return;
   }
 
-  const vectors: Array<{ id: string; values: number[]; metadata?: Record<string, string | number | boolean> }> = [];
+  const vectors: Array<{
+    id: string;
+    values: number[];
+    metadata?: Record<string, string | number | boolean>;
+  }> = [];
 
   for (let i = 0; i < newsList.length; i++) {
     const news = newsList[i];

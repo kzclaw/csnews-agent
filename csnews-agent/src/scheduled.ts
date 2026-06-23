@@ -88,13 +88,19 @@ export async function scheduledProcess(
       const tavilyRes = await handleTavilyAction(tavilyDummyRequest, env, tavilyDummyUrl, {});
       const tavilyBody = await tavilyRes.text();
       const tavilyElapsed = Date.now() - tavilyStart;
-      console.log(`[cron] tavily done status=${tavilyRes.status} elapsed=${tavilyElapsed}ms body=${tavilyBody.slice(0, 300)}`);
+      console.log(
+        `[cron] tavily done status=${tavilyRes.status} elapsed=${tavilyElapsed}ms body=${tavilyBody.slice(0, 300)}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
           tavilyRes.status === 200 ? 'info' : 'error',
           '[cron] tavily done',
-          { status: tavilyRes.status, elapsed_ms: tavilyElapsed, body_preview: tavilyBody.slice(0, 200) },
+          {
+            status: tavilyRes.status,
+            elapsed_ms: tavilyElapsed,
+            body_preview: tavilyBody.slice(0, 200),
+          },
           'scheduler'
         ).catch(() => {})
       );
@@ -540,7 +546,6 @@ export async function scheduledArchiveOldEntities(
     );
   }
 }
-
 
 /**
  * 每日 04:00 UTC cron 触发 O11 Feedback Loop (v0.36.22)

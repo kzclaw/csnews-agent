@@ -34,7 +34,11 @@ export class VectorizeClient {
    * @param id - news_hotspots row id
    * @param metadata - optional metadata (title, category, etc.)
    */
-  async upsert(embedding: number[], id: string, metadata?: Record<string, string | number | boolean>): Promise<void> {
+  async upsert(
+    embedding: number[],
+    id: string,
+    metadata?: Record<string, string | number | boolean>
+  ): Promise<void> {
     if (!this.index) {
       console.warn('[Vectorize] binding not available, skipping upsert');
       return;

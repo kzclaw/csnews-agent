@@ -48,10 +48,7 @@ interface WeightRow {
  * @param category - Topic category
  * @returns Record<hot_word, weight>
  */
-export async function loadWeights(
-  env: Env,
-  category: string
-): Promise<Record<string, number>> {
+export async function loadWeights(env: Env, category: string): Promise<Record<string, number>> {
   // Start with defaults
   const weights: Record<string, number> = { ...DEFAULT_HOT_WORD_WEIGHTS };
 
@@ -99,7 +96,7 @@ export async function saveWeights(
 
   const res = await fetch(`${host}/rest/v1/score_rule_weights`, {
     method: 'POST',
-    headers: { ...supabaseHeaders(env), 'Prefer': 'resolution=merge-duplicates' },
+    headers: { ...supabaseHeaders(env), Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify(rows),
   });
 

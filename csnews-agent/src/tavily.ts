@@ -44,7 +44,8 @@ const MOCK_ARTICLES: NormalizedArticle[] = [
     url: 'https://example.com/tech-earnings-q2',
     published_at: new Date().toISOString(),
     source: 'tavily',
-    summary: 'Leading technology companies have posted record quarterly earnings, driven by surging demand for AI products and cloud services.',
+    summary:
+      'Leading technology companies have posted record quarterly earnings, driven by surging demand for AI products and cloud services.',
     category: 'technology',
   },
   {
@@ -52,7 +53,8 @@ const MOCK_ARTICLES: NormalizedArticle[] = [
     url: 'https://example.com/climate-summit-2026',
     published_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
     source: 'tavily',
-    summary: 'World leaders at the annual climate summit have agreed to accelerated emission reduction targets, marking a significant step forward in the global climate response.',
+    summary:
+      'World leaders at the annual climate summit have agreed to accelerated emission reduction targets, marking a significant step forward in the global climate response.',
     category: 'world',
   },
   {
@@ -60,7 +62,8 @@ const MOCK_ARTICLES: NormalizedArticle[] = [
     url: 'https://example.com/quantum-computing-breakthrough',
     published_at: new Date(Date.now() - 6 * 3600_000).toISOString(),
     source: 'tavily',
-    summary: 'Scientists have demonstrated a new quantum computing approach that could accelerate practical quantum applications by an order of magnitude.',
+    summary:
+      'Scientists have demonstrated a new quantum computing approach that could accelerate practical quantum applications by an order of magnitude.',
     category: 'science',
   },
 ];
@@ -69,19 +72,14 @@ const MOCK_ARTICLES: NormalizedArticle[] = [
  * Normalize a raw Tavily result to the shared NormalizedArticle format.
  */
 function normalizeTavilyResult(result: TavilySearchResult): NormalizedArticle {
-  const publishedAt =
-    result.published_date ||
-    result.raw_date ||
-    new Date().toISOString();
+  const publishedAt = result.published_date || result.raw_date || new Date().toISOString();
 
   return {
     title: result.title || 'Untitled',
     url: result.url || '',
     published_at: publishedAt,
     source: 'tavily',
-    summary: result.content
-      ? result.content.substring(0, 300)
-      : undefined,
+    summary: result.content ? result.content.substring(0, 300) : undefined,
   };
 }
 

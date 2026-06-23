@@ -100,10 +100,9 @@ async function fetchOpenWarnings(
  */
 async function fetchTopicScore(env: Env, topicId: string): Promise<number> {
   const host = getSupabaseHost(env);
-  const res = await fetch(
-    `${host}/rest/v1/topics?id=eq.${topicId}&select=score&limit=1`,
-    { headers: supabaseHeaders(env) }
-  );
+  const res = await fetch(`${host}/rest/v1/topics?id=eq.${topicId}&select=score&limit=1`, {
+    headers: supabaseHeaders(env),
+  });
   if (!res.ok) return 0;
   const rows: TopicRow[] = await res.json();
   return rows[0]?.score ?? 0;
@@ -117,7 +116,12 @@ async function callRecordFeedbackRpc(
   warningId: string,
   checkHour: number,
   topicScoreNow: number
-): Promise<{ feedback_status: string | null; accuracy: number | null; correct: number; total: number }> {
+): Promise<{
+  feedback_status: string | null;
+  accuracy: number | null;
+  correct: number;
+  total: number;
+}> {
   const host = getSupabaseHost(env);
   const body = JSON.stringify({
     p_warning_id: warningId,
@@ -127,7 +131,7 @@ async function callRecordFeedbackRpc(
 
   const res = await fetch(`${host}/rest/v1/rpc/record_feedback`, {
     method: 'POST',
-    headers: { ...supabaseHeaders(env), 'Prefer': 'return=representation' },
+    headers: { ...supabaseHeaders(env), Prefer: 'return=representation' },
     body,
   });
 
@@ -136,8 +140,12 @@ async function callRecordFeedbackRpc(
     throw new Error(`record_feedback RPC failed HTTP ${res.status}: ${err.slice(0, 200)}`);
   }
 
-  const rows: Array<{ feedback_status: string | null; accuracy: number | null; correct: number; total: number }> =
-    await res.json();
+  const rows: Array<{
+    feedback_status: string | null;
+    accuracy: number | null;
+    correct: number;
+    total: number;
+  }> = await res.json();
   return rows[0] ?? { feedback_status: null, accuracy: null, correct: 0, total: 0 };
 }
 
@@ -198,12 +206,7 @@ export async function runFeedbackCheck(env: Env): Promise<FeedbackResult> {
   for (const { warning, checkHour } of checkpoints) {
     try {
       const topicScoreNow = await fetchTopicScore(env, warning.topic_id);
-      const rpcResult = await callRecordFeedbackRpc(
-        env,
-        warning.id,
-        checkHour,
-        topicScoreNow
-      );
+      const rpcResult = await callRecordFeedbackRpc(env, warning.id, checkHour, topicScoreNow);
 
       const { feedback_status, accuracy, correct, total } = rpcResult;
       const category = warning.category ?? 'unknown';
@@ -216,7 +219,8 @@ export async function runFeedbackCheck(env: Env): Promise<FeedbackResult> {
 
       // Accumulate category stats for accuracy calculation
       if (feedback_status === 'validated' || feedback_status === 'dismissed') {
-        categoryCorrect[category] = (categoryCorrect[category] ?? 0) + (feedback_status === 'validated' ? 1 : 0);
+        categoryCorrect[category] =
+          (categoryCorrect[category] ?? 0) + (feedback_status === 'validated' ? 1 : 0);
         categoryTotal[category] = (categoryTotal[category] ?? 0) + 1;
       }
 
@@ -264,7 +268,14 @@ export async function handleFeedbackCheckAction(
   } catch (e: any) {
     return {
       ok: false,
-      result: { processed: 0, validated: 0, dismissed: 0, pending: 0, errors: 1, categoryAccuracy: {} },
+      result: {
+        processed: 0,
+        validated: 0,
+        dismissed: 0,
+        pending: 0,
+        errors: 1,
+        categoryAccuracy: {},
+      },
       elapsed_ms: Date.now() - start,
     };
   }
