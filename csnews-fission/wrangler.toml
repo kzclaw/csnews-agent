@@ -11,9 +11,10 @@ compatibility_date = "2026-05-29"
 binding = "AI"
 
 # R2 bucket：裂变报告存储
-# 使用与主 Worker 相同的 bucket（同一账户级别资源）
+# 复用主 Worker 的 csnews-raw bucket（同一账户级别资源）
 [[r2_buckets]]
 binding = "csnews_raw"
+bucket_name = "csnews-raw"
 
 # Cron Trigger：每 6 小时触发一次
 # CF Free Plan 限制：每账号 5 个 cron triggers
