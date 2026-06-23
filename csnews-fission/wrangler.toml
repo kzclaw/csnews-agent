@@ -16,6 +16,12 @@ binding = "AI"
 binding = "csnews_raw"
 bucket_name = "csnews-raw"
 
+# KV namespace：AI Neurons 用量追踪 (Phase 1 · O12KR1)
+# 复用主 Worker 的 AI_USAGE_KV namespace（同一账户级别资源）
+[[kv_namespaces]]
+binding = "AI_USAGE_KV"
+id = "<TODO: 部署时填入主 Worker 同一 namespace ID>"
+
 # Cron Trigger：每 6 小时触发一次
 # CF Free Plan 限制：每账号 5 个 cron triggers
 # 主 Worker 4 槽位 (process / entity+event 合并 / archive / feedback) + Fission 1 槽位 = 5/5
