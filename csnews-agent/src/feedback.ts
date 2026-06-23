@@ -32,6 +32,7 @@ function accuracyR2Key(category: string): string {
 interface WarningRow {
   id: string;
   topic_id: string;
+  category: string | null;
   feedback_status: string | null;
   created_at: string;
 }
@@ -62,7 +63,7 @@ async function fetchOpenWarnings(
 
   // Fetch all open warnings with null/pending feedback_status
   const res = await fetch(
-    `${host}/rest/v1/warnings?status=eq.open&or=(feedback_status.is.null,feedback_status.eq.pending)&select=id,topic_id,feedback_status,created_at&limit=1000`,
+    `${host}/rest/v1/warnings?status=eq.open&or=(feedback_status.is.null,feedback_status.eq.pending)&select=id,topic_id,category,feedback_status,created_at&limit=1000`,
     { headers: supabaseHeaders(env) }
   );
 

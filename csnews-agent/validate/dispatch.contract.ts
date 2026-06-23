@@ -1,5 +1,5 @@
 /**
- * CSNEWS Agent · dispatch utility 业务契约 (v0.36.10 · KR0)
+ * CSNEWS Agent · dispatch utility 业务契约 (v0.36.10)
  *
  * 唯一目标：守住"24 action dispatch 路由表就是这样"（当前实现的 snapshot）
  *
@@ -11,10 +11,10 @@
  *   - 19 个 handler 全部 import from './endpoints'
  *
  * 加新 action 时: ALLOWED_ACTIONS 加 + dispatchAction 加 1 行 + 此文件 describe 块补 1 个 it
- * 详见：tasks/csnews-agent-okr.md KR0
+ * 详见：项目任务文档 (csnews-agent/tasks/ 目录)
  *
- * v0.36.26 O13-MCP: 新增 2 个 MCP action (mcp / mcp-list)
- * O11 KR1: 新增 1 个 feedback-check action → 总计 24 个
+ * v0.36.26 MCP: 新增 2 个 MCP action (mcp / mcp-list)
+ * O11: 新增 1 个 feedback-check action → 总计 24 个
  */
 import { describe, it, expect, vi } from 'vitest';
 import {
@@ -32,7 +32,7 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 25 个 action (v0.36.26 新增 mcp/mcp-list + O11 KR1 feedback-check + O13 tavily)', () => {
+  it('ALLOWED_ACTIONS 必须含 25 个 action (v0.36.26 新增 mcp/mcp-list + feedback-check + tavily)', () => {
     expect(ALLOWED_ACTIONS).toHaveLength(25);
   });
 
@@ -130,7 +130,7 @@ describe('dispatchAction · unknown action 处理', () => {
     expect(res.status).not.toBe(400);
   });
 
-  it('大小写敏感 (KR0 实测: action=Health 不识别)', async () => {
+  it('大小写敏感 (v0.36 实测: action=Health 不识别)', async () => {
     // 大小写不敏感不在 v0.36.10 scope
     const { env, ctx } = makeMocks();
     const req = new Request('https://example.com/?action=Health');
