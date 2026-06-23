@@ -455,6 +455,7 @@ const TOOL_HANDLERS: Record<
   get_daily_report: toolGetDailyReport,
 };
 
+// MCP Protocol methods
 async function executeTool(
   toolName: string,
   env: Env,
@@ -466,6 +467,48 @@ async function executeTool(
     throw new Error(`Unknown tool: ${toolName}`);
   }
   return handler(env, ctx, params);
+}
+
+function handleMCPProtocolMethod(req: JSONRPCRequest): {
+  isProtocol: boolean;
+  response?: Record<string, unknown>;
+} {
+  const { method, params, id } = req;
+  if (method === 'initialize') {
+    const p = (params || {}) as Record<string, unknown>;
+    return {
+      isProtocol: true,
+      response: {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          protocolVersion: (p.protocolVersion as string) || '2024-11-05',
+          capabilities: { tools: {} },
+          serverInfo: { name: 'csnews', version: '1.0.0' },
+        },
+      },
+    };
+  }
+  if (method === 'ping' || method === 'notifications/initialized') {
+    return { isProtocol: true, response: { jsonrpc: '2.0', id, result: null } };
+  }
+  if (method === 'tools/list') {
+    return {
+      isProtocol: true,
+      response: {
+        jsonrpc: '2.0',
+        id,
+        result: {
+          tools: MCP_TOOLS.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          })),
+        },
+      },
+    };
+  }
+  return { isProtocol: false };
 }
 
 // ============================================================
@@ -652,6 +695,12 @@ export async function handleMCPAction(
           );
         }
 
+        // Protocol methods
+        const proto = handleMCPProtocolMethod(req);
+        if (proto.isProtocol && proto.response) {
+          return proto.response as unknown as JSONRPCResponse;
+        }
+
         try {
           const text = await executeTool(req.method, env, ctx, params(req));
           return buildSuccessResponse(req.id, text);
@@ -667,6 +716,15 @@ export async function handleMCPAction(
     );
   } else {
     const req = parsed as JSONRPCRequest;
+
+    // Protocol methods
+    const proto = handleMCPProtocolMethod(req);
+    if (proto.isProtocol && proto.response) {
+      return new Response(JSON.stringify(proto.response), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+
     const validationError = validateRequest(req);
     if (validationError) {
       return new Response(
