@@ -154,7 +154,7 @@ serve(async (req: Request) => {
       const eventId = createdEvents[i].id
       const entityIds = [...new Set(clusters[i].flatMap(n => n.entity_ids ?? []))]
       for (const entityId of entityIds) {
-        eventEntityInserts.push({ event_id: eventId, entity_id: entityId, role: 'participant' })
+        eventEntityInserts.push({ event_id: eventId, entity_id: entityId, role: 'subject' })
       }
     }
 
