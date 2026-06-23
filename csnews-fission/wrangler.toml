@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
 # Fission Worker：裂变触发器
-# 职责：每 30 分钟扫描 explosive+score=9 的 topic，执行裂变流程
+# 职责：每 6 小时扫描 explosive+score=9 的 topic，执行裂变流程
 # 架构：monorepo 子目录，与主 Worker 独立部署
 
 # Workers AI（用于 LLM 生成搜索词 + 报告生成）
@@ -15,9 +15,9 @@ binding = "AI"
 [[r2_buckets]]
 binding = "csnews_raw"
 
-# Cron Trigger：每 30 分钟触发一次
+# Cron Trigger：每 6 小时触发一次
 # CF Free Plan 限制：每账号 5 个 cron triggers
-# Fission 占第 6 个槽位（主 Worker 已用 5 个）
-# 注意：部署前需在 CF Dashboard 确认配额，或由 agent 通过 wrangler 配置
+# 主 Worker 4 槽位 (process / entity+event 合并 / archive / feedback) + Fission 1 槽位 = 5/5
+# 方案 C: explosive+score=9 topics 稀少，6h 一次足够
 [triggers]
-crons = [ "*/30 * * * *" ]
+crons = [ "0 */6 * * *" ]

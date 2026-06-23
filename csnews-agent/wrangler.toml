@@ -49,14 +49,11 @@ TAVILY_API_KEY = "YOUR_KEY_HERE"
 #   2. Worker → 自家域名走 CF 内部 routing,绕开 Bot Fight Mode
 #   3. 0 漂移(精准整点),0 外部依赖
 #   4. process 主要是 fetch 等待,不算 CPU,10ms 限制够用
-# 每日 03:00(UTC)跑 entity cron — 自学习 + 写 R2 finalized
-#   - 频率设计:每日 1 次(不是每小时)→ entity selflearn 重(bge-m3 embedding)
+# 每日 03:00(UTC)跑 entity + event — 自学习/Jaccard 聚类串行 (方案 C 合并)
+#   - entity selflearn + process → event clustering 在同一 cron 内串行
+#   - 合并原因: event 依赖 entity-finalized.json, 强行拆开徒增槽位占用
 #   - Neurons 预算:~5K/天 ≤ 10K Free 配额
 #   - 错开 process 整点,避免 Neurons spike 同时打
-# 每日 03:30(UTC)跑 event cron — Jaccard 聚类 + 写 R2 event-clusters.json
-#   - 频率设计:每日 1 次(不是每小时)→ 依赖 entity finalized 必须 entity 跑完
-#   - 0 Neurons(Jaccard 是数学运算,不调 AI)
-#   - 错开 entity 30min,确保读 entity-finalized.json 时数据已就位
 # 每月 1 号 0:00(UTC)跑 archive cron — 30d+ entity 热层自动归档
 #   - 频率设计:每月 1 次(数据量稳态 150-300 行,1 个月归档 1 次够)
 #   - 0 Neurons(纯 SQL + R2 操作)
@@ -67,6 +64,6 @@ TAVILY_API_KEY = "YOUR_KEY_HERE"
 #   - 业务: 查 open warnings → record_feedback RPC → 调 score_rule_weights → 写 R2 accuracy
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *", "30 3 * * *", "0 0 1 * *", "0 4 * * *" ]
+crons = [ "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
 
 

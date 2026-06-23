@@ -172,7 +172,7 @@ export async function scheduledProcess(
 }
 
 /**
- * 每日 03:00 UTC cron 触发 entity 自学习 + 写 R2 finalized (v0.36.21)
+ * 每日 03:00 UTC cron 触发 entity 自学习 + event clustering 串行 (方案 C 合并)
  *
  * 流程:
  *   1. 写 [cron] entity triggered log
@@ -180,6 +180,8 @@ export async function scheduledProcess(
  *   3. 写 [cron] entity selflearn done/error log
  *   4. inline 调 runEntityProcess (读 candidates + 写 entity-finalized.json)
  *   5. 写 [cron] entity process done/error log
+ *   6. inline 调 runEventProcess (读 entity-finalized.json + Jaccard 聚类)
+ *   7. 写 [cron] event done/error log
  *
  * 失败处理:
  *   - selflearn 抛错 → log error + 仍尝试 process (process 0 Neurons)
@@ -286,6 +288,49 @@ export async function scheduledEntity(
         'scheduler'
       ).catch(() => {})
     );
+
+    // Phase 3: event clustering (读 entity-finalized.json + Jaccard 聚类 + 写 R2)
+    // 串行等 entity process 写完, 确保 runEventProcess 能读到最新 finalized
+    const eventStart = Date.now();
+    const eventTs = new Date().toISOString();
+    console.log(`[cron] event triggered at ${eventTs}`);
+    ctx.waitUntil(
+      logEvent(env, 'info', '[cron] event triggered', { ts: eventTs }, 'scheduler').catch(() => {})
+    );
+    try {
+      const eventResult = await runEventProcess(env);
+      const eventElapsed = Date.now() - eventStart;
+      console.log(
+        `[cron] event done clusters=${eventResult.clusters} threshold=${eventResult.threshold} written=${eventResult.written} errors=${eventResult.errors} elapsed=${eventElapsed}ms`
+      );
+      ctx.waitUntil(
+        logEvent(
+          env,
+          'info',
+          '[cron] event done',
+          {
+            clusters: eventResult.clusters,
+            threshold: eventResult.threshold,
+            written: eventResult.written,
+            errors: eventResult.errors,
+            elapsed_ms: eventElapsed,
+          },
+          'scheduler'
+        ).catch(() => {})
+      );
+    } catch (e: any) {
+      const eventElapsed = Date.now() - eventStart;
+      console.error(`[cron] event failed elapsed=${eventElapsed}ms err=${e?.message || e}`);
+      ctx.waitUntil(
+        logEvent(
+          env,
+          'error',
+          '[cron] event failed',
+          { elapsed_ms: eventElapsed, err: e?.message || String(e) },
+          'scheduler'
+        ).catch(() => {})
+      );
+    }
   }
 
   const totalElapsed = Date.now() - start;
@@ -293,18 +338,21 @@ export async function scheduledEntity(
 }
 
 /**
- * 每日 03:30 UTC cron 触发 event 聚类 + 写 R2 event-clusters.json (v0.36.21)
+ * Event clustering 辅助函数 (方案 C 后不再被 cron 路由调用)
  *
+ * 本函数已不再被 index.ts scheduled handler 调用 — event clustering 已合并入
+ * scheduledEntity Phase 3，在同一 03:00 UTC cron 内串行执行。
+ *
+ * 保留本函数用于手动调试: await scheduledEvent(env, ctx, { cron: 'manual' })
  * 流程:
  *   1. 写 [cron] event triggered log
  *   2. inline 调 runEventProcess (读 entity-finalized.json + Jaccard 聚类 + 写 event-clusters.json)
- *   3. 写 [cron] event process done/error log
+ *   3. 写 [cron] event done/error log
  *
  * 失败处理:
  *   - process 抛错 → log error + 不阻塞
- *   - log 写失败 → catch 兜底
+ *   - log写失败 → catch 兜底
  *
- * 频率:每日 1 次 (依赖 entity finalized 必须 entity 跑完, 错开 entity 30min)
  * 0 Neurons (Jaccard 是数学运算, 不调 AI)
  */
 export async function scheduledEvent(
