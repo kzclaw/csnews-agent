@@ -15,11 +15,17 @@
  */
 import { Env } from './shared';
 import { runFissionTrigger } from './fission-trigger';
+import { authRequest } from './auth';
 
 // ====== HTTP fetch handler ======
 async function handleFetch(request: Request, env: Env): Promise<Response> {
+  // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';
+  if (action !== 'ping') {
+    const deny = authRequest(request, env);
+    if (deny) return deny;
+  }
 
   if (action === 'ping') {
     return new Response(JSON.stringify({ ok: true, worker: 'csnews-fission', action }), {
