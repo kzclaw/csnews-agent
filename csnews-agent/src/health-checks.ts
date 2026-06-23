@@ -874,6 +874,91 @@ export async function checkPullCacheFreshness(
 }
 
 // ============================================================
+// 12b. ai_calls_breakdown — 按 model 聚合当日 AI 调用次数
+// Phase 4 新增，支撑 health 端点 neurons_used_today / ai_budget_status / ai_calls_breakdown
+// ============================================================
+
+export async function checkAiCallsBreakdown(env: Env): Promise<{
+  ai_calls_breakdown: Record<string, number>;
+  neurons_used_today: number;
+  ai_budget_status: string;
+  checks: {
+    ai_calls_breakdown: { status: 'ok' | 'unknown'; detail: string };
+  };
+}> {
+  const checks: any = {};
+  const breakdown: Record<string, number> = {};
+
+  try {
+    // 读取当日 KV (usage/YYYY-MM-DD)
+    if (!env.AI_USAGE_KV) {
+      checks.ai_calls_breakdown = { status: 'unknown', detail: 'AI_USAGE_KV binding missing' };
+      return {
+        ai_calls_breakdown: {},
+        neurons_used_today: 0,
+        ai_budget_status: 'unknown',
+        checks: checks.ai_calls_breakdown,
+      };
+    }
+
+    const now = new Date();
+    const y = now.getUTCFullYear();
+    const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(now.getUTCDate()).padStart(2, '0');
+    const todayKey = `usage/${y}-${m}-${d}`;
+
+    const raw = await env.AI_USAGE_KV.get(todayKey);
+    let totalNeurons = 0;
+    let callCount = 0;
+
+    if (raw) {
+      try {
+        const record = JSON.parse(raw) as { total: number; calls: Array<{ model: string; neurons: number }> };
+        totalNeurons = record.total ?? 0;
+        for (const call of record.calls ?? []) {
+          const model = call.model || 'unknown';
+          breakdown[model] = (breakdown[model] || 0) + 1;
+          callCount++;
+        }
+      } catch {
+        // parse failed, return empty breakdown
+      }
+    }
+
+    const models = Object.keys(breakdown);
+    checks.ai_calls_breakdown = {
+      status: 'ok',
+      detail:
+        models.length > 0
+          ? `${callCount} calls across ${models.length} model(s): ${models.join(', ')}`
+          : 'no AI calls recorded today',
+    };
+
+    // ai_budget_status 派生 (复用已静态导入的 getBudgetStatus)
+    let aiBudgetStatus: string = 'unknown';
+    if (env.AI_USAGE_KV) {
+      const budget = await getBudgetStatus(env);
+      aiBudgetStatus = budget.tier;
+    }
+
+    return {
+      ai_calls_breakdown: breakdown,
+      neurons_used_today: totalNeurons,
+      ai_budget_status: aiBudgetStatus,
+      checks: checks.ai_calls_breakdown,
+    };
+  } catch (e: any) {
+    checks.ai_calls_breakdown = { status: 'unknown', detail: e?.message };
+    return {
+      ai_calls_breakdown: {},
+      neurons_used_today: 0,
+      ai_budget_status: 'unknown',
+      checks: checks.ai_calls_breakdown,
+    };
+  }
+}
+
+// ============================================================
 // 12b. cascade_dependency_chain — cascade 依赖降级
 // ============================================================
 

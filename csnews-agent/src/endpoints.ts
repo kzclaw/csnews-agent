@@ -44,6 +44,7 @@ export {
 export {
   handleProcessAction,
   handleHealthAction,
+  handleAiUsageAction,
   handleLogsAction,
   handleTavilyAction,
 } from './endpoints-process';

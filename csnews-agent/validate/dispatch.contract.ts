@@ -32,8 +32,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 25 个 action (v0.36.26 新增 mcp/mcp-list + feedback-check + tavily)', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(25);
+  it('ALLOWED_ACTIONS 必须含 26 个 action (v0.36.26 新增 mcp/mcp-list + feedback-check + tavily + ai-usage)', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(26);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {
@@ -58,6 +58,7 @@ describe('业务常量', () => {
     expect(ALLOWED_ACTIONS).toContain('knowledge');
     expect(ALLOWED_ACTIONS).toContain('mcp');
     expect(ALLOWED_ACTIONS).toContain('mcp-list');
+    expect(ALLOWED_ACTIONS).toContain('ai-usage');
   });
 });
 

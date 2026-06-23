@@ -47,6 +47,7 @@ import {
   checkEntityAndEventFreshness,
   checkCacheMetrics,
   checkPullCacheFreshness,
+  checkAiCallsBreakdown,
 } from './health-checks';
 
 // ===================== process (News Self Growth 主流程) =====================
@@ -309,7 +310,7 @@ export async function handleProcessAction(
 }
 
 // ===================== health =====================
-// 14 大维度检查 (拆分至 health-checks.ts)
+// 17 大维度检查 (拆分至 health-checks.ts)
 //  1. last_process_at              - 最近 process 跑时间 (KV 持久化)
 //  2. cron_health                  - 派生: last_process_at > 1.5h 前 = degraded / > 3h = down
 //  3. secret_resolved              - WORKER_SELF_URL secret 是不是占位符
@@ -319,12 +320,15 @@ export async function handleProcessAction(
 //  7. r2_latest_supabase_write     - Supabase news_hotspots 最新 created_at
 //  8. r2_prefix_counts             - R2 各 prefix 行数
 //  9. cron_history                 - R2 logs/ 上一小时 [scheduler] log 数量
-// 10. zscore_signals_today         - 7d z-score 异常数
-// 11. ai_budget_today              - 当日 AI 配额用量
+// 10. zscore_signals_today        - 7d z-score 异常数
+// 11. ai_budget_today             - 当日 AI 配额用量
 // 12. entity_freshness             - entity cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
-// 13. event_freshness              - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
+// 13. event_freshness             - event cron 每日 1 次 跑后 freshness (ok<25h / degraded<50h)
 // 14. cache_metrics                - pull KV 缓存 hit rate (per-isolate, hit_rate≥50%=ok)
 // 15. pull_cache_freshness         - 按 news/entity/event 分组检查 pull 缓存新鲜度
+// 16. neurons_used_today           - 当日 Neurons 总量 (Phase 4)
+// 17. ai_budget_status             - 预算状态 tier (Phase 4)
+// 18. ai_calls_breakdown           - 按 model 分当日调用次数 (Phase 4)
 export async function handleHealthAction(
   request: Request,
   env: Env,
@@ -401,7 +405,14 @@ export async function handleHealthAction(
   result.pull_cache_freshness = pullCacheFreshnessResult.pull_cache_freshness;
   checks.pull_cache_freshness = pullCacheFreshnessResult.checks.pull_cache_freshness;
 
-  // 16. mcp_tools_count — MCP Server 工具数量（O13-MCP）
+  // 16+17+18. Phase 4: neurons_used_today / ai_budget_status / ai_calls_breakdown
+  const aiCallsResult = await checkAiCallsBreakdown(env);
+  result.neurons_used_today = aiCallsResult.neurons_used_today;
+  result.ai_budget_status = aiCallsResult.ai_budget_status;
+  result.ai_calls_breakdown = aiCallsResult.ai_calls_breakdown;
+  checks.ai_calls_breakdown = aiCallsResult.checks.ai_calls_breakdown;
+
+  // 17. mcp_tools_count — MCP Server 工具数量（O13-MCP）
   result.mcp_tools_count = MCP_TOOLS_COUNT;
 
   // 整体 status 聚合
@@ -421,6 +432,83 @@ export async function handleHealthAction(
     status: 200,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
+}
+
+// ===================== ai-usage =====================
+// ?action=ai-usage 端点 (Phase 4)
+// 读取 KV usage/{date} 聚合 7 天 history，按 model + day 聚合
+export async function handleAiUsageAction(
+  env: Env,
+  cors: Record<string, string>
+): Promise<Response> {
+  if (!env.AI_USAGE_KV) {
+    return new Response(JSON.stringify({ error: 'AI_USAGE_KV binding missing' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
+  // 生成过去 7 天 UTC 日期列表
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.now() - i * 86400_000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    dates.push(`${y}-${m}-${day}`);
+  }
+
+  // 并行读取 7 天 KV 数据
+  const kvResults = await Promise.allSettled(
+    dates.map((date) => env.AI_USAGE_KV!.get(`usage/${date}`))
+  );
+
+  // 按 model + day 聚合
+  // 结构: { [date]: { [model]: { calls: number, neurons: number } } }
+  type DayModelAgg = { calls: number; neurons: number };
+  const aggregated: Record<string, Record<string, DayModelAgg>> = {};
+
+  for (let i = 0; i < kvResults.length; i++) {
+    const result = kvResults[i];
+    const date = dates[i];
+    aggregated[date] = {};
+
+    if (result.status === 'fulfilled' && result.value) {
+      try {
+        const record = JSON.parse(result.value) as {
+          total: number;
+          calls: Array<{ model: string; neurons: number }>;
+        };
+        for (const call of record.calls ?? []) {
+          const model = call.model || 'unknown';
+          if (!aggregated[date][model]) {
+            aggregated[date][model] = { calls: 0, neurons: 0 };
+          }
+          aggregated[date][model].calls++;
+          aggregated[date][model].neurons += call.neurons;
+        }
+      } catch {
+        // parse failed, skip
+      }
+    }
+  }
+
+  // 扁平化返回格式
+  type UsageEntry = { date: string; model: string; calls: number; neurons: number };
+  const entries: UsageEntry[] = [];
+  for (const [date, models] of Object.entries(aggregated)) {
+    for (const [model, agg] of Object.entries(models)) {
+      entries.push({ date, model, calls: agg.calls, neurons: agg.neurons });
+    }
+  }
+
+  // 按 date desc 排序
+  entries.sort((a, b) => b.date.localeCompare(a.date));
+
+  return new Response(
+    JSON.stringify({ days: 7, entries, total_entries: entries.length }, null, 2),
+    { status: 200, headers: { 'Content-Type': 'application/json', ...cors } }
+  );
 }
 
 // ===================== logs =====================

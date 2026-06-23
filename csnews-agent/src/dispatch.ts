@@ -34,6 +34,7 @@ import {
   handleRescoreAction,
   handleProcessAction,
   handleHealthAction,
+  handleAiUsageAction,
   handleLogsAction,
   handleContentAction,
   handleTrendAction,
@@ -66,6 +67,7 @@ export const ALLOWED_ACTIONS = [
   'rescore',
   'process',
   'health',
+  'ai-usage',
   'logs',
   'content',
   'trend',
@@ -138,6 +140,7 @@ export async function dispatchAction(
   if (action === 'rescore') return await handleRescoreAction(request, env, url, cors, ctx);
   if (action === 'process') return await handleProcessAction(request, env, url, cors, ctx);
   if (action === 'health') return await handleHealthAction(request, env, url, cors);
+  if (action === 'ai-usage') return await handleAiUsageAction(env, cors);
   if (action === 'logs') return await handleLogsAction(request, env, url, cors);
   if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
   if (action === 'trend') return await handleTrendAction(request, env, url, cors, ctx);
