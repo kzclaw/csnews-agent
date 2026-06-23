@@ -32,8 +32,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 24 个 action (v0.36.26 新增 mcp/mcp-list + O11 KR1 feedback-check)', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(24);
+  it('ALLOWED_ACTIONS 必须含 25 个 action (v0.36.26 新增 mcp/mcp-list + O11 KR1 feedback-check + O13 tavily)', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(25);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {
@@ -186,6 +186,7 @@ describe('dispatchAction · 21 action 路由正确性 (mock handler 路径)', ()
     'knowledge',
     'mcp',
     'mcp-list',
+    'tavily',
   ];
 
   for (const action of actionsToTest) {

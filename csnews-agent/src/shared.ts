@@ -33,6 +33,12 @@ export interface Env {
    * Vectorize index for news_hotspots embedding vector storage.
    */
   VECTORIZE?: Vectorize;
+  /**
+   * Tavily Search API key (CF Secret: TAVILY_API_KEY).
+   * Set via `wrangler secret put TAVILY_API_KEY`.
+   * Placeholder "YOUR_KEY_HERE" activates mock test mode.
+   */
+  TAVILY_API_KEY?: string;
 }
 
 export function getSupabaseHost(env: Env): string {

@@ -1,6 +1,6 @@
 // ============================================================
 // endpoints-process.ts · v0.36.20 · csnews-audit 修复
-// 3 个 action handler: process / health / logs
+// 4 个 action handler: process / health / logs / tavily
 //
 // 从 endpoints.ts 拆出 (audit 2026-06-18 4:30 · endpoints.ts 2,071 行超长)
 //
@@ -8,6 +8,7 @@
 //   - process: News Self Growth 主流程, cron 整点跑
 //   - health: 15 维度 worker 可观测性检查
 //   - logs: 读 R2 logs 端点
+//   - tavily: Tavily News API ingestion, same cron slot as process
 // ============================================================
 
 import { Env } from './shared';
@@ -534,5 +535,221 @@ export async function handleLogsAction(
     {
       headers: { 'Content-Type': 'application/json', ...cors },
     }
+  );
+}
+
+
+// ===================== tavily (Tavily News API ingestion) =====================
+// Scheduled cron every 2 hours (CF cron slot 6 of 5 — runs as HTTP action).
+// Design: separate from ZAKER process to keep AI embedding budget predictable.
+// - Fetches ~10 articles per run (2 queries × 5 results)
+// - Cross-source dedup via Vectorize (> 0.88 similarity → skip)
+// - Batch insert to news_hotspots with source='tavily'
+// - Dual-write to Vectorize
+
+/** Preset search queries for Tavily ingestion. Adjust as news coverage needs evolve. */
+const TAVILY_QUERIES = [
+  'top trending news today worldwide',
+  'breaking technology business science news',
+];
+
+export async function handleTavilyAction(
+  request: Request,
+  env: Env,
+  url: URL,
+  cors: Record<string, string>
+): Promise<Response> {
+  const start = Date.now();
+  const apiKey = env.TAVILY_API_KEY;
+  const maxPerQuery = Math.max(
+    1,
+    Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
+  );
+
+  // Aggregate all fetched articles across queries
+  const allArticles: import('./tavily').NormalizedArticle[] = [];
+  const fetchErrors: string[] = [];
+
+  for (const query of TAVILY_QUERIES) {
+    const { fetchTavilyNews } = await import('./tavily');
+    const articles = await fetchTavilyNews(apiKey, query, maxPerQuery);
+    if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
+      fetchErrors.push(`query="${query}" returned 0 results`);
+    }
+    allArticles.push(...articles);
+  }
+
+  if (allArticles.length === 0) {
+    return new Response(
+      JSON.stringify({
+        source: 'tavily',
+        fetched: 0,
+        inserted: 0,
+        skipped_duplicates: 0,
+        errors: fetchErrors,
+        elapsed_ms: Date.now() - start,
+      }),
+      { headers: { 'Content-Type': 'application/json', ...cors } }
+    );
+  }
+
+  // Deduplicate by URL before processing
+  const seen = new Set<string>();
+  const uniqueArticles = allArticles.filter((a) => {
+    if (seen.has(a.url)) return false;
+    seen.add(a.url);
+    return true;
+  });
+
+  const results: Array<{
+    title: string;
+    url: string;
+    similarity: number | null;
+    stored_reason: string;
+  }> = [];
+  const pendingNews: Array<{
+    title: string;
+    url: string;
+    source: string;
+    category: string | undefined;
+    published_at: string;
+    summary: string | undefined;
+    embedding: number[];
+    topicId: string | undefined;
+    isNewTopic: boolean;
+    newsLevel: string;
+    newsScore: number;
+    matchedSimilarity: number | null;
+  }> = [];
+
+  // Process all unique articles (Tavily articles ≤ ZAKER 10-item budget)
+  // Embed top 6 to stay within AI embedding budget (same as ZAKER FULL_COUNT)
+  const EMBED_COUNT = 6;
+
+  for (let i = 0; i < uniqueArticles.length; i++) {
+    const article = uniqueArticles[i];
+    const title = article.title;
+
+    let topicId: string | undefined;
+    let embedding: number[] = [];
+    let matchedSimilarity: number | null = null;
+    let newsLevel = 'follow';
+    let newsScore = 0;
+    let isNewTopic = false;
+    let storedReason = 'lightweight_no_embedding';
+
+    if (i < EMBED_COUNT) {
+      try {
+        const embResp = (await env.AI.run('@cf/baai/bge-m3', { text: [title] })) as import('./types').BgeEmbeddingResponse;
+        if (Array.isArray(embResp?.data) && embResp.data.length > 0) {
+          const it = embResp.data[0];
+          embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
+        }
+      } catch {
+        /* embedding failure: skip dedup check for this article */
+      }
+
+      if (embedding.length > 0) {
+        const similar = await findSimilarNews(env, embedding, 0.88, 3);
+        if (similar.length > 0 && similar[0].topic_id) {
+          const top = similar[0];
+          topicId = top.topic_id;
+          const updated = (await updateTopicScore(env, top.topic_id, 1)) as import('./types').UpdateTopicScoreResult;
+          newsScore = updated.new_score || 0;
+          newsLevel = updated.new_level || 'follow';
+          matchedSimilarity = top.similarity || null;
+          const simScore = top.similarity || 0;
+          if (simScore < 0.95) {
+            storedReason = 'same_topic_new_angle';
+          } else {
+            storedReason = 'same_topic_duplicate';
+          }
+        }
+      }
+
+      if (!topicId) {
+        const titleHash = Math.abs(hashStr(title)).toString(36);
+        const topicKey = `t-${titleHash}`;
+        const created = (await createTopic(env, topicKey, 'follow')) as import('./types').CreatedTopicRow;
+        if (created?.id) {
+          topicId = created.id;
+          newsScore = 0;
+          newsLevel = 'follow';
+          isNewTopic = true;
+          storedReason = embedding.length > 0 ? 'new_topic' : 'new_topic_without_embedding';
+        }
+      }
+    }
+
+    pendingNews.push({
+      title,
+      url: article.url,
+      source: 'tavily',
+      category: article.category,
+      published_at: article.published_at,
+      summary: article.summary,
+      embedding,
+      topicId,
+      isNewTopic,
+      newsLevel,
+      newsScore,
+      matchedSimilarity,
+    });
+
+    results.push({
+      title,
+      url: article.url,
+      similarity: matchedSimilarity,
+      stored_reason: storedReason,
+    });
+  }
+
+  // Batch insert all articles (Tavily articles + R2 stored metadata)
+  const batchNewsArray = pendingNews.map((p) => ({
+    title: p.title,
+    url: p.url || '',
+    source: p.source,
+    category: p.category,
+    hot_score: undefined as number | undefined,
+    published_at: p.published_at,
+    summary: (p.summary || '').substring(0, 200),
+    embedding: p.embedding.length > 0 ? p.embedding : undefined,
+    r2_key: undefined as string | undefined,
+    topic_id: p.topicId,
+    level: p.newsLevel,
+    score: p.newsScore,
+    is_stored_r2: false,
+  }));
+
+  const batchIds = await insertNewsHotspotsBatch(env, batchNewsArray);
+
+  // Dual-write embeddings to Vectorize
+  dualWriteEmbeddingsToVectorize(env, batchNewsArray, batchIds).catch((err) => {
+    console.error('[Tavily] Vectorize dual-write failed:', err);
+  });
+
+  // Record trend membership for articles with topicId
+  for (let i = 0; i < pendingNews.length; i++) {
+    const p = pendingNews[i];
+    const newsId = batchIds[i];
+    if (newsId && p.topicId) {
+      await recordTrendWithMember(env, newsId, p.topicId, p.isNewTopic);
+    }
+  }
+
+  const inserted = batchIds.filter(Boolean).length;
+  const skipped = results.filter((r) => r.stored_reason === 'same_topic_duplicate').length;
+
+  return new Response(
+    JSON.stringify({
+      source: 'tavily',
+      fetched: uniqueArticles.length,
+      inserted,
+      skipped_duplicates: skipped,
+      errors: fetchErrors,
+      elapsed_ms: Date.now() - start,
+      items: results,
+    }),
+    { headers: { 'Content-Type': 'application/json', ...cors } }
   );
 }

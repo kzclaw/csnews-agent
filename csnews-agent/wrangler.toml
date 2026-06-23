@@ -32,6 +32,10 @@ index_name = "csnews-news-vectors"
 # 历史: commit 5798b18 用 YOUR-WORKER.workers.dev 占位符 + 不替换 = cron 14h+ 静默
 # 现在: [vars] 不设同名 key → secret 唯一 → Worker env.WORKER_SELF_URL = secret 真值
 
+# TAVILY_API_KEY: set via `wrangler secret put TAVILY_API_KEY` — do NOT commit real key here
+# Placeholder "YOUR_KEY_HERE" activates mock test mode in fetchTavilyNews()
+TAVILY_API_KEY = "YOUR_KEY_HERE"
+
 # Worker 版本标识 —— 2026-06-17 删 (v0.36.10.6 拍板 B)
 # 原因: pre-commit hook (scripts/bump-version.sh) 算 STAGED tree hash 改 WORKER_VERSION, 但 hook 改 wrangler.toml 后 commit hash 又变, 字段不准确 (504838a commit 实际, hook 改 075ff17, 错位)
 # 修法: 删 hook + 删 WORKER_VERSION 字段 + health 端点改用 env.CF_DEPLOYMENT_ID (CF runtime 注入, 每次部署 UUID, 区分部署够用)

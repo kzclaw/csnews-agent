@@ -40,8 +40,8 @@ export {
   handleRescoreAction,
 } from './endpoints-core';
 
-// process (3)
-export { handleProcessAction, handleHealthAction, handleLogsAction } from './endpoints-process';
+// process (4)
+export { handleProcessAction, handleHealthAction, handleLogsAction, handleTavilyAction } from './endpoints-process';
 
 // trend (3) + helper
 export {

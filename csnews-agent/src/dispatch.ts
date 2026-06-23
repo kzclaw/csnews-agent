@@ -42,6 +42,7 @@ import {
   handleEventAction,
   handleMCPAction,
   handleMCPListAction,
+  handleTavilyAction,
 } from './endpoints';
 import { handleFeedbackCheckAction } from './feedback';
 
@@ -74,6 +75,7 @@ export const ALLOWED_ACTIONS = [
   'mcp',
   'mcp-list',
   'feedback-check',
+  'tavily',
 ] as const;
 export type Action = (typeof ALLOWED_ACTIONS)[number];
 
@@ -142,6 +144,7 @@ export async function dispatchAction(
   if (action === 'knowledge') return await handleKnowledgeAction(request, env, url, cors, ctx);
   if (action === 'entity') return await handleEntityAction(request, env, url, cors, ctx);
   if (action === 'event') return await handleEventAction(request, env, url, cors, ctx);
+  if (action === 'tavily') return await handleTavilyAction(request, env, url, cors);
   if (action === 'mcp') return await handleMCPAction(request, env, url, cors, ctx);
   if (action === 'mcp-list') return handleMCPListAction(request, cors);
   if (action === 'feedback-check') {
