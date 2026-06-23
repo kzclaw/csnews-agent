@@ -20,7 +20,7 @@ bucket_name = "csnews-raw"
 # 复用主 Worker 的 AI_USAGE_KV namespace（同一账户级别资源）
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"
-id = "<TODO: 部署时填入主 Worker 同一 namespace ID>"
+id = "470a9354d39241a09e311cdac06a1c69"
 
 # Cron Trigger：每 6 小时触发一次
 # CF Free Plan 限制：每账号 5 个 cron triggers
