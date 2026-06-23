@@ -22,6 +22,11 @@ binding = "PROCESS_STATE"
 id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
 preview_id = "c8b14c901b114f32aa5903a2d733ff91"
 
+[[kv_namespaces]]
+binding = "AI_USAGE_KV"
+id = "470a9354d39241a09e311cdac06a1c69"
+preview_id = "470a9354d39241a09e311cdac06a1c69"
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "csnews-news-vectors"
@@ -35,6 +40,12 @@ index_name = "csnews-news-vectors"
 # TAVILY_API_KEY: set via `wrangler secret put TAVILY_API_KEY` — do NOT commit real key here
 # Placeholder "YOUR_KEY_HERE" activates mock test mode in fetchTavilyNews()
 TAVILY_API_KEY = "YOUR_KEY_HERE"
+
+# AI 预算阈值 (Phase 1) — Neurons 配额
+AI_BUDGET_DAILY_LIMIT = "10000"
+AI_BUDGET_WARNING_THRESHOLD = "5000"
+AI_BUDGET_CRITICAL_THRESHOLD = "7000"
+AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
 
 # Worker 版本标识 —— 2026-06-17 删 (v0.36.10.6 拍板 B)
 # 原因: pre-commit hook (scripts/bump-version.sh) 算 STAGED tree hash 改 WORKER_VERSION, 但 hook 改 wrangler.toml 后 commit hash 又变, 字段不准确 (504838a commit 实际, hook 改 075ff17, 错位)
@@ -64,6 +75,6 @@ TAVILY_API_KEY = "YOUR_KEY_HERE"
 #   - 业务: 查 open warnings → record_feedback RPC → 调 score_rule_weights → 写 R2 accuracy
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
+crons = [ "0 0 * * *", "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
 
 

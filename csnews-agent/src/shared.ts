@@ -39,6 +39,21 @@ export interface Env {
    * Placeholder "YOUR_KEY_HERE" activates mock test mode.
    */
   TAVILY_API_KEY?: string;
+
+  /**
+   * KV namespace 存 AI Neurons 用量 (Phase 1).
+   * Key format: usage/{YYYY-MM-DD}, TTL 7 days.
+   */
+  AI_USAGE_KV?: KVNamespace;
+
+  /**
+   * AI 预算阈值 env vars (Phase 1).
+   * 在 wrangler.toml [vars] 中配置 (非 Secret，明文安全)。
+   */
+  AI_BUDGET_DAILY_LIMIT?: number;
+  AI_BUDGET_WARNING_THRESHOLD?: number;
+  AI_BUDGET_CRITICAL_THRESHOLD?: number;
+  AI_BUDGET_SHUTDOWN_THRESHOLD?: number;
 }
 
 export function getSupabaseHost(env: Env): string {
