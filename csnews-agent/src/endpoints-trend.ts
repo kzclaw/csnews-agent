@@ -742,3 +742,213 @@ export async function runKnowledgeAccumulation(
     return { written, errors: errors + 1 };
   }
 }
+
+// ===================== runKnowledgeGeneration (warning-triggered 24h insight) =====================
+// Warning 创建 24h 后自动生成 insight:
+//   1. 扫 warnings 表找 created_at 落在 23h-25h 窗口的记录 (覆盖 cron 漂移)
+//   2. 查 Supabase knowledge 表确认该 warning_id 未处理 (幂等)
+//   3. 查 topic 信息 + top-5 新闻标题 + trend_snapshots
+//   4. 写 R2: knowledge/{topic_id}/{timestamp}.md (结构化 Markdown)
+//   5. 写 Supabase knowledge 表 (索引/引用)
+//
+// 不调 LLM, 纯 SQL + 模板 (快赢哲学)
+// 触发: application-level scheduler (不依赖 pg_cron)
+export async function runKnowledgeGeneration(
+  env: Env
+): Promise<{ written: number; skipped: number; errors: number }> {
+  let written = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  try {
+    // 1. 时间窗口: 23h-25h ago (覆盖 cron 漂移 ±1h)
+    const now = Date.now();
+    const windowStart = new Date(now - 25 * 3600 * 1000).toISOString();
+    const windowEnd = new Date(now - 23 * 3600 * 1000).toISOString();
+
+    // 2. 扫 warnings 表
+    const warningsRes = await supabaseFetch(
+      env,
+      `/rest/v1/warnings?created_at=gte.${encodeURIComponent(windowStart)}&created_at=lte.${encodeURIComponent(windowEnd)}&status=eq.open&select=id,topic_id,warning_type,severity,reason,created_at`
+    );
+    const warnings: Array<{
+      id: string;
+      topic_id: string;
+      warning_type: string;
+      severity: string;
+      reason: string;
+      created_at: string;
+    }> = await safeJson(warningsRes);
+    if (!warnings || warnings.length === 0) {
+      return { written: 0, skipped: 0, errors: 0 };
+    }
+
+    // 3. 查已有 knowledge 记录 (幂等:跳过已处理的 warning)
+    const existingRes = await supabaseFetch(
+      env,
+      `/rest/v1/knowledge?warning_id=in.(${warnings.map((w) => w.id).join(',')})&select=warning_id`
+    );
+    const existing: Array<{ warning_id: string }> = await safeJson(existingRes);
+    const processedWarnings = new Set(existing.map((e) => e.warning_id));
+
+    const pendingWarnings = warnings.filter((w) => !processedWarnings.has(w.id));
+    if (pendingWarnings.length === 0) {
+      return { written: 0, skipped: warnings.length, errors: 0 };
+    }
+
+    // 4. 对每个 pending warning 生成 insight
+    for (const w of pendingWarnings) {
+      try {
+        const ts = new Date();
+        const tsIso = ts.toISOString();
+
+        // 4.1 查 topic 信息
+        const topicRes = await supabaseFetch(
+          env,
+          `/rest/v1/topics?id=eq.${w.topic_id}&select=id,topic_key,level,score,last_active_at&limit=1`
+        );
+        const topics: Array<{ id: string; topic_key: string; level: string; score: number; last_active_at: string | null }> =
+          await safeJson(topicRes);
+        const topic = topics[0];
+        if (!topic) {
+          console.warn(`[knowledge-gen] topic ${w.topic_id} not found for warning ${w.id}`);
+          skipped++;
+          continue;
+        }
+
+        // 4.2 查 top-5 新闻标题 (按 hot_score desc)
+        const sinceIso = new Date(now - 24 * 3600 * 1000).toISOString();
+        const newsRes = await supabaseFetch(
+          env,
+          `/rest/v1/news_hotspots?topic_id=eq.${w.topic_id}&published_at=gte.${encodeURIComponent(sinceIso)}&select=id,title,source,hot_score&order=hot_score.desc&limit=5`
+        );
+        const news: Array<{ id: string; title: string | null; source: string | null; hot_score: number | null }> =
+          await safeJson(newsRes);
+
+        // 4.3 查 trend_snapshots (最近 24h)
+        const snapshotsRes = await supabaseFetch(
+          env,
+          `/rest/v1/trend_snapshots?topic_id=eq.${w.topic_id}&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,score,velocity,acceleration,stage,created_at&order=created_at.desc&limit=10`
+        );
+        const snapshots: Array<{
+          id: string;
+          score: number | null;
+          velocity: number | null;
+          acceleration: number | null;
+          stage: string | null;
+          created_at: string;
+        }> = await safeJson(snapshotsRes);
+
+        // 4.4 计算汇总数据
+        const newsCount = news.length;
+        const latestSnapshot = snapshots[0] || null;
+        const avgVelocity =
+          snapshots.length > 0
+            ? snapshots.reduce((s, snap) => s + (snap.velocity || 0), 0) / snapshots.length
+            : 0;
+        const maxVelocity =
+          snapshots.length > 0 ? Math.max(...snapshots.map((s) => s.velocity || 0)) : 0;
+        const confidence = Math.min(
+          0.99,
+          Math.max(0.1, (topic.score || 0) / 10 + (newsCount / 5) * 0.2)
+        );
+
+        // 4.5 生成 insight 摘要文本
+        const velocityLabel =
+          avgVelocity > 2
+            ? '🔥 高热'
+            : avgVelocity > 1
+              ? '📈 上升'
+              : avgVelocity < 0.5
+                ? '📉 下降'
+                : '➡️ 平稳';
+        const insight =
+          `【${topic.topic_key}】${velocityLabel} · 24h ${newsCount}条新闻 · ` +
+          `话题评分 ${topic.score} · ${latestSnapshot?.stage ? `阶段 ${latestSnapshot.stage}` : '阶段未知'}` +
+          ` · 均速 ${avgVelocity.toFixed(2)} · 最高 ${maxVelocity.toFixed(2)}`;
+
+        // 4.6 构造 R2 Markdown (topic 标题 + trend_snapshots 摘要 + top-5 新闻)
+        const r2Key = `knowledge/${topic.id}/${tsIso.replace(/[:.]/g, '-')}.md`;
+        const newsList =
+          news.length > 0
+            ? news
+                .map((n, i) => `${i + 1}. **${n.title || '(无标题)'}** — ${n.source || '未知来源'} (hot_score=${n.hot_score ?? '?'})`)
+                .join('\n')
+            : '_24h 无相关新闻_';
+
+        const snapshotTable =
+          snapshots.length > 0
+            ? `| 时间 | 评分 | 速度 | 加速度 | 阶段 |\n|------|------|------|--------|------|\n` +
+              snapshots
+                .map(
+                  (s) =>
+                    `| ${new Date(s.created_at).toLocaleString('zh-CN')} | ${s.score ?? '?'} | ${s.velocity?.toFixed(2) ?? '?'} | ${s.acceleration?.toFixed(2) ?? '?'} | ${s.stage ?? '?'} |`
+                )
+                .join('\n')
+            : '_暂无趋势快照_';
+
+        const markdown =
+          `# ${topic.topic_key}\n\n` +
+          `> **Insight 摘要**: ${insight}\n` +
+          `> **触发来源**: warning=${w.warning_type} (severity=${w.severity})\n` +
+          `> **生成时间**: ${tsIso}\n` +
+          `> **置信度**: ${(confidence * 100).toFixed(0)}%\n\n` +
+          `---\n\n` +
+          `## 基础信息\n\n` +
+          `- **话题 ID**: ${topic.id}\n` +
+          `- **等级**: ${topic.level}\n` +
+          `- **评分**: ${topic.score}\n` +
+          `- **最后活跃**: ${topic.last_active_at || '未知'}\n` +
+          `- **Warning 原因**: ${w.reason || '无'}\n\n` +
+          `## Top-5 新闻标题 (24h)\n\n` +
+          `${newsList}\n\n` +
+          `## 趋势快照 (24h)\n\n` +
+          `${snapshotTable}\n\n` +
+          `---\n\n` +
+          `_由 CSNEWS Knowledge Engine 自动生成于 ${tsIso}_\n`;
+
+        // 4.7 写 R2
+        await env.csnews_raw.put(r2Key, markdown, {
+          httpMetadata: { contentType: 'text/markdown' },
+        });
+
+        // 4.8 写 Supabase knowledge 表 (幂等)
+        const insertRes = await supabaseFetch(env, '/rest/v1/knowledge', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify([
+            {
+              topic_id: topic.id,
+              warning_id: w.id,
+              insight,
+              confidence,
+              r2_key: r2Key,
+              created_at: tsIso,
+            },
+          ]),
+        });
+        if (!insertRes.ok) {
+          const errText = await insertRes.text();
+          // 23505 = unique violation (并发幂等), 忽略不报错
+          if (!errText.includes('23505')) {
+            throw new Error(`knowledge insert failed HTTP ${insertRes.status}: ${errText.slice(0, 200)}`);
+          }
+          console.log(`[knowledge-gen] warning ${w.id} already inserted (idempotent skip)`);
+          skipped++;
+          continue;
+        }
+        const inserted: Array<{ id: string }> = await safeJson(insertRes);
+        console.log(`[knowledge-gen] wrote knowledge id=${inserted[0]?.id} r2=${r2Key} warning=${w.id}`);
+        written++;
+      } catch (e: any) {
+        errors++;
+        console.error(`[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`);
+      }
+    }
+
+    return { written, skipped, errors };
+  } catch (e: any) {
+    console.error(`[knowledge-gen] job failed: ${e?.message || e}`);
+    return { written, skipped: 0, errors: errors + 1 };
+  }
+}

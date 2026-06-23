@@ -90,6 +90,16 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     allowedFilters: ['topic_id'],
     timeField: 'created_at',
   },
+  // knowledge: Knowledge Engine insight 查询 (Supabase knowledge 表 + R2 引用)
+  // 字段: id / topic_id / warning_id / insight / confidence / r2_key / created_at
+  knowledge: {
+    table: 'knowledge',
+    defaultOrderBy: 'created_at',
+    allowedOrderBy: ['created_at', 'confidence', 'topic_id'],
+    defaultSelect: 'id, topic_id, warning_id, insight, confidence, r2_key, created_at',
+    allowedFilters: ['topic_id'],
+    timeField: 'created_at',
+  },
   // stats: 统计汇总视图,查询 news_hotspots / topics / warnings 各表 count
   stats: {
     table: 'news_hotspots',

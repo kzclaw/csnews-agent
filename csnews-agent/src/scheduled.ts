@@ -10,6 +10,7 @@
  *     (历史教训: v0.34-v0.36.4 fetch(selfUrl) 走 CF 内部 routing 9 整点全 522)
  *   - v0.36.7: process 跑完 inline 调 runKnowledgeAccumulation
  *     ("快赢"哲学: 0 DDL · 全 R2 · 失败不阻塞 process 200)
+ *   - Knowledge Engine: warning 触发 24h insight 生成 (写 R2 + Supabase knowledge 表)
  *   - 所有 log 用 ctx.waitUntil 异步持久化 (fire-and-forget, R2 失败不阻塞)
  *   - scheduler log 失败不阻塞 process (v0.36.5 mini 确定 try/catch 兜底)
  *
@@ -19,7 +20,7 @@
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
-import { handleProcessAction, runKnowledgeAccumulation, handleTavilyAction } from './endpoints';
+import { handleProcessAction, runKnowledgeAccumulation, runKnowledgeGeneration, handleTavilyAction } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
 import { runEventProcess } from './event-process';
@@ -32,8 +33,10 @@ import { runFeedbackCheck } from './feedback';
  *   1. 写 [cron] process triggered log
  *   2. inline 调 handleProcessAction (v0.36.5 mini 修, 不 fetch selfUrl)
  *   3. 写 [cron] process done/error log
- *   4. inline 调 runKnowledgeAccumulation (v0.36.7 加)
+ *   4. inline 调 runKnowledgeAccumulation (v0.36.7 加, 所有 active topics 累积)
  *   5. 写 [cron] knowledge accumulation done/error log
+ *   6. inline 调 runKnowledgeGeneration (warning 触发 24h insight 生成)
+ *   7. 写 [cron] knowledge generation done/error log
  *
  * 失败处理:
  *   - process 抛错 → log error + 不阻塞 (v0.36.5 mini 确定)
@@ -152,6 +155,45 @@ export async function scheduledProcess(
           'error',
           '[cron] knowledge accumulation failed',
           { elapsed_ms: knowledgeElapsed, err: e?.message || String(e) },
+          'scheduler'
+        ).catch(() => {})
+      );
+    }
+
+    // Warning-triggered 24h insight generation (application-level scheduler)
+    // 不占独立 cron slot, 复用整点 slot 扫描 warnings 表找 23h-25h 窗口记录
+    const insightStart = Date.now();
+    try {
+      const insightRes = await runKnowledgeGeneration(env);
+      const insightElapsed = Date.now() - insightStart;
+      console.log(
+        `[cron] knowledge generation done written=${insightRes.written} skipped=${insightRes.skipped} errors=${insightRes.errors} elapsed=${insightElapsed}ms`
+      );
+      ctx.waitUntil(
+        logEvent(
+          env,
+          'info',
+          '[cron] knowledge generation done',
+          {
+            written: insightRes.written,
+            skipped: insightRes.skipped,
+            errors: insightRes.errors,
+            elapsed_ms: insightElapsed,
+          },
+          'scheduler'
+        ).catch(() => {})
+      );
+    } catch (e: any) {
+      const insightElapsed = Date.now() - insightStart;
+      console.error(
+        `[cron] knowledge generation failed elapsed=${insightElapsed}ms err=${e?.message || e}`
+      );
+      ctx.waitUntil(
+        logEvent(
+          env,
+          'error',
+          '[cron] knowledge generation failed',
+          { elapsed_ms: insightElapsed, err: e?.message || String(e) },
           'scheduler'
         ).catch(() => {})
       );

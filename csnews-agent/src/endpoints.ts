@@ -48,12 +48,13 @@ export {
   handleTavilyAction,
 } from './endpoints-process';
 
-// trend (3) + helper
+// trend (3) + helpers
 export {
   handleContentAction,
   handleTrendAction,
   handleKnowledgeAction,
   runKnowledgeAccumulation,
+  runKnowledgeGeneration,
 } from './endpoints-trend';
 
 // entity (2)
