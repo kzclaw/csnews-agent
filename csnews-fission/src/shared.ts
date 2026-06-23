@@ -9,6 +9,7 @@ export interface Env {
   BEARER_TOKEN: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
+  TAVILY_API_KEY?: string;
 }
 
 export function getSupabaseHost(env: Env): string {
