@@ -2,7 +2,7 @@ name = "csnews-fission"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
-# Fission Worker：裂变触发器（O7KR1 Phase 1）
+# Fission Worker：裂变触发器
 # 职责：每 30 分钟扫描 explosive+score=9 的 topic，执行裂变流程
 # 架构：monorepo 子目录，与主 Worker 独立部署
 
