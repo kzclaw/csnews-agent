@@ -469,6 +469,45 @@ async function executeTool(
   return handler(env, ctx, params);
 }
 
+// Standard MCP tools/call handler
+async function handleToolsCall(
+  req: JSONRPCRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<JSONRPCResponse> {
+  const p = (req.params || {}) as Record<string, unknown>;
+  const toolName = p.name as string;
+  const toolArgs = (p.arguments || {}) as Record<string, unknown>;
+
+  if (!toolName || typeof toolName !== 'string') {
+    return buildErrorResponse(
+      req.id,
+      MCP_ERROR_CODES.INVALID_PARAMS,
+      'Missing or invalid tool name in params.name'
+    );
+  }
+
+  if (!TOOL_HANDLERS[toolName]) {
+    return buildErrorResponse(
+      req.id,
+      MCP_ERROR_CODES.METHOD_NOT_FOUND,
+      `Unknown tool: ${toolName}`
+    );
+  }
+
+  try {
+    const text = await executeTool(toolName, env, ctx, toolArgs);
+    return buildSuccessResponse(req.id, text);
+  } catch (e: any) {
+    return buildErrorResponse(
+      req.id,
+      MCP_ERROR_CODES.TOOL_EXECUTION_ERROR,
+      e.message || 'Tool execution failed',
+      { tool: toolName }
+    );
+  }
+}
+
 function handleMCPProtocolMethod(req: JSONRPCRequest): {
   isProtocol: boolean;
   response?: Record<string, unknown>;
@@ -701,6 +740,11 @@ export async function handleMCPAction(
           return proto.response as unknown as JSONRPCResponse;
         }
 
+        // Standard MCP tools/call
+        if (req.method === 'tools/call') {
+          return handleToolsCall(req, env, ctx);
+        }
+
         try {
           const text = await executeTool(req.method, env, ctx, params(req));
           return buildSuccessResponse(req.id, text);
@@ -721,6 +765,14 @@ export async function handleMCPAction(
     const proto = handleMCPProtocolMethod(req);
     if (proto.isProtocol && proto.response) {
       return new Response(JSON.stringify(proto.response), {
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+
+    // Standard MCP tools/call
+    if (req.method === 'tools/call') {
+      const response = await handleToolsCall(req, env, ctx);
+      return new Response(JSON.stringify(response), {
         headers: { 'Content-Type': 'application/json', ...cors },
       });
     }
