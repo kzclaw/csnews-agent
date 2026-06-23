@@ -270,7 +270,7 @@ export async function canUseTier(
  * @param severity  - 可选，severity 影响阈值 (severity越高阈值越严苛)
  * @returns true = 允许调用 AI; false = 跳过此次调用
  *
- * 阈值规格 (O12KR1 Phase 2):
+ * 阈值规格 (Phase 2):
  *   L1: 始终允许 (规则分类 0 Neurons)
  *   L2: 始终允许 (AI 评分免费路由)
  *   L4: used < 7,000 Neurons

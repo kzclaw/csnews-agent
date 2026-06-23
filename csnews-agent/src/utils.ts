@@ -37,7 +37,7 @@ export function extractText(resp: any): string {
 // NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
 export async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
   if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
-  // O12KR1 Phase 2: 预算检查 L2（AI 评分）
+  // Phase 2: 预算检查 L2（AI 评分）
   if (!(await shouldTriggerAiCall(env, 'L2'))) {
     return '(AI跳过-预算不足-L2)';
   }

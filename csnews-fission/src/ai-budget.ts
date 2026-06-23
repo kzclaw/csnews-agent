@@ -1,5 +1,5 @@
 /**
- * CSNEWS Fission Worker · AI 预算检查 (Phase 2 · O12KR1)
+ * CSNEWS Fission Worker · AI 预算检查 (Phase 2)
  *
  * 预埋集成点：裂变流程 Workers AI 调用前的预算检查
  * - L5 裂变搜索词生成前调用 shouldTriggerAiCall('L5')
@@ -70,7 +70,7 @@ export async function getDailyUsage(env: Env, date?: string): Promise<number> {
  * @param severity  - 可选，severity 影响阈值
  * @returns true = 允许调用 AI; false = 跳过此次调用
  *
- * 阈值规格 (O12KR1 Phase 2):
+ * 阈值规格 (Phase 2):
  *   L5: used < 8,000 Neurons
  *   L6: used < 9,000 Neurons
  */

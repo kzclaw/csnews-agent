@@ -757,7 +757,7 @@ export async function runKnowledgeAccumulation(
 export async function runKnowledgeGeneration(
   env: Env
 ): Promise<{ written: number; skipped: number; errors: number }> {
-  // O12KR1 Phase 2: 预算检查 L6（Knowledge generation）
+  // Phase 2: 预算检查 L6（Knowledge generation）
   if (!(await shouldTriggerAiCall(env, 'L6'))) {
     console.warn('[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold');
     return { written: 0, skipped: 0, errors: 0 };

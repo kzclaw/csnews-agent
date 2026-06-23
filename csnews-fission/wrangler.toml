@@ -16,7 +16,7 @@ binding = "AI"
 binding = "csnews_raw"
 bucket_name = "csnews-raw"
 
-# KV namespace：AI Neurons 用量追踪 (Phase 1 · O12KR1)
+# KV namespace：AI Neurons 用量追踪
 # 复用主 Worker 的 AI_USAGE_KV namespace（同一账户级别资源）
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"

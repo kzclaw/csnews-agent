@@ -11,7 +11,7 @@ export interface Env {
   SUPABASE_SERVICE_KEY: string;
   TAVILY_API_KEY?: string;
   /**
-   * KV namespace 存 AI Neurons 用量 (Phase 1 · O12KR1)
+   * KV namespace 存 AI Neurons 用量 (Phase 1)
    * 复用主 Worker AI_USAGE_KV，同一账户级别资源
    */
   AI_USAGE_KV?: KVNamespace;
