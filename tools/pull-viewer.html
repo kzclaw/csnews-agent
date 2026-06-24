@@ -297,9 +297,9 @@ body {
 }
 
 /* main area */
-.main { background: var(--bg-1); overflow: hidden; position: relative; }
+.main { background: var(--bg-1); overflow: hidden; position: relative; min-height: 0; }
 .view {
-  position: absolute; inset: 0;
+  position: absolute; inset: 0; width: 100%;
   display: none;
   overflow: hidden;
   overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
@@ -734,8 +734,8 @@ body {
 .reader-body {
   display: grid;
   grid-template-columns: 240px 1fr;
-  flex: 1;
-  min-height: 0;
+  flex: 1; min-height: 0;
+  width: 100%; overflow: hidden;
 }
 .sidebar {
   background: var(--bg);
@@ -813,8 +813,7 @@ body {
   /* fix: .reader-body 的 flex child, .view 已有 max-height + overflow-y:auto 约束滚动边界
      不要在 reader-main 层再加 overflow-y:auto（会导致 .view + .reader-main 双层滚动）
      → 只用 min-height:0 让 flex child 可收缩，使 grid(.feed) 能正确获知可用高度 */
-  display: flex; flex-direction: column;
-  min-height: 0;
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
 }
 
 .filter-bar {
