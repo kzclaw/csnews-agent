@@ -376,7 +376,7 @@ export async function handleHealthAction(
     (v) => typeof v === 'object' && 'error' in v
   ).length;
   checks.r2_prefix_counts = {
-    status: r2PrefixErrorCount === 0 ? 'ok' : r2PrefixErrorCount < r2PrefixResult.r2_prefix_counts ? 'degraded' : 'down',
+    status: r2PrefixErrorCount === 0 ? 'ok' : r2PrefixErrorCount < Object.keys(r2PrefixResult.r2_prefix_counts).length ? 'degraded' : 'down',
     detail: `${r2PrefixErrorCount}/${Object.keys(r2PrefixResult.r2_prefix_counts).length} prefixes failed`,
   };
 
@@ -424,8 +424,8 @@ export async function handleHealthAction(
 
   // 整体 status 聚合
   const statuses = Object.values(checks)
-    .filter((c): c is { status: string; detail: any } => c != null && 'status' in c)
-    .map((c) => c.status);
+    .filter((c): c is { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: any } => c != null && 'status' in c)
+    .map((c) => c.status as string);
   if (statuses.includes('down')) result.status = 'down';
   else if (statuses.includes('degraded')) result.status = 'degraded';
   else if (statuses.every((s) => s === 'ok' || s === 'unknown')) result.status = 'ok';
