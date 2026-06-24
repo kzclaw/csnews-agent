@@ -810,8 +810,11 @@ body {
 }
 
 .reader-main {
-  overflow-y: auto;
+  /* fix: .reader-body 的 flex child, .view 已有 max-height + overflow-y:auto 约束滚动边界
+     不要在 reader-main 层再加 overflow-y:auto（会导致 .view + .reader-main 双层滚动）
+     → 只用 min-height:0 让 flex child 可收缩，使 grid(.feed) 能正确获知可用高度 */
   display: flex; flex-direction: column;
+  min-height: 0;
 }
 
 .filter-bar {
@@ -867,6 +870,10 @@ body {
   grid-template-columns: 1fr 1fr;
   grid-auto-flow: row dense;
   gap: 12px;
+  /* fix: .reader-main 是 flex-column 容器，.feed 是 flex child 且是 grid item
+     需要 min-height: 0 (flex child 收缩到内容高度的默认值会破坏 grid layout)
+     → min-height: 0 让 flex child 能收缩到可用空间，grid 才能正确填满 */
+  min-height: 0;
 }
 .feed > .card:first-child {
   /* v0.36.12 KR2: 首条置顶大图 (lead story, 跨整行 16:9) */
