@@ -1,58 +1,193 @@
 /**
- * Structural contract tests — verify exported interfaces are stable.
- * If these break, the public API contract is violated.
+ * Business contract tests for pull.ts type interfaces and query builders.
+ * Verifies that exported types and interfaces match the expected shape.
  */
-import { describe, it, expect } from 'vitest';
-import * as score from '../src/score';
-import * as classify from '../src/classify';
-import * as pull from '../src/pull';
-import * as dispatch from '../src/dispatch';
 
-describe('score exports', () => {
-  it('exports hashStr function', () => {
-    expect(typeof score.hashStr).toBe('function');
+import type {
+  TypeConfig,
+  ParsedFilters,
+  PullResponse,
+  Format,
+} from '../src/pull';
+import { TYPE_CONFIG } from '../src/pull';
+import { createMockUrl } from '../test-helpers';
+import { parseFilters } from '../src/pull';
+
+describe('pull.ts exported types', () => {
+  describe('TypeConfig shape', () => {
+    it('has all required fields', () => {
+      const config: TypeConfig = {
+        table: 'news_hotspots',
+        defaultOrderBy: 'created_at',
+        allowedOrderBy: ['created_at', 'published_at'],
+        defaultSelect: 'id, title',
+        allowedFilters: ['level', 'category'],
+        timeField: 'created_at',
+      };
+      expect(config.table).toBe('news_hotspots');
+      expect(config.defaultOrderBy).toBe('created_at');
+      expect(Array.isArray(config.allowedOrderBy)).toBe(true);
+      expect(typeof config.defaultSelect).toBe('string');
+      expect(Array.isArray(config.allowedFilters)).toBe(true);
+      expect(config.timeField).toBe('created_at');
+    });
   });
-  it('exports scoreRule function', () => {
-    expect(typeof score.scoreRule).toBe('function');
+
+  describe('ParsedFilters shape', () => {
+    it('has all required fields', () => {
+      const filters: ParsedFilters = {
+        type: 'news',
+        limit: 20,
+        order: 'desc',
+        orderBy: 'created_at',
+        format: 'summary',
+      };
+      expect(filters.type).toBe('news');
+      expect(filters.limit).toBe(20);
+      expect(filters.order).toMatch(/^(asc|desc)$/);
+      expect(typeof filters.orderBy).toBe('string');
+      expect(filters.format).toMatch(/^(ids|summary|full)$/);
+    });
+
+    it('accepts all optional fields', () => {
+      const filters: ParsedFilters = {
+        type: 'news',
+        limit: 10,
+        offset: 5,
+        order: 'asc',
+        orderBy: 'hot_score',
+        since: '2024-01-01T00:00:00.000Z',
+        until: '2024-12-31T23:59:59.999Z',
+        level: 'important',
+        category: '科技',
+        topicId: '123e4567-e89b-12d3-a456-426614174000',
+        status: 'open',
+        stage: 'emerging',
+        fissionTriggered: true,
+        titleLike: 'AI',
+        select: 'id, title',
+        format: 'full',
+      };
+      expect(filters.offset).toBe(5);
+      expect(filters.level).toBe('important');
+      expect(filters.topicId).toMatch(/^[0-9a-f-]+$/i);
+      expect(filters.fissionTriggered).toBe(true);
+      expect(filters.titleLike).toBe('AI');
+    });
   });
-  it('exports applyScore function', () => {
-    expect(typeof score.applyScore).toBe('function');
+
+  describe('PullResponse shape', () => {
+    it('has all required fields', () => {
+      const response: PullResponse = {
+        type: 'news',
+        count: 0,
+        total: 0,
+        truncated: false,
+        filters: {},
+        items: [],
+      };
+      expect(response.type).toBe('news');
+      expect(response.count).toBe(0);
+      expect(response.total).toBe(0);
+      expect(response.truncated).toBe(false);
+      expect(Array.isArray(response.filters)).toBe(false);
+      expect(Array.isArray(response.items)).toBe(true);
+    });
   });
-  it('exports AI_ROUTE_R_THRESHOLD constant', () => {
-    expect(typeof score.AI_ROUTE_R_THRESHOLD).toBe('number');
+
+  describe('Format type', () => {
+    it('covers all valid format values', () => {
+      const formats: Format[] = ['ids', 'summary', 'full'];
+      expect(formats).toContain('ids');
+      expect(formats).toContain('summary');
+      expect(formats).toContain('full');
+    });
   });
 });
 
-describe('classify exports', () => {
-  it('exports classifyRule function', () => {
-    expect(typeof classify.classifyRule).toBe('function');
+describe('pull.ts TYPE_CONFIG coverage', () => {
+  it('news type has correct allowedOrderBy', () => {
+    expect(TYPE_CONFIG.news.allowedOrderBy).toContain('created_at');
+    expect(TYPE_CONFIG.news.allowedOrderBy).toContain('hot_score');
   });
-  it('exports classify function', () => {
-    expect(typeof classify.classify).toBe('function');
+
+  it('topics type has correct allowedOrderBy', () => {
+    expect(TYPE_CONFIG.topics.allowedOrderBy).toContain('score');
+    expect(TYPE_CONFIG.topics.allowedOrderBy).toContain('last_active_at');
+  });
+
+  it('warnings type has correct allowedOrderBy', () => {
+    expect(TYPE_CONFIG.warnings.allowedOrderBy).toContain('severity');
+  });
+
+  it('trends type has correct allowedOrderBy', () => {
+    expect(TYPE_CONFIG.trends.allowedOrderBy).toContain('velocity');
+    expect(TYPE_CONFIG.trends.allowedOrderBy).toContain('acceleration');
+  });
+
+  it('entity type is R2-backed with correct defaults', () => {
+    expect(TYPE_CONFIG.entity.table).toBe('__r2__');
+    expect(TYPE_CONFIG.entity.allowedOrderBy).toContain('confidence');
+    expect(TYPE_CONFIG.entity.allowedOrderBy).toContain('mention_count');
+  });
+
+  it('fission-pending has no allowedFilters', () => {
+    expect(TYPE_CONFIG['fission-pending'].allowedFilters).toHaveLength(0);
+  });
+
+  it('stats has no allowedFilters', () => {
+    expect(TYPE_CONFIG.stats.allowedFilters).toHaveLength(0);
   });
 });
 
-describe('pull exports', () => {
-  it('exports TYPE_CONFIG', () => {
-    expect(typeof pull.TYPE_CONFIG).toBe('object');
+describe('score.ts exported functions', () => {
+  it('scoreRule is a function with correct signature', async () => {
+    const { scoreRule } = await import('../src/score');
+    const result = scoreRule('AI models achieve breakthrough performance');
+    expect(typeof result).toBe('object');
+    expect(typeof result.score).toBe('number');
+    expect(typeof result.reason).toBe('string');
+    expect(typeof result.isHigh).toBe('boolean');
   });
-  it('exports parseFilters function', () => {
-    expect(typeof pull.parseFilters).toBe('function');
-  });
-  it('exports VALID_LEVELS', () => {
-    expect(Array.isArray(pull.VALID_LEVELS)).toBe(true);
-  });
-  it('exports VALID_STAGES', () => {
-    expect(Array.isArray(pull.VALID_STAGES)).toBe(true);
+
+  it('hashStr is a function with correct signature', async () => {
+    const { hashStr } = await import('../src/score');
+    expect(typeof hashStr).toBe('function');
+    expect(typeof hashStr('test')).toBe('number');
   });
 });
 
-describe('dispatch exports', () => {
-  it('exports ALLOWED_ACTIONS array', () => {
-    expect(Array.isArray(dispatch.ALLOWED_ACTIONS)).toBe(true);
-    expect(dispatch.ALLOWED_ACTIONS.length).toBeGreaterThan(0);
+describe('classify.ts exported functions', () => {
+  it('classifyRule is a function returning a string', async () => {
+    const { classifyRule } = await import('../src/classify');
+    expect(typeof classifyRule).toBe('function');
+    expect(typeof classifyRule('OpenAI releases new model')).toBe('string');
   });
-  it('exports dispatchAction function', () => {
-    expect(typeof dispatch.dispatchAction).toBe('function');
+});
+
+describe('dispatch.ts exported constants', () => {
+  it('ALLOWED_ACTIONS is a non-empty readonly tuple', async () => {
+    const { ALLOWED_ACTIONS } = await import('../src/dispatch');
+    expect(Array.isArray(ALLOWED_ACTIONS)).toBe(true);
+    expect(ALLOWED_ACTIONS.length).toBeGreaterThan(0);
+    expect(ALLOWED_ACTIONS).toContain('pull');
+    expect(ALLOWED_ACTIONS).toContain('ping');
+    expect(ALLOWED_ACTIONS).toContain('score');
+    expect(ALLOWED_ACTIONS).toContain('classify');
+  });
+
+  it('DEFAULT_ACTION is a valid action string', async () => {
+    const { DEFAULT_ACTION, ALLOWED_ACTIONS } = await import('../src/dispatch');
+    expect(ALLOWED_ACTIONS).toContain(DEFAULT_ACTION);
+  });
+
+  it('dispatchAction is a function', async () => {
+    const { dispatchAction } = await import('../src/dispatch');
+    expect(typeof dispatchAction).toBe('function');
+  });
+
+  it('handleCorsPreflight is a function', async () => {
+    const { handleCorsPreflight } = await import('../src/dispatch');
+    expect(typeof handleCorsPreflight).toBe('function');
   });
 });

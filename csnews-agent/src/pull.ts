@@ -141,7 +141,7 @@ export interface PullResponse {
  * - summary: 截断 summary 字段到 200 字,其他保留
  * - full: 完整字段(但仍排除 embedding 大字段)
  */
-function projectFormat(items: any[], format: Format): any[] {
+export function projectFormat(items: any[], format: Format): any[] {
   if (format === 'ids') {
     return items.map((item) => ({ id: item.id }));
   }
@@ -381,7 +381,7 @@ export function parseFilters(
 
 // ====== PostgREST 查询构造器(白名单 + 参数化) ======
 
-function buildPostgRestQuery(filters: ParsedFilters): string {
+export function buildPostgRestQuery(filters: ParsedFilters): string {
   const config = TYPE_CONFIG[filters.type];
   const params: string[] = [];
 

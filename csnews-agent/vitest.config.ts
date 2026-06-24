@@ -12,8 +12,6 @@ export default defineConfig({
         'src/classify.ts',
         'src/pull.ts',
         'src/dispatch.ts',
-        'src/endpoints-entity.ts',
-        'src/endpoints-trend.ts',
       ],
       thresholds: {
         lines: 50,

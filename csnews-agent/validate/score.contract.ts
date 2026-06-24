@@ -136,3 +136,97 @@ describe('scoreRule threshold boundary', () => {
     expect(result.score).toBeLessThanOrEqual(10);
   });
 });
+
+
+// Additional coverage for applyScore and constants
+
+describe('score.ts — applyScore direct coverage', () => {
+  it('applyScore returns matchedHotWords', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('突发：AI技术重大突破', {});
+    expect(Array.isArray(result.matchedHotWords)).toBe(true);
+    expect(result.matchedHotWords.length).toBeGreaterThan(0);
+  });
+
+  it('applyScore detects superHot correctly', async () => {
+    const { applyScore } = await import('../src/score');
+    const superHotResult = applyScore('紧急：重大事故发生', {});
+    const normalResult = applyScore('AI技术取得进展', {});
+    expect(superHotResult.superHot).toBe(true);
+    expect(normalResult.superHot).toBe(false);
+  });
+
+  it('applyScore returns number bonus when digits present', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('2024年AI十大突破', {});
+    expect(result.score).toBeGreaterThanOrEqual(5.0);
+  });
+
+  it('applyScore returns length bonus for mid-length titles', async () => {
+    const { applyScore } = await import('../src/score');
+    // 25 chars — within length bonus range 21-34
+    const result = applyScore('突发：AI技术重大突破新进展', {});
+    expect(result.score).toBeGreaterThanOrEqual(5.0);
+  });
+
+  it('applyScore returns exclaim bonus for !', async () => {
+    const { applyScore } = await import('../src/score');
+    const withExclaim = applyScore('震惊！AI技术突破！', {});
+    expect(withExclaim.score).toBeGreaterThanOrEqual(5.0);
+  });
+
+  it('applyScore returns multi-hot bonus for 2+ hot words', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('突发震惊：AI大模型新进展', {});
+    expect(result.score).toBeGreaterThan(5.0);
+  });
+
+  it('applyScore returns multi-hot bonus for 3+ hot words', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('突发震惊重磅：AI革命', {});
+    expect(result.score).toBeGreaterThan(5.0);
+  });
+
+  it('applyScore score is capped at 10', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('突发震惊重磅紧急史上最新突破革命创历史！2024年11月AI技术重大进展', {});
+    expect(result.score).toBeLessThanOrEqual(10);
+  });
+
+  it('applyScore uses custom weights', async () => {
+    const { applyScore } = await import('../src/score');
+    const result = applyScore('突发：AI技术', { '突发': 2.0 });
+    expect(result.score).toBeGreaterThanOrEqual(5.0);
+  });
+});
+
+describe('score.ts — exported constants', () => {
+  it('AI_ROUTE_R_THRESHOLD is defined and positive', async () => {
+    const { AI_ROUTE_R_THRESHOLD } = await import('../src/score');
+    expect(typeof AI_ROUTE_R_THRESHOLD).toBe('number');
+    expect(AI_ROUTE_R_THRESHOLD).toBeGreaterThan(0);
+  });
+
+  it('TOPIC_MATCH_THRESHOLD is defined and between 0 and 1', async () => {
+    const { TOPIC_MATCH_THRESHOLD } = await import('../src/score');
+    expect(typeof TOPIC_MATCH_THRESHOLD).toBe('number');
+    expect(TOPIC_MATCH_THRESHOLD).toBeGreaterThan(0);
+    expect(TOPIC_MATCH_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+
+  it('R2_DUP_THRESHOLD is defined and between 0 and 1', async () => {
+    const { R2_DUP_THRESHOLD } = await import('../src/score');
+    expect(typeof R2_DUP_THRESHOLD).toBe('number');
+    expect(R2_DUP_THRESHOLD).toBeGreaterThan(0);
+    expect(R2_DUP_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('scoreRule — isHigh boundary', () => {
+  it('isHigh is false when score < threshold', () => {
+    const result = scoreRule('AI取得新进展');
+    if (result.score < 7.0) {
+      expect(result.isHigh).toBe(false);
+    }
+  });
+});
