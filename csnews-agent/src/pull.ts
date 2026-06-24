@@ -16,7 +16,7 @@ import {
   cacheGet,
   cacheSet,
   makeCacheKey,
-  DEFAULT_TTL_SECONDS,
+  PULL_TTL_SECONDS,
   isNegativeSentinel,
   setNegativeSentinel,
   clearNegativeSentinel,
@@ -607,17 +607,18 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
 
   // fire-and-forget 写缓存 (ctx.waitUntil 让 KV put 在响应后继续)
   // 传入 recordCount + maxContentAgeMin, 自动包装 SeedEnvelope
+  // TTL = PULL_TTL_SECONDS (60s), 热点数据快速失效减少 stale
   const maxContentAgeMin = computeMaxContentAgeMin(items);
   if (ctx && typeof ctx.waitUntil === 'function') {
     ctx.waitUntil(
-      cacheSet(env, cacheKey, response, DEFAULT_TTL_SECONDS, {
+      cacheSet(env, cacheKey, response, PULL_TTL_SECONDS, {
         recordCount: projected.length,
         maxContentAgeMin,
       })
     );
   } else {
     // 无 ctx (如测试) → 同步写
-    await cacheSet(env, cacheKey, response, DEFAULT_TTL_SECONDS, {
+    await cacheSet(env, cacheKey, response, PULL_TTL_SECONDS, {
       recordCount: projected.length,
       maxContentAgeMin,
     });

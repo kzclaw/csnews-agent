@@ -93,6 +93,9 @@ export const NEG_SENTINEL_TTL = 30;
 /** 默认 TTL = 1h (跟 cron 整点对齐) */
 export const DEFAULT_TTL_SECONDS = 60 * 60;
 
+/** Pull 端点 TTL = 60s (热点数据快速失效，减少 stale) */
+export const PULL_TTL_SECONDS = 60;
+
 /** 防御性 value size cap = 25MB (KV hard limit) */
 export const MAX_VALUE_SIZE_BYTES = 25 * 1024 * 1024;
 
