@@ -34,13 +34,17 @@ const ENTITY_RATE_LIMIT_PER_MIN = 60;
 const EVENT_RATE_LIMIT_PER_MIN = 60;
 
 // ===================== entity (Entity Engine) =====================
-// 6 档 type:
+// 10 档 type:
 //   - candidates: 读 R2 entity-candidates.json
 //   - selflearn: 触发 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type)
 //   - process: 触发 runEntityProcess (暂存 R2 entity-finalized.json)
 //   - finalized: 读 R2 entity-finalized.json
 //   - noise-anchors: 读 R2 entity-noise-anchors.json
 //   - noise: 读 R2 entity-candidates.json 的 noise 分组
+//   - approve: review 批准 entity → 触发 event re-clustering
+//   - reject: review 拒绝 entity → 触发 event re-clustering
+//   - noise-add: review 标记为 noise → 触发 event re-clustering
+//   - noise-remove: review 取消 noise 标记 → 触发 event re-clustering
 export async function handleEntityAction(
   request: Request,
   env: Env,
@@ -50,7 +54,18 @@ export async function handleEntityAction(
 ): Promise<Response> {
   // 1. 输入校验
   const type = url.searchParams.get('type') || 'candidates';
-  const validTypes = ['candidates', 'selflearn', 'process', 'finalized', 'noise-anchors', 'noise'];
+  const validTypes = [
+    'candidates',
+    'selflearn',
+    'process',
+    'finalized',
+    'noise-anchors',
+    'noise',
+    'approve',
+    'reject',
+    'noise-add',
+    'noise-remove',
+  ];
   if (!validTypes.includes(type)) {
     return new Response(
       JSON.stringify({
@@ -260,6 +275,292 @@ export async function handleEntityAction(
       );
     } catch (e: any) {
       return new Response(JSON.stringify({ error: 'r2_read_failed', reason: e?.message || e }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  // ===================== entity review actions (auto re-clustering) =====================
+  // Helper: 触发 event re-clustering (fire-and-forget, 失败不阻塞 entity action)
+  const triggerEventRecluster = async (): Promise<void> => {
+    try {
+      await runEventProcess(env);
+    } catch (e: any) {
+      // entity action 已成功, clustering 失败只 log 不阻塞 response
+      console.error(`[handleEntityAction] event re-clustering failed: ${e?.message || e}`);
+    }
+  };
+
+  if (type === 'approve') {
+    // review 批准 entity (从 noise/candidates 移到 approved)
+    const entityName = url.searchParams.get('name');
+    if (!entityName) {
+      return new Response(
+        JSON.stringify({ error: 'missing_param', reason: 'name 是必填参数' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    }
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: 'entity-candidates.json 不存在' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+      const json = await obj.json<{
+        candidates: any[];
+        noise: any[];
+        generated_at: string;
+      }>();
+
+      // 从 noise 移除 或从 candidates 标记
+      const inNoise = json.noise?.findIndex((e) => e.name === entityName) ?? -1;
+      const inCandidates = json.candidates?.findIndex((e) => e.name === entityName) ?? -1;
+      if (inNoise === -1 && inCandidates === -1) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: `实体 "${entityName}" 不存在` }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+
+      // 构造 approved entity 并更新 JSON
+      const approvedEntity = {
+        name: entityName,
+        type: inNoise >= 0 ? json.noise[inNoise].type : json.candidates[inCandidates].type,
+        confidence: 0.9,
+        source: 'review' as const,
+        first_seen:
+          inNoise >= 0 ? json.noise[inNoise].first_seen : json.candidates[inCandidates].first_seen,
+        last_seen: new Date().toISOString(),
+        mention_count:
+          (inNoise >= 0 ? json.noise[inNoise].mention_count : json.candidates[inCandidates].mention_count) || 1,
+      };
+
+      const newCandidates =
+        inNoise >= 0
+          ? [...json.candidates, approvedEntity]
+          : json.candidates.map((e) =>
+              e.name === entityName ? { ...e, source: 'review' as const, confidence: 0.9 } : e
+            );
+      const newNoise = inNoise >= 0
+          ? json.noise.filter((_: any, i: number) => i !== inNoise)
+          : json.noise;
+
+      await env.csnews_raw.put(
+        ENTITY_CANDIDATES_R2_KEY,
+        JSON.stringify({ ...json, candidates: newCandidates, noise: newNoise, generated_at: new Date().toISOString() }, null, 2)
+      );
+
+      // review 成功 → 自动触发 event re-clustering
+      triggerEventRecluster();
+
+      return new Response(
+        JSON.stringify({
+          type: 'approve',
+          description: 'review 批准 entity → 触发 event re-clustering',
+          entity: entityName,
+          reclustering: 'triggered',
+        }),
+        { headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'internal_error', reason: e?.message || e }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'reject') {
+    // review 拒绝 entity (从 candidates 和 noise 移除)
+    const entityName = url.searchParams.get('name');
+    if (!entityName) {
+      return new Response(
+        JSON.stringify({ error: 'missing_param', reason: 'name 是必填参数' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    }
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: 'entity-candidates.json 不存在' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+      const json = await obj.json<{
+        candidates: any[];
+        noise: any[];
+        generated_at: string;
+      }>();
+
+      const inCandidates = json.candidates?.findIndex((e) => e.name === entityName) ?? -1;
+      const inNoise = json.noise?.findIndex((e) => e.name === entityName) ?? -1;
+      if (inCandidates === -1 && inNoise === -1) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: `实体 "${entityName}" 不存在` }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+
+      const newCandidates = json.candidates.filter((_: any, i: number) => i !== inCandidates);
+      const newNoise = json.noise.filter((_: any, i: number) => i !== inNoise);
+
+      await env.csnews_raw.put(
+        ENTITY_CANDIDATES_R2_KEY,
+        JSON.stringify({ ...json, candidates: newCandidates, noise: newNoise, generated_at: new Date().toISOString() }, null, 2)
+      );
+
+      // review 成功 → 自动触发 event re-clustering
+      triggerEventRecluster();
+
+      return new Response(
+        JSON.stringify({
+          type: 'reject',
+          description: 'review 拒绝 entity → 触发 event re-clustering',
+          entity: entityName,
+          reclustering: 'triggered',
+        }),
+        { headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'internal_error', reason: e?.message || e }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'noise-add') {
+    // review 标记 entity 为 noise
+    const entityName = url.searchParams.get('name');
+    if (!entityName) {
+      return new Response(
+        JSON.stringify({ error: 'missing_param', reason: 'name 是必填参数' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    }
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: 'entity-candidates.json 不存在' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+      const json = await obj.json<{
+        candidates: any[];
+        noise: any[];
+        generated_at: string;
+      }>();
+
+      const inCandidates = json.candidates?.findIndex((e) => e.name === entityName) ?? -1;
+      const inNoise = json.noise?.findIndex((e) => e.name === entityName) ?? -1;
+      if (inCandidates === -1) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: `候选实体 "${entityName}" 不存在` }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+      if (inNoise >= 0) {
+        return new Response(
+          JSON.stringify({ error: 'already_noise', reason: `实体 "${entityName}" 已在 noise 列表` }),
+          { status: 409, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+
+      const noiseEntity = {
+        ...json.candidates[inCandidates],
+        first_seen: json.candidates[inCandidates].first_seen || new Date().toISOString(),
+      };
+      const newCandidates = json.candidates.filter((_: any, i: number) => i !== inCandidates);
+      const newNoise = [...(json.noise || []), noiseEntity];
+
+      await env.csnews_raw.put(
+        ENTITY_CANDIDATES_R2_KEY,
+        JSON.stringify({ ...json, candidates: newCandidates, noise: newNoise, generated_at: new Date().toISOString() }, null, 2)
+      );
+
+      // review 成功 → 自动触发 event re-clustering
+      triggerEventRecluster();
+
+      return new Response(
+        JSON.stringify({
+          type: 'noise-add',
+          description: 'review 标记 entity 为 noise → 触发 event re-clustering',
+          entity: entityName,
+          reclustering: 'triggered',
+        }),
+        { headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'internal_error', reason: e?.message || e }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...cors },
+      });
+    }
+  }
+
+  if (type === 'noise-remove') {
+    // review 取消 entity 的 noise 标记 (移回 candidates)
+    const entityName = url.searchParams.get('name');
+    if (!entityName) {
+      return new Response(
+        JSON.stringify({ error: 'missing_param', reason: 'name 是必填参数' }),
+        { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    }
+    try {
+      const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
+      if (!obj) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: 'entity-candidates.json 不存在' }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+      const json = await obj.json<{
+        candidates: any[];
+        noise: any[];
+        generated_at: string;
+      }>();
+
+      const inNoise = json.noise?.findIndex((e) => e.name === entityName) ?? -1;
+      if (inNoise === -1) {
+        return new Response(
+          JSON.stringify({ error: 'not_found', reason: `noise 列表中没有 "${entityName}"` }),
+          { status: 404, headers: { 'Content-Type': 'application/json', ...cors } }
+        );
+      }
+
+      const restoredEntity = {
+        ...json.noise[inNoise],
+        source: 'selflearn',
+        confidence: 0.5,
+      };
+      const newNoise = json.noise.filter((_: any, i: number) => i !== inNoise);
+      const newCandidates = [...(json.candidates || []), restoredEntity];
+
+      await env.csnews_raw.put(
+        ENTITY_CANDIDATES_R2_KEY,
+        JSON.stringify({ ...json, candidates: newCandidates, noise: newNoise, generated_at: new Date().toISOString() }, null, 2)
+      );
+
+      // review 成功 → 自动触发 event re-clustering
+      triggerEventRecluster();
+
+      return new Response(
+        JSON.stringify({
+          type: 'noise-remove',
+          description: 'review 取消 noise 标记 → 触发 event re-clustering',
+          entity: entityName,
+          reclustering: 'triggered',
+        }),
+        { headers: { 'Content-Type': 'application/json', ...cors } }
+      );
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: 'internal_error', reason: e?.message || e }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...cors },
       });
