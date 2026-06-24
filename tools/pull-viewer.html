@@ -297,7 +297,7 @@ body {
 }
 
 /* main area */
-.main { background: var(--bg-1); overflow: hidden; position: relative; }
+.main { background: var(--bg-1); overflow: hidden; position: relative; min-height: 0; }
 .view {
   position: absolute; inset: 0;
   display: none;
@@ -734,8 +734,8 @@ body {
 .reader-body {
   display: grid;
   grid-template-columns: 240px 1fr;
-  flex: 1;
-  min-height: 0;
+  flex: 1; min-height: 0;
+  width: 100%;
 }
 .sidebar {
   background: var(--bg);
@@ -810,8 +810,10 @@ body {
 }
 
 .reader-main {
-  overflow-y: auto;
-  display: flex; flex-direction: column;
+  /* fix: .reader-body 的 flex child, .view 已有 max-height + overflow-y:auto 约束滚动边界
+     不要在 reader-main 层再加 overflow-y:auto（会导致 .view + .reader-main 双层滚动）
+     → 只用 min-height:0 让 flex child 可收缩，使 grid(.feed) 能正确获知可用高度 */
+  display: flex; flex-direction: column; flex: 1; min-height: 0;
 }
 
 .filter-bar {
@@ -858,13 +860,19 @@ body {
 .filter-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
 
  .feed {
-  padding: 20px 28px 60px;
-  max-width: 920px; width: 100%; margin: 0 auto;
-  display: grid;
+   padding: 20px 28px 60px;
+   max-width: 920px; width: 100%; margin: 0 auto;
+   display: grid;
+   /* fix: ::before (SVG bg) 需要 relative 定位锚点，否则 inset:0 撑开父容器 */
+   position: relative;
   /* v0.36.12 KR2: 跨栏 grid ("World Engine" (user)Reader 杂志风) — 首条置顶大图 + 副条 2 列 */
   grid-template-columns: 1fr 1fr;
   grid-auto-flow: row dense;
   gap: 12px;
+  /* fix: .reader-main 是 flex-column 容器，.feed 是 flex child 且是 grid item
+     需要 min-height: 0 (flex child 收缩到内容高度的默认值会破坏 grid layout)
+     → min-height: 0 让 flex child 能收缩到可用空间，grid 才能正确填满 */
+  min-height: 0;
 }
 .feed > .card:first-child {
   /* v0.36.12 KR2: 首条置顶大图 (lead story, 跨整行 16:9) */
@@ -1197,6 +1205,81 @@ body::before {
 }
 
 /* ============================================================
+ * ENTITY REVIEW tab styles
+ * ============================================================ */
+.entity-review-wrap { padding: 20px 28px 60px; max-width: 1100px; margin: 0 auto; }
+.entity-review-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.entity-review-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.entity-review-meta { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); margin-left: auto; }
+.entity-section { margin-bottom: 28px; }
+.entity-section-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px;
+}
+.entity-section-title .count {
+  font-family: var(--font-mono); font-size: 10px; padding: 1px 6px;
+  background: var(--bg-2); border-radius: 3px; color: var(--text-3);
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+}
+.entity-card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.entity-card:hover { border-color: var(--hairline-strong); background: var(--bg-1); }
+.entity-card-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 10px;
+}
+.entity-card-name { font-size: 13.5px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; word-break: break-word; }
+.entity-card-badge {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 7px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong);
+  border-radius: 3px; color: var(--text-2); flex-shrink: 0;
+}
+.entity-card-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-3); font-family: var(--font-mono);
+  margin-bottom: 12px;
+}
+.entity-card-meta span { display: flex; align-items: center; gap: 4px; }
+.entity-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.entity-card-actions .btn { font-size: 11.5px; height: 26px; padding: 3px 10px; }
+.entity-card-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.entity-card-actions .btn.success-btn { border-color: var(--success); color: var(--success); }
+.entity-card-actions .btn.success-btn:hover { background: var(--success-bg); }
+.entity-card-actions .btn.danger-btn { border-color: var(--danger); color: var(--danger); }
+.entity-card-actions .btn.danger-btn:hover { background: var(--danger-bg); }
+.entity-card-actions .btn.warning-btn { border-color: var(--warning); color: var(--warning); }
+.entity-card-actions .btn.warning-btn:hover { background: var(--warning-bg); }
+.entity-card-actions .btn.info-btn { border-color: var(--info); color: var(--info); }
+.entity-card-actions .btn.info-btn:hover { background: var(--info-bg); }
+
+/* noise anchor chip */
+.noise-anchor-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-1); border: 1px solid var(--hairline);
+  border-radius: var(--radius); padding: 4px 10px;
+  font-size: 12px; color: var(--text-2);
+}
+.noise-anchor-chip .remove-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); padding: 0 2px; font-size: 14px; line-height: 1;
+  display: flex; align-items: center;
+  transition: color var(--transition);
+}
+.noise-anchor-chip .remove-btn:hover { color: var(--danger); }
+.entity-anchors-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
  * Responsive
  * ============================================================ */
 @media (max-width: 1100px) {
@@ -1223,6 +1306,107 @@ body::before {
   .card-title { font-size: 16px; }
   .modal { max-width: calc(100vw - 24px); margin: 12px; }
 }
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+.reader-float-backdrop {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: flex-start; justify-content: center;
+  z-index: 200;
+  padding: 48px 16px 24px;
+  overflow-y: auto;
+  animation: rfloat-fadein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes rfloat-fadein { from { opacity: 0; } to { opacity: 1; } }
+.reader-float-backdrop.closing {
+  animation: rfloat-fadeout 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes rfloat-fadeout { from { opacity: 1; } to { opacity: 0; } }
+.reader-float {
+  background: var(--bg-1);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 760px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  animation: rfloat-slidein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 1px rgba(212, 162, 83, 0.08), 0 8px 32px rgba(0,0,0,0.48);
+}
+@keyframes rfloat-slidein {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reader-float-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gold-bg-strong);
+  background: var(--bg);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.reader-float-title {
+  font-size: 13px; font-weight: 600; color: var(--gold);
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reader-float-close {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-3); padding: 4px;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.reader-float-close:hover { color: var(--text); background: var(--bg-hover); }
+.reader-float-close svg { width: 18px; height: 18px; }
+.reader-float-body {
+  flex: 1; overflow-y: auto; max-height: calc(100vh - 200px);
+}
+.reader-float-content {
+  padding: 0;
+  font-size: 15px; line-height: 1.75; color: var(--text);
+}
+.reader-float-content iframe {
+  width: 100%; min-height: 60vh;
+  border: none; display: block;
+  background: white;
+}
+.reader-float-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 20px; gap: 12px; color: var(--text-3); font-size: 13px;
+}
+.reader-float-loading-spinner {
+  width: 24px; height: 24px; border: 2px solid var(--hairline);
+  border-top-color: var(--gold); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.reader-float-error {
+  padding: 32px 24px; text-align: center; color: var(--danger); font-size: 13px;
+}
+.reader-float-source {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  font-size: 11px; color: var(--text-3);
+  flex-shrink: 0;
+}
+.reader-float-source a { color: var(--text-2); text-decoration: none; }
+.reader-float-source a:hover { color: var(--gold); text-decoration: underline; }
+.reader-float-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.reader-float-footer .kbd { font-size: 10px; }
+.reader-float-footer span { font-size: 11px; color: var(--text-3); }
 </style>
 </head>
 <body>
@@ -1288,12 +1472,16 @@ body::before {
         <button class="dash-tab" data-tab="health">
           <span>Health</span>
         </button>
+        <button class="dash-tab" data-tab="entity-review">
+          <span>实体审核</span>
+        </button>
       </nav>
       <div class="dash-pane">
         <div class="dash-pane-inner active" id="pane-overview"></div>
         <div class="dash-pane-inner" id="pane-data"></div>
         <div class="dash-pane-inner" id="pane-logs"></div>
         <div class="dash-pane-inner" id="pane-health"></div>
+        <div class="dash-pane-inner" id="pane-entity-review"></div>
       </div>
     </section>
 
@@ -1418,6 +1606,34 @@ body::before {
 
 <div class="toast" id="toast"></div>
 
+<!-- ============ Reader Float Modal (Readability) ============ -->
+<div class="reader-float-backdrop" id="reader-float-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="rfloat-title">
+  <div class="reader-float">
+    <div class="reader-float-header">
+      <div class="reader-float-title" id="rfloat-title">加载中…</div>
+      <button class="reader-float-close" id="rfloat-close" title="关闭 (ESC)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="reader-float-body">
+      <div class="reader-float-loading" id="rfloat-loading">
+        <div class="reader-float-loading-spinner"></div>
+        <span>正在抓取正文…</span>
+      </div>
+      <div class="reader-float-error" id="rfloat-error" style="display: none;"></div>
+      <iframe id="rfloat-iframe" style="display: none;" sandbox="allow-same-origin" title="文章正文"></iframe>
+    </div>
+    <div class="reader-float-source" id="rfloat-source" style="display: none;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span>来源: <a id="rfloat-source-link" href="#" target="_blank" rel="noopener noreferrer">—</a></span>
+    </div>
+    <div class="reader-float-footer">
+      <span class="kbd">ESC</span>
+      <span>关闭</span>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
  * CSNEWS Console — Dashboard + Reader
@@ -1440,6 +1656,10 @@ const STATE = {
   news7d: [], news7dErr: null,
   entity: null, entityErr: null,
   event: null, eventErr: null,
+  // entity review
+  entityReviewCandidates: null, entityReviewCandidatesErr: null,
+  entityReviewNoiseAnchors: null, entityReviewNoiseAnchorsErr: null,
+  entityReviewLoading: null,  // set of currently-actioning entity ids
   selectedEndpoint: 'pull-news',
   endpointResponse: null, endpointError: null, endpointLoading: false, endpointElapsed: 0,
   logs: [], logsErr: null,
@@ -2462,6 +2682,195 @@ function renderHealth() {
     </div>`;
 }
 
+/* ============================================================
+ * ENTITY REVIEW module
+ * ============================================================ */
+async function fetchEntityReviewCandidates() {
+  return apiGet('/', { action: 'entity', type: 'candidates' });
+}
+async function fetchEntityReviewNoiseAnchors() {
+  return apiGet('/', { action: 'entity', type: 'noise-anchors' });
+}
+
+async function doEntityAction(type, id) {
+  if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
+  STATE.entityReviewLoading = STATE.entityReviewLoading || new Set();
+  STATE.entityReviewLoading.add(id);
+  renderEntityReview();
+  try {
+    const result = await apiGet('/', { action: 'entity', type, ...(id ? { id } : {}) });
+    toast(`${type} 成功`, 'success');
+    return result;
+  } catch (e) {
+    toast(`${type} 失败: ${e.message}`, 'error');
+    return null;
+  } finally {
+    STATE.entityReviewLoading.delete(id);
+    STATE.entityReviewLoading = new Set(STATE.entityReviewLoading);
+    // Refresh data after action
+    try {
+      STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+      STATE.entityReviewCandidatesErr = null;
+    } catch (e) { STATE.entityReviewCandidatesErr = { message: e.message }; }
+    try {
+      STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+      STATE.entityReviewNoiseAnchorsErr = null;
+    } catch (e) { STATE.entityReviewNoiseAnchorsErr = { message: e.message }; }
+    renderEntityReview();
+  }
+}
+
+function isEntityLoading(id) {
+  return STATE.entityReviewLoading && STATE.entityReviewLoading.has(id);
+}
+
+function renderEntityReview() {
+  const c = document.getElementById('pane-entity-review');
+  if (!c) return;
+
+  const candidates = STATE.entityReviewCandidates;
+  const noiseAnchorsData = STATE.entityReviewNoiseAnchors;
+  const candidatesErr = STATE.entityReviewCandidatesErr;
+  const noiseAnchorsErr = STATE.entityReviewNoiseAnchorsErr;
+
+  const candidatesList = candidates?.candidates || [];
+  const noiseList = candidates?.noise || [];
+  const anchorsList = noiseAnchorsData?.anchors || [];
+  const loadingCandidates = candidates == null && !candidatesErr;
+  const loadingAnchors = noiseAnchorsData == null && !noiseAnchorsErr;
+
+  let html = `<div class="entity-review-wrap">`;
+
+  // Header
+  html += `
+  <div class="entity-review-header">
+    <div class="entity-review-title">🧠 实体审核</div>
+    <div class="entity-review-meta">
+      ${candidatesList.length} 候选 · ${noiseList.length} 待噪音 · ${anchorsList.length} 噪音词
+    </div>
+  </div>`;
+
+  // Error banners
+  if (candidatesErr) {
+    html += `<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 候选实体加载失败</div>
+      <div class="error-banner-body">${escapeHtml(candidatesErr.message)}</div>
+    </div>`;
+  }
+  if (noiseAnchorsErr) {
+    html += `<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 噪音词加载失败</div>
+      <div class="error-banner-body">${escapeHtml(noiseAnchorsErr.message)}</div>
+    </div>`;
+  }
+
+  // Candidates section
+  html += `
+  <div class="entity-section">
+    <div class="entity-section-title">
+      候选实体
+      <span class="count">${candidatesList.length}</span>
+    </div>`;
+
+  if (loadingCandidates) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>`;
+  } else if (!candidatesList.length && !noiseList.length) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无候选实体</div>`;
+  } else {
+    // Render candidates
+    const allEntities = [...candidatesList, ...noiseList.map(n => ({ ...n, _fromNoise: true }))];
+    for (const entity of allEntities) {
+      const isNoise = entity._fromNoise;
+      const loading = isEntityLoading(entity.uuid);
+      const conf = entity.confidence != null ? `${(entity.confidence * 100).toFixed(0)}%` : '—';
+      const freq = entity.frequency != null ? entity.frequency : '—';
+      const firstSeen = entity.first_seen ? fmtTime(entity.first_seen) : '—';
+      html += `
+      <div class="entity-card">
+        <div class="entity-card-header">
+          <div class="entity-card-name">${escapeHtml(entity.name)}</div>
+          ${isNoise ? '<span class="entity-card-badge">噪音</span>' : ''}
+          <span class="entity-card-badge">${escapeHtml(entity.type || 'unknown')}</span>
+        </div>
+        <div class="entity-card-meta">
+          <span>conf: ${conf}</span>
+          <span>freq: ${freq}</span>
+          <span>source: ${escapeHtml(entity.source || '—')}</span>
+          <span>first_seen: ${firstSeen}</span>
+        </div>
+        <div class="entity-card-actions">
+          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ✅ 采纳
+          </button>
+          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ❌ 拒绝
+          </button>
+          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ➕ 加噪音词
+          </button>
+          <button class="btn info-btn" data-action="noise-remove" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''}>
+            ➖ 删噪音词
+          </button>
+        </div>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+
+  // Noise Anchors section
+  html += `
+  <div class="entity-section">
+    <div class="entity-section-title">
+      噪音词 Anchors
+      <span class="count">${anchorsList.length}</span>
+    </div>`;
+  if (loadingAnchors) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>`;
+  } else if (!anchorsList.length) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无噪音词</div>`;
+  } else {
+    html += `<div class="entity-anchors-wrap">`;
+    for (const anchor of anchorsList) {
+      const loading = isEntityLoading(anchor);
+      html += `
+      <div class="noise-anchor-chip">
+        <span>${escapeHtml(anchor)}</span>
+        <button class="remove-btn" data-action="noise-remove" data-id="${escapeHtml(anchor)}" title="删除噪音词" ${loading ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>✕</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  html += `</div>`; // end entity-review-wrap
+  c.innerHTML = html;
+
+  // Bind action buttons
+  c.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      await doEntityAction(action, id);
+    });
+  });
+}
+
+async function refreshEntityReview() {
+  try {
+    STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+    STATE.entityReviewCandidatesErr = null;
+  } catch (e) {
+    STATE.entityReviewCandidatesErr = { message: e.message || String(e) };
+  }
+  try {
+    STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+    STATE.entityReviewNoiseAnchorsErr = null;
+  } catch (e) {
+    STATE.entityReviewNoiseAnchorsErr = { message: e.message || String(e) };
+  }
+  renderEntityReview();
+}
+
 function renderDashTab() {
   document.querySelectorAll('.dash-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === STATE.dashTab));
   document.querySelectorAll('.dash-pane-inner').forEach(el => el.classList.toggle('active', el.id === 'pane-' + STATE.dashTab));
@@ -2469,10 +2878,17 @@ function renderDashTab() {
   else if (STATE.dashTab === 'data') renderData();
   else if (STATE.dashTab === 'logs') renderLogs();
   else if (STATE.dashTab === 'health') renderHealth();
+  else if (STATE.dashTab === 'entity-review') renderEntityReview();
 }
 
 document.querySelectorAll('.dash-tab').forEach(el => {
-  el.addEventListener('click', () => { STATE.dashTab = el.dataset.tab; renderDashTab(); });
+  el.addEventListener('click', () => {
+    STATE.dashTab = el.dataset.tab;
+    renderDashTab();
+    if (STATE.dashTab === 'entity-review' && !STATE.entityReviewCandidates && !STATE.entityReviewCandidatesErr) {
+      refreshEntityReview();
+    }
+  });
 });
 
 async function refreshDashboard() {
@@ -2745,6 +3161,15 @@ function bindCardClicks() {
       const item = STATE.items.find(x => x.id === id);
       if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
     });
+    // v0.37: Reader Float Modal — 点标题抓取原文并浮窗显示
+    const titleEl = card.querySelector('.card-title');
+    if (titleEl) {
+      titleEl.addEventListener('click', e => {
+        e.stopPropagation();
+        const item = STATE.items.find(x => x.id === id);
+        if (item && item.url) openReaderFloat(id, item.url, item.title);
+      });
+    }
   });
   // v0.36.12 KR2 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
   if ('IntersectionObserver' in window) {
@@ -2795,6 +3220,85 @@ function formatContent(text) {
   const paras = text.split(/\n\n+/).map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`);
   return paras.join('');
 }
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 点击标题 → fetch ?action=proxy&url= → 浮窗显示原文
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+
+async function fetchReaderArticle(url) {
+  const cfg = getConfig();
+  const proxyUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=proxy&url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.reason || data.error || `HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return text;
+}
+
+async function openReaderFloat(id, url, title) {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const titleEl = document.getElementById('rfloat-title');
+  const loadingEl = document.getElementById('rfloat-loading');
+  const errorEl = document.getElementById('rfloat-error');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  const sourceEl = document.getElementById('rfloat-source');
+  const sourceLinkEl = document.getElementById('rfloat-source-link');
+  if (!backdrop) return;
+
+  // 显示浮窗
+  backdrop.style.display = 'flex';
+  titleEl.textContent = title ? title.slice(0, 80) : '正文中…';
+  loadingEl.style.display = 'flex';
+  errorEl.style.display = 'none';
+  iframeEl.style.display = 'none';
+  sourceEl.style.display = 'none';
+  backdrop.classList.remove('closing');
+
+  try {
+    const html = await fetchReaderArticle(url);
+    loadingEl.style.display = 'none';
+    iframeEl.style.display = 'block';
+    iframeEl.srcdoc = html;
+    sourceLinkEl.href = url;
+    sourceLinkEl.textContent = url;
+    sourceEl.style.display = 'flex';
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    errorEl.textContent = `抓取失败: ${e.message || String(e)}`;
+    errorEl.style.display = 'block';
+  }
+}
+
+function closeReaderFloat() {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  if (!backdrop) return;
+
+  // fade-out 动画后再隐藏
+  backdrop.classList.add('closing');
+  backdrop.addEventListener('animationend', () => {
+    backdrop.style.display = 'none';
+    backdrop.classList.remove('closing');
+    iframeEl.srcdoc = '';
+  }, { once: true });
+}
+
+// 点击关闭按钮
+document.getElementById('rfloat-close')?.addEventListener('click', closeReaderFloat);
+// 点击 backdrop 关闭
+document.getElementById('reader-float-backdrop')?.addEventListener('click', e => {
+  if (e.target.id === 'reader-float-backdrop') closeReaderFloat();
+});
+// ESC 关闭
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('reader-float-backdrop')?.style.display === 'flex') {
+    closeReaderFloat();
+  }
+});
 
 async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
