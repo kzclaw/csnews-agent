@@ -1,0 +1,15 @@
+{
+  "name": "csnews-mcp-server",
+  "version": "1.0.0",
+  "description": "CSNEWS Agent MCP Server — Claude Desktop / Cursor 直查新闻",
+  "main": "src/index.cjs",
+  "bin": {
+    "csnews-mcp": "./src/index.cjs"
+  },
+  "scripts": {
+    "start": "node src/index.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
