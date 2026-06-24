@@ -44,6 +44,7 @@ export {
 export {
   handleProcessAction,
   handleHealthAction,
+  handleAiUsageAction,
   handleLogsAction,
   handleTavilyAction,
 } from './endpoints-process';
@@ -62,3 +63,6 @@ export { handleEntityAction, handleEventAction } from './endpoints-entity';
 
 // mcp (2) — O13-MCP MCP Server
 export { handleMCPAction, handleMCPListAction } from './mcp-handler';
+
+// proxy (1) — Reader 浮窗 Readability 模式 (v0.37)
+export { handleProxyAction } from './endpoints-proxy';

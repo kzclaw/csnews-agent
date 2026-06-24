@@ -21,6 +21,7 @@
  */
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
+import { shouldTriggerAiCall } from './ai-budget';
 
 // ============================================================
 // Types
@@ -170,12 +171,19 @@ function extractAIResponse(resp: unknown): string {
 /**
  * Workers AI 生成 5 个中文搜索词
  * Fallback: 返回 [topicTitle] 如果 AI 调用失败
+ * Phase 2: L5 预算检查，不足时 fallback 到 topicTitle
  */
 async function generateSearchQueries(
   env: Env,
   topicTitle: string,
   relatedNews: string[]
 ): Promise<string[]> {
+  // Phase 2: 预算检查 L5（裂变搜索词生成）
+  if (!(await shouldTriggerAiCall(env, 'L5'))) {
+    console.warn('[AI] skipped search query generation: Neurons budget exceeded for L5 threshold');
+    return [topicTitle];
+  }
+
   const relatedCtx = relatedNews.length > 0
     ? `相关报道标题：\n${relatedNews.slice(0, 3).map((t, i) => `${i + 1}. ${t}`).join('\n')}`
     : '暂无相关报道。';
@@ -256,6 +264,16 @@ async function generateFissionReport(
   const newsItems = searchResults
     .map((r, i) => `${i + 1}. **${r.title}**\n   来源：${r.source} | ${r.published_at || '时间未知'}\n   ${r.summary || '（无摘要）'}`)
     .join('\n\n');
+
+  // Phase 2: 预算检查 L5（裂变报告生成）
+  if (!(await shouldTriggerAiCall(env, 'L5'))) {
+    console.warn('[AI] skipped fission report generation: Neurons budget exceeded for L5 threshold');
+    return `# 裂变报告：${topicTitle}
+
+> 警告：本次裂变 AI 报告生成跳过（Neurons 预算不足，L5 阈值 8,000）。
+> 由 CSNEWS 裂变引擎自动生成 · ${new Date().toISOString()}
+`;
+  }
 
   const prompt = `你是一个专业的新闻分析记者。
 

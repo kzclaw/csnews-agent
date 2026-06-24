@@ -257,3 +257,48 @@ export async function canUseTier(
   if (tier === 'L6') return budgetTier === 'normal';
   return false;
 }
+
+// ============================================================
+// Phase 2: 预算检查 hook
+// ============================================================
+
+/**
+ * L 层 AI 调用预算检查 (Phase 2 核心函数)
+ *
+ * @param env       - Worker Env (含 AI_USAGE_KV binding)
+ * @param level     - AI 调用层级 L1-L6
+ * @param severity  - 可选，severity 影响阈值 (severity越高阈值越严苛)
+ * @returns true = 允许调用 AI; false = 跳过此次调用
+ *
+ * 阈值规格 (Phase 2):
+ *   L1: 始终允许 (规则分类 0 Neurons)
+ *   L2: 始终允许 (AI 评分免费路由)
+ *   L4: used < 7,000 Neurons
+ *   L5: used < 8,000 Neurons
+ *   L6: used < 9,000 Neurons
+ *
+ * 使用场景:
+ *   L2: 每条 news AI 评分前 shouldTriggerAiCall('L2')
+ *   L5: fission-trigger Workers AI 调用前 shouldTriggerAiCall('L5')
+ *   L6: knowledge generation 前 shouldTriggerAiCall('L6')
+ */
+export async function shouldTriggerAiCall(
+  env: Env,
+  level: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6',
+  _severity?: number
+): Promise<boolean> {
+  // L1 规则分类始终允许 (0 Neurons 消耗)
+  if (level === 'L1') return true;
+
+  // L2 AI 评分始终允许 (免费路由)
+  if (level === 'L2') return true;
+
+  const used = await getDailyUsage(env);
+
+  if (level === 'L4') return used < 7_000;
+  if (level === 'L5') return used < 8_000;
+  if (level === 'L6') return used < 9_000;
+
+  // L3: fallback to budget tier logic
+  return canUseTier(env, level);
+}

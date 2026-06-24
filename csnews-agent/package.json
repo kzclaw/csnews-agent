@@ -1,8 +1,10 @@
 {
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260609.1",
+    "@mozilla/readability": "^0.6.0",
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.8",
+    "linkedom": "^0.18.12",
     "prettier": "^3.5.0",
     "typescript": "^5.3.3",
     "vitest": "^4.1.8"

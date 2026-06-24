@@ -22,6 +22,7 @@ import { ENTITY_CANDIDATES_R2_KEY, type EntityCandidate } from './entity-selflea
 export const ENTITY_FINALIZED_R2_KEY = 'entity-finalized.json';
 
 export interface EntityFinalized {
+  uuid: string;
   name: string;
   type: 'person' | 'org' | 'place';
   confidence: number;

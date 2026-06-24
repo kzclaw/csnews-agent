@@ -34,6 +34,7 @@ import {
   handleRescoreAction,
   handleProcessAction,
   handleHealthAction,
+  handleAiUsageAction,
   handleLogsAction,
   handleContentAction,
   handleTrendAction,
@@ -43,6 +44,7 @@ import {
   handleMCPAction,
   handleMCPListAction,
   handleTavilyAction,
+  handleProxyAction,
 } from './endpoints';
 import { handleFeedbackCheckAction } from './feedback';
 
@@ -66,6 +68,7 @@ export const ALLOWED_ACTIONS = [
   'rescore',
   'process',
   'health',
+  'ai-usage',
   'logs',
   'content',
   'trend',
@@ -76,6 +79,7 @@ export const ALLOWED_ACTIONS = [
   'mcp-list',
   'feedback-check',
   'tavily',
+  'proxy',
 ] as const;
 export type Action = (typeof ALLOWED_ACTIONS)[number];
 
@@ -138,6 +142,7 @@ export async function dispatchAction(
   if (action === 'rescore') return await handleRescoreAction(request, env, url, cors, ctx);
   if (action === 'process') return await handleProcessAction(request, env, url, cors, ctx);
   if (action === 'health') return await handleHealthAction(request, env, url, cors);
+  if (action === 'ai-usage') return await handleAiUsageAction(env, cors);
   if (action === 'logs') return await handleLogsAction(request, env, url, cors);
   if (action === 'content') return await handleContentAction(request, env, url, cors, ctx);
   if (action === 'trend') return await handleTrendAction(request, env, url, cors, ctx);
@@ -145,6 +150,7 @@ export async function dispatchAction(
   if (action === 'entity') return await handleEntityAction(request, env, url, cors, ctx);
   if (action === 'event') return await handleEventAction(request, env, url, cors, ctx);
   if (action === 'tavily') return await handleTavilyAction(request, env, url, cors);
+  if (action === 'proxy') return await handleProxyAction(request, env, url, cors, ctx);
   if (action === 'mcp') return await handleMCPAction(request, env, url, cors, ctx);
   if (action === 'mcp-list') return handleMCPListAction(request, cors);
   if (action === 'feedback-check') {

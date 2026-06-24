@@ -7,6 +7,7 @@
 import { Env } from './shared';
 import { runEventClustering, type EventCluster } from './event-cluster';
 import { loadReviewedCandidates, type EntityFinalized } from './entity-process';
+export { runEventClustering };
 
 export const EVENT_CLUSTERS_R2_KEY = 'event-clusters.json';
 export const EVENT_CLUSTERS_INDEX_R2_KEY = 'event-clusters-index.json';

@@ -26,6 +26,7 @@ import {
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 
 export interface EntityCandidate {
+  uuid: string;
   name: string;
   type: 'person' | 'org' | 'place';
   frequency: number;
@@ -103,6 +104,17 @@ export function isValidGram(gram: string): boolean {
   if (!/[\u4e00-\u9fa5]/.test(gram)) return false;
   if (/^[\s\p{P}]+$/u.test(gram)) return false;
   return true;
+}
+
+/**
+ * 生成 UUID v4 (纯数学, 0 依赖)
+ */
+export function generateUuidV4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 /**
@@ -271,6 +283,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{
     const candidates: EntityCandidate[] = filterResult.kept
       .sort((a, b) => b.count - a.count)
       .map((c) => ({
+        uuid: generateUuidV4(),
         name: c.name,
         type: inferEntityType(c.name),
         frequency: c.count,
@@ -281,6 +294,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{
       }));
 
     const noiseCandidates: EntityCandidate[] = filterResult.noise.map((n) => ({
+      uuid: generateUuidV4(),
       name: n.candidate.name,
       type: inferEntityType(n.candidate.name),
       frequency: n.candidate.count,
