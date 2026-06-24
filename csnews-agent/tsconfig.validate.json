@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["es2022", "dom"],
-    "types": ["@cloudflare/workers-types", "node"],
+    "types": ["@cloudflare/workers-types", "node", "vitest/globals"],
     "moduleResolution": "bundler"
   },
   "include": ["src/**/*", "validate/**/*", "vitest.config.ts"]
