@@ -301,8 +301,7 @@ body {
 .view {
   position: absolute; inset: 0;
   display: none;
-  overflow: hidden;
-  overflow-y: auto;  /* fix 4-1: dashboard 可滚动 */
+  overflow-y: auto;
   max-height: calc(100vh - 90px);  /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 · fix 6-12: 28→30 = 82 + 8 buffer = 90 */
 }
 .view.active { display: flex; flex-direction: column; }
