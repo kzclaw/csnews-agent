@@ -1,4 +1,3 @@
-// deploy-trigger: 1782300925
 // ============================================================
 // endpoints-process.ts · v0.36.20 · csnews-audit 修复
 // 4 个 action handler: process / health / logs / tavily
@@ -373,6 +372,13 @@ export async function handleHealthAction(
   // 8. r2_prefix_counts
   const r2PrefixResult = await checkR2PrefixCounts(env);
   result.r2_prefix_counts = r2PrefixResult.r2_prefix_counts;
+  const r2PrefixErrorCount = Object.values(r2PrefixResult.r2_prefix_counts).filter(
+    (v) => typeof v === 'object' && 'error' in v
+  ).length;
+  checks.r2_prefix_counts = {
+    status: r2PrefixErrorCount === 0 ? 'ok' : r2PrefixErrorCount < r2PrefixResult.r2_prefix_counts ? 'degraded' : 'down',
+    detail: `${r2PrefixErrorCount}/${Object.keys(r2PrefixResult.r2_prefix_counts).length} prefixes failed`,
+  };
 
   // 9. cron_history
   const cronHistoryResult = await checkCronHistory(env, ts);
@@ -417,7 +423,9 @@ export async function handleHealthAction(
   result.mcp_tools_count = MCP_TOOLS_COUNT;
 
   // 整体 status 聚合
-  const statuses = Object.values(checks).map((c) => c.status);
+  const statuses = Object.values(checks)
+    .filter((c): c is { status: string; detail: any } => c != null && 'status' in c)
+    .map((c) => c.status);
   if (statuses.includes('down')) result.status = 'down';
   else if (statuses.includes('degraded')) result.status = 'degraded';
   else if (statuses.every((s) => s === 'ok' || s === 'unknown')) result.status = 'ok';
