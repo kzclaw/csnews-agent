@@ -1,11 +1,12 @@
 /**
- * CSNEWS Agent · 消费面通用 pull 端点（v0.31）
+ * CSNEWS Agent · 消费面通用 pull 端点（v0.37）
  *
  * 端点：GET /?action=pull
  * 设计原则：架构接口统一 / 模块化可复用可扩展通用性 / 最少扰动 / 不增熵
  *
  * 4 个 type(v0.31 阶段):news / topics / warnings / fission-pending
  * 2 个 type(v0.32 阶段):trends / stats
+ * 1 个 type(v0.37 阶段):entity (R2, 非 Supabase)
  *
  * 通用参数:limit / order / order_by / since / until / level / category /
  *           topic_id / status / stage / fission_triggered / select / format
@@ -108,6 +109,16 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     defaultSelect: 'id, created_at',
     allowedFilters: [],
     timeField: 'created_at',
+  },
+  // entity: 从 R2 entity-finalized.json 读取(非 Supabase),映射字段 uuid→id / mention_count→news_count
+  // allowedOrderBy 含 entity 专属字段:last_seen / confidence / mention_count
+  entity: {
+    table: '__r2__',
+    defaultOrderBy: 'last_seen',
+    allowedOrderBy: ['last_seen', 'confidence', 'mention_count', 'first_seen'],
+    defaultSelect: 'id, name, type, confidence, first_seen, last_seen, news_count',
+    allowedFilters: ['type', 'category', 'since', 'until'],
+    timeField: 'last_seen',
   },
 };
 
@@ -469,7 +480,116 @@ async function queryFissionPending(
   return { items: filtered, total: filtered.length };
 }
 
-// ====== Seed Envelope helpers ======
+// ====== entity 查询(R2) ======
+
+const ENTITY_R2_KEY = 'entity-finalized.json';
+
+interface EntityR2Item {
+  uuid: string;
+  name: string;
+  type: 'person' | 'org' | 'place';
+  confidence: number;
+  source: 'selflearn' | 'review';
+  first_seen: string;
+  last_seen: string;
+  mention_count: number;
+}
+
+interface EntityR2Payload {
+  generated_at: string;
+  entities: EntityR2Item[];
+}
+
+/**
+ * 从 R2 读 entity-finalized.json 并按 filters 做过滤/排序/分页
+ * 字段映射: uuid→id, mention_count→news_count
+ */
+async function queryEntity(
+  env: Env,
+  filters: ParsedFilters
+): Promise<{ items: any[]; total: number }> {
+  let raw: EntityR2Payload | null = null;
+  try {
+    const obj = await env.csnews_raw.get(ENTITY_R2_KEY);
+    if (obj) {
+      const text = await obj.text();
+      raw = JSON.parse(text) as EntityR2Payload;
+    }
+  } catch (e: any) {
+    console.error(`[pull:entity] R2 read failed: ${e?.message || e}`);
+  }
+
+  let items = (raw?.entities || []) as EntityR2Item[];
+
+  // 过滤: type
+  if (filters.level) {
+    items = items.filter((it) => it.type === filters.level);
+  }
+
+  // 过滤: category(映射到 type,保持兼容)
+  if (filters.category) {
+    items = items.filter((it) => it.type === filters.category);
+  }
+
+  // 时间窗口
+  if (filters.since) {
+    const sinceMs = Date.parse(filters.since);
+    items = items.filter((it) => Date.parse(it.last_seen) >= sinceMs);
+  }
+  if (filters.until) {
+    const untilMs = Date.parse(filters.until);
+    items = items.filter((it) => Date.parse(it.last_seen) <= untilMs);
+  }
+
+  // total(在过滤之后)
+  const total = items.length;
+
+  // 排序
+  items = [...items].sort((a, b) => {
+    let av: number | string;
+    let bv: number | string;
+    switch (filters.orderBy) {
+      case 'confidence':
+        av = a.confidence;
+        bv = b.confidence;
+        break;
+      case 'mention_count':
+        av = a.mention_count;
+        bv = b.mention_count;
+        break;
+      case 'first_seen':
+        av = Date.parse(a.first_seen);
+        bv = Date.parse(b.first_seen);
+        break;
+      case 'last_seen':
+      default:
+        av = Date.parse(a.last_seen);
+        bv = Date.parse(b.last_seen);
+        break;
+    }
+    if (av < bv) return filters.order === 'asc' ? -1 : 1;
+    if (av > bv) return filters.order === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // 分页: offset + limit
+  const offset = filters.offset || 0;
+  items = items.slice(offset, offset + filters.limit);
+
+  // 字段映射: uuid→id, mention_count→news_count
+  const mapped = items.map((it) => ({
+    id: it.uuid,
+    name: it.name,
+    type: it.type,
+    confidence: it.confidence,
+    category: it.type, // type 即 category
+    first_seen: it.first_seen,
+    last_seen: it.last_seen,
+    news_count: it.mention_count,
+  }));
+
+  return { items: mapped, total };
+}
 
 /**
  * 计算 items 数组中最新内容的年龄(分钟)
@@ -554,6 +674,11 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
     if (filters.type === 'fission-pending') {
       // 衍生视图,走专用查询
       const result = await queryFissionPending(env, filters);
+      items = result.items;
+      total = result.total;
+    } else if (filters.type === 'entity') {
+      // R2 专用查询
+      const result = await queryEntity(env, filters);
       items = result.items;
       total = result.total;
     } else {
