@@ -32,8 +32,8 @@ describe('业务常量', () => {
     expect(DEFAULT_ACTION).toBe('ping');
   });
 
-  it('ALLOWED_ACTIONS 必须含 26 个 action (v0.36.26 新增 mcp/mcp-list + feedback-check + tavily + ai-usage)', () => {
-    expect(ALLOWED_ACTIONS).toHaveLength(26);
+  it('ALLOWED_ACTIONS 必须含 27 个 action (v0.37 新增 proxy 端点)', () => {
+    expect(ALLOWED_ACTIONS).toHaveLength(27);
   });
 
   it('ALLOWED_ACTIONS 必须含全部基础 action', () => {

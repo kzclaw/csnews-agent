@@ -1223,6 +1223,107 @@ body::before {
   .card-title { font-size: 16px; }
   .modal { max-width: calc(100vw - 24px); margin: 12px; }
 }
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+.reader-float-backdrop {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: flex-start; justify-content: center;
+  z-index: 200;
+  padding: 48px 16px 24px;
+  overflow-y: auto;
+  animation: rfloat-fadein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes rfloat-fadein { from { opacity: 0; } to { opacity: 1; } }
+.reader-float-backdrop.closing {
+  animation: rfloat-fadeout 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes rfloat-fadeout { from { opacity: 1; } to { opacity: 0; } }
+.reader-float {
+  background: var(--bg-1);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 760px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  animation: rfloat-slidein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 1px rgba(212, 162, 83, 0.08), 0 8px 32px rgba(0,0,0,0.48);
+}
+@keyframes rfloat-slidein {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reader-float-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gold-bg-strong);
+  background: var(--bg);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.reader-float-title {
+  font-size: 13px; font-weight: 600; color: var(--gold);
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reader-float-close {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-3); padding: 4px;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.reader-float-close:hover { color: var(--text); background: var(--bg-hover); }
+.reader-float-close svg { width: 18px; height: 18px; }
+.reader-float-body {
+  flex: 1; overflow-y: auto; max-height: calc(100vh - 200px);
+}
+.reader-float-content {
+  padding: 0;
+  font-size: 15px; line-height: 1.75; color: var(--text);
+}
+.reader-float-content iframe {
+  width: 100%; min-height: 60vh;
+  border: none; display: block;
+  background: white;
+}
+.reader-float-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 20px; gap: 12px; color: var(--text-3); font-size: 13px;
+}
+.reader-float-loading-spinner {
+  width: 24px; height: 24px; border: 2px solid var(--hairline);
+  border-top-color: var(--gold); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.reader-float-error {
+  padding: 32px 24px; text-align: center; color: var(--danger); font-size: 13px;
+}
+.reader-float-source {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  font-size: 11px; color: var(--text-3);
+  flex-shrink: 0;
+}
+.reader-float-source a { color: var(--text-2); text-decoration: none; }
+.reader-float-source a:hover { color: var(--gold); text-decoration: underline; }
+.reader-float-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.reader-float-footer .kbd { font-size: 10px; }
+.reader-float-footer span { font-size: 11px; color: var(--text-3); }
 </style>
 </head>
 <body>
@@ -1417,6 +1518,34 @@ body::before {
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ============ Reader Float Modal (Readability) ============ -->
+<div class="reader-float-backdrop" id="reader-float-backdrop" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="rfloat-title">
+  <div class="reader-float">
+    <div class="reader-float-header">
+      <div class="reader-float-title" id="rfloat-title">加载中…</div>
+      <button class="reader-float-close" id="rfloat-close" title="关闭 (ESC)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="reader-float-body">
+      <div class="reader-float-loading" id="rfloat-loading">
+        <div class="reader-float-loading-spinner"></div>
+        <span>正在抓取正文…</span>
+      </div>
+      <div class="reader-float-error" id="rfloat-error" style="display: none;"></div>
+      <iframe id="rfloat-iframe" style="display: none;" sandbox="allow-same-origin" title="文章正文"></iframe>
+    </div>
+    <div class="reader-float-source" id="rfloat-source" style="display: none;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span>来源: <a id="rfloat-source-link" href="#" target="_blank" rel="noopener noreferrer">—</a></span>
+    </div>
+    <div class="reader-float-footer">
+      <span class="kbd">ESC</span>
+      <span>关闭</span>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -2745,6 +2874,15 @@ function bindCardClicks() {
       const item = STATE.items.find(x => x.id === id);
       if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
     });
+    // v0.37: Reader Float Modal — 点标题抓取原文并浮窗显示
+    const titleEl = card.querySelector('.card-title');
+    if (titleEl) {
+      titleEl.addEventListener('click', e => {
+        e.stopPropagation();
+        const item = STATE.items.find(x => x.id === id);
+        if (item && item.url) openReaderFloat(id, item.url, item.title);
+      });
+    }
   });
   // v0.36.12 KR2 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
   if ('IntersectionObserver' in window) {
@@ -2795,6 +2933,85 @@ function formatContent(text) {
   const paras = text.split(/\n\n+/).map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`);
   return paras.join('');
 }
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 点击标题 → fetch ?action=proxy&url= → 浮窗显示原文
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+
+async function fetchReaderArticle(url) {
+  const cfg = getConfig();
+  const proxyUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/?action=proxy&url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxyUrl, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.reason || data.error || `HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return text;
+}
+
+async function openReaderFloat(id, url, title) {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const titleEl = document.getElementById('rfloat-title');
+  const loadingEl = document.getElementById('rfloat-loading');
+  const errorEl = document.getElementById('rfloat-error');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  const sourceEl = document.getElementById('rfloat-source');
+  const sourceLinkEl = document.getElementById('rfloat-source-link');
+  if (!backdrop) return;
+
+  // 显示浮窗
+  backdrop.style.display = 'flex';
+  titleEl.textContent = title ? title.slice(0, 80) : '正文中…';
+  loadingEl.style.display = 'flex';
+  errorEl.style.display = 'none';
+  iframeEl.style.display = 'none';
+  sourceEl.style.display = 'none';
+  backdrop.classList.remove('closing');
+
+  try {
+    const html = await fetchReaderArticle(url);
+    loadingEl.style.display = 'none';
+    iframeEl.style.display = 'block';
+    iframeEl.srcdoc = html;
+    sourceLinkEl.href = url;
+    sourceLinkEl.textContent = url;
+    sourceEl.style.display = 'flex';
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    errorEl.textContent = `抓取失败: ${e.message || String(e)}`;
+    errorEl.style.display = 'block';
+  }
+}
+
+function closeReaderFloat() {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  if (!backdrop) return;
+
+  // fade-out 动画后再隐藏
+  backdrop.classList.add('closing');
+  backdrop.addEventListener('animationend', () => {
+    backdrop.style.display = 'none';
+    backdrop.classList.remove('closing');
+    iframeEl.srcdoc = '';
+  }, { once: true });
+}
+
+// 点击关闭按钮
+document.getElementById('rfloat-close')?.addEventListener('click', closeReaderFloat);
+// 点击 backdrop 关闭
+document.getElementById('reader-float-backdrop')?.addEventListener('click', e => {
+  if (e.target.id === 'reader-float-backdrop') closeReaderFloat();
+});
+// ESC 关闭
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('reader-float-backdrop')?.style.display === 'flex') {
+    closeReaderFloat();
+  }
+});
 
 async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
