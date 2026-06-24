@@ -448,6 +448,9 @@ export async function handleEntityAction(
         )
       );
 
+      // 重算聚类
+      await runEventProcess(env);
+
       return new Response(
         JSON.stringify({
           type: 'approve',
@@ -520,6 +523,9 @@ export async function handleEntityAction(
         )
       );
 
+      // 重算聚类
+      await runEventProcess(env);
+
       return new Response(
         JSON.stringify({
           type: 'reject',
@@ -588,6 +594,9 @@ export async function handleEntityAction(
       const newAnchors = [...noiseData.anchors, entity.name];
       await writeNoiseAnchors(env, newAnchors, noiseData.threshold);
 
+      // 重算聚类
+      await runEventProcess(env);
+
       return new Response(
         JSON.stringify({
           type: 'noise-add',
@@ -623,6 +632,9 @@ export async function handleEntityAction(
       const newAnchors = [...noiseData.anchors];
       newAnchors.splice(idx, 1);
       await writeNoiseAnchors(env, newAnchors, noiseData.threshold);
+
+      // 重算聚类
+      await runEventProcess(env);
 
       return new Response(
         JSON.stringify({
