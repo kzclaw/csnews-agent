@@ -1,3 +1,4 @@
+// deploy-trigger: 1782300925
 // ============================================================
 // endpoints-process.ts · v0.36.20 · csnews-audit 修复
 // 4 个 action handler: process / health / logs / tavily
