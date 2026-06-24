@@ -1197,6 +1197,81 @@ body::before {
 }
 
 /* ============================================================
+ * ENTITY REVIEW tab styles
+ * ============================================================ */
+.entity-review-wrap { padding: 20px 28px 60px; max-width: 1100px; margin: 0 auto; }
+.entity-review-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.entity-review-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.entity-review-meta { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); margin-left: auto; }
+.entity-section { margin-bottom: 28px; }
+.entity-section-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px;
+}
+.entity-section-title .count {
+  font-family: var(--font-mono); font-size: 10px; padding: 1px 6px;
+  background: var(--bg-2); border-radius: 3px; color: var(--text-3);
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+}
+.entity-card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.entity-card:hover { border-color: var(--hairline-strong); background: var(--bg-1); }
+.entity-card-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 10px;
+}
+.entity-card-name { font-size: 13.5px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; word-break: break-word; }
+.entity-card-badge {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 7px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong);
+  border-radius: 3px; color: var(--text-2); flex-shrink: 0;
+}
+.entity-card-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-3); font-family: var(--font-mono);
+  margin-bottom: 12px;
+}
+.entity-card-meta span { display: flex; align-items: center; gap: 4px; }
+.entity-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.entity-card-actions .btn { font-size: 11.5px; height: 26px; padding: 3px 10px; }
+.entity-card-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.entity-card-actions .btn.success-btn { border-color: var(--success); color: var(--success); }
+.entity-card-actions .btn.success-btn:hover { background: var(--success-bg); }
+.entity-card-actions .btn.danger-btn { border-color: var(--danger); color: var(--danger); }
+.entity-card-actions .btn.danger-btn:hover { background: var(--danger-bg); }
+.entity-card-actions .btn.warning-btn { border-color: var(--warning); color: var(--warning); }
+.entity-card-actions .btn.warning-btn:hover { background: var(--warning-bg); }
+.entity-card-actions .btn.info-btn { border-color: var(--info); color: var(--info); }
+.entity-card-actions .btn.info-btn:hover { background: var(--info-bg); }
+
+/* noise anchor chip */
+.noise-anchor-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-1); border: 1px solid var(--hairline);
+  border-radius: var(--radius); padding: 4px 10px;
+  font-size: 12px; color: var(--text-2);
+}
+.noise-anchor-chip .remove-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); padding: 0 2px; font-size: 14px; line-height: 1;
+  display: flex; align-items: center;
+  transition: color var(--transition);
+}
+.noise-anchor-chip .remove-btn:hover { color: var(--danger); }
+.entity-anchors-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
  * Responsive
  * ============================================================ */
 @media (max-width: 1100px) {
@@ -1389,12 +1464,16 @@ body::before {
         <button class="dash-tab" data-tab="health">
           <span>Health</span>
         </button>
+        <button class="dash-tab" data-tab="entity-review">
+          <span>实体审核</span>
+        </button>
       </nav>
       <div class="dash-pane">
         <div class="dash-pane-inner active" id="pane-overview"></div>
         <div class="dash-pane-inner" id="pane-data"></div>
         <div class="dash-pane-inner" id="pane-logs"></div>
         <div class="dash-pane-inner" id="pane-health"></div>
+        <div class="dash-pane-inner" id="pane-entity-review"></div>
       </div>
     </section>
 
@@ -1569,6 +1648,10 @@ const STATE = {
   news7d: [], news7dErr: null,
   entity: null, entityErr: null,
   event: null, eventErr: null,
+  // entity review
+  entityReviewCandidates: null, entityReviewCandidatesErr: null,
+  entityReviewNoiseAnchors: null, entityReviewNoiseAnchorsErr: null,
+  entityReviewLoading: null,  // set of currently-actioning entity ids
   selectedEndpoint: 'pull-news',
   endpointResponse: null, endpointError: null, endpointLoading: false, endpointElapsed: 0,
   logs: [], logsErr: null,
@@ -2591,6 +2674,195 @@ function renderHealth() {
     </div>`;
 }
 
+/* ============================================================
+ * ENTITY REVIEW module
+ * ============================================================ */
+async function fetchEntityReviewCandidates() {
+  return apiGet('/', { action: 'entity', type: 'candidates' });
+}
+async function fetchEntityReviewNoiseAnchors() {
+  return apiGet('/', { action: 'entity', type: 'noise-anchors' });
+}
+
+async function doEntityAction(type, id) {
+  if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
+  STATE.entityReviewLoading = STATE.entityReviewLoading || new Set();
+  STATE.entityReviewLoading.add(id);
+  renderEntityReview();
+  try {
+    const result = await apiGet('/', { action: 'entity', type, ...(id ? { id } : {}) });
+    toast(`${type} 成功`, 'success');
+    return result;
+  } catch (e) {
+    toast(`${type} 失败: ${e.message}`, 'error');
+    return null;
+  } finally {
+    STATE.entityReviewLoading.delete(id);
+    STATE.entityReviewLoading = new Set(STATE.entityReviewLoading);
+    // Refresh data after action
+    try {
+      STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+      STATE.entityReviewCandidatesErr = null;
+    } catch (e) { STATE.entityReviewCandidatesErr = { message: e.message }; }
+    try {
+      STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+      STATE.entityReviewNoiseAnchorsErr = null;
+    } catch (e) { STATE.entityReviewNoiseAnchorsErr = { message: e.message }; }
+    renderEntityReview();
+  }
+}
+
+function isEntityLoading(id) {
+  return STATE.entityReviewLoading && STATE.entityReviewLoading.has(id);
+}
+
+function renderEntityReview() {
+  const c = document.getElementById('pane-entity-review');
+  if (!c) return;
+
+  const candidates = STATE.entityReviewCandidates;
+  const noiseAnchorsData = STATE.entityReviewNoiseAnchors;
+  const candidatesErr = STATE.entityReviewCandidatesErr;
+  const noiseAnchorsErr = STATE.entityReviewNoiseAnchorsErr;
+
+  const candidatesList = candidates?.candidates || [];
+  const noiseList = candidates?.noise || [];
+  const anchorsList = noiseAnchorsData?.anchors || [];
+  const loadingCandidates = candidates == null && !candidatesErr;
+  const loadingAnchors = noiseAnchorsData == null && !noiseAnchorsErr;
+
+  let html = `<div class="entity-review-wrap">`;
+
+  // Header
+  html += `
+  <div class="entity-review-header">
+    <div class="entity-review-title">🧠 实体审核</div>
+    <div class="entity-review-meta">
+      ${candidatesList.length} 候选 · ${noiseList.length} 待噪音 · ${anchorsList.length} 噪音词
+    </div>
+  </div>`;
+
+  // Error banners
+  if (candidatesErr) {
+    html += `<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 候选实体加载失败</div>
+      <div class="error-banner-body">${escapeHtml(candidatesErr.message)}</div>
+    </div>`;
+  }
+  if (noiseAnchorsErr) {
+    html += `<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 噪音词加载失败</div>
+      <div class="error-banner-body">${escapeHtml(noiseAnchorsErr.message)}</div>
+    </div>`;
+  }
+
+  // Candidates section
+  html += `
+  <div class="entity-section">
+    <div class="entity-section-title">
+      候选实体
+      <span class="count">${candidatesList.length}</span>
+    </div>`;
+
+  if (loadingCandidates) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>`;
+  } else if (!candidatesList.length && !noiseList.length) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无候选实体</div>`;
+  } else {
+    // Render candidates
+    const allEntities = [...candidatesList, ...noiseList.map(n => ({ ...n, _fromNoise: true }))];
+    for (const entity of allEntities) {
+      const isNoise = entity._fromNoise;
+      const loading = isEntityLoading(entity.uuid);
+      const conf = entity.confidence != null ? `${(entity.confidence * 100).toFixed(0)}%` : '—';
+      const freq = entity.frequency != null ? entity.frequency : '—';
+      const firstSeen = entity.first_seen ? fmtTime(entity.first_seen) : '—';
+      html += `
+      <div class="entity-card">
+        <div class="entity-card-header">
+          <div class="entity-card-name">${escapeHtml(entity.name)}</div>
+          ${isNoise ? '<span class="entity-card-badge">噪音</span>' : ''}
+          <span class="entity-card-badge">${escapeHtml(entity.type || 'unknown')}</span>
+        </div>
+        <div class="entity-card-meta">
+          <span>conf: ${conf}</span>
+          <span>freq: ${freq}</span>
+          <span>source: ${escapeHtml(entity.source || '—')}</span>
+          <span>first_seen: ${firstSeen}</span>
+        </div>
+        <div class="entity-card-actions">
+          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ✅ 采纳
+          </button>
+          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ❌ 拒绝
+          </button>
+          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+            ➕ 加噪音词
+          </button>
+          <button class="btn info-btn" data-action="noise-remove" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''}>
+            ➖ 删噪音词
+          </button>
+        </div>
+      </div>`;
+    }
+  }
+  html += `</div>`;
+
+  // Noise Anchors section
+  html += `
+  <div class="entity-section">
+    <div class="entity-section-title">
+      噪音词 Anchors
+      <span class="count">${anchorsList.length}</span>
+    </div>`;
+  if (loadingAnchors) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>`;
+  } else if (!anchorsList.length) {
+    html += `<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无噪音词</div>`;
+  } else {
+    html += `<div class="entity-anchors-wrap">`;
+    for (const anchor of anchorsList) {
+      const loading = isEntityLoading(anchor);
+      html += `
+      <div class="noise-anchor-chip">
+        <span>${escapeHtml(anchor)}</span>
+        <button class="remove-btn" data-action="noise-remove" data-id="${escapeHtml(anchor)}" title="删除噪音词" ${loading ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>✕</button>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  html += `</div>`; // end entity-review-wrap
+  c.innerHTML = html;
+
+  // Bind action buttons
+  c.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      await doEntityAction(action, id);
+    });
+  });
+}
+
+async function refreshEntityReview() {
+  try {
+    STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+    STATE.entityReviewCandidatesErr = null;
+  } catch (e) {
+    STATE.entityReviewCandidatesErr = { message: e.message || String(e) };
+  }
+  try {
+    STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+    STATE.entityReviewNoiseAnchorsErr = null;
+  } catch (e) {
+    STATE.entityReviewNoiseAnchorsErr = { message: e.message || String(e) };
+  }
+  renderEntityReview();
+}
+
 function renderDashTab() {
   document.querySelectorAll('.dash-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === STATE.dashTab));
   document.querySelectorAll('.dash-pane-inner').forEach(el => el.classList.toggle('active', el.id === 'pane-' + STATE.dashTab));
@@ -2598,10 +2870,17 @@ function renderDashTab() {
   else if (STATE.dashTab === 'data') renderData();
   else if (STATE.dashTab === 'logs') renderLogs();
   else if (STATE.dashTab === 'health') renderHealth();
+  else if (STATE.dashTab === 'entity-review') renderEntityReview();
 }
 
 document.querySelectorAll('.dash-tab').forEach(el => {
-  el.addEventListener('click', () => { STATE.dashTab = el.dataset.tab; renderDashTab(); });
+  el.addEventListener('click', () => {
+    STATE.dashTab = el.dataset.tab;
+    renderDashTab();
+    if (STATE.dashTab === 'entity-review' && !STATE.entityReviewCandidates && !STATE.entityReviewCandidatesErr) {
+      refreshEntityReview();
+    }
+  });
 });
 
 async function refreshDashboard() {
