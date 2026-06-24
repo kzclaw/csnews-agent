@@ -897,7 +897,7 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
         ai_calls_breakdown: {},
         neurons_used_today: 0,
         ai_budget_status: 'unknown',
-        checks: checks.ai_calls_breakdown,
+        checks: { ai_calls_breakdown: checks.ai_calls_breakdown },
       };
     }
 
@@ -945,7 +945,7 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
       ai_calls_breakdown: breakdown,
       neurons_used_today: totalNeurons,
       ai_budget_status: aiBudgetStatus,
-      checks: checks.ai_calls_breakdown,
+      checks: { ai_calls_breakdown: checks.ai_calls_breakdown },
     };
   } catch (e: any) {
     checks.ai_calls_breakdown = { status: 'unknown', detail: e?.message };
@@ -953,7 +953,7 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
       ai_calls_breakdown: {},
       neurons_used_today: 0,
       ai_budget_status: 'unknown',
-      checks: checks.ai_calls_breakdown,
+      checks: { ai_calls_breakdown: checks.ai_calls_breakdown },
     };
   }
 }
