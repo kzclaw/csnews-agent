@@ -78,7 +78,7 @@ export async function loadNoiseAnchors(env: Env): Promise<NoiseAnchorsData> {
  * 计算 candidate vs anchors 的最大 cosine similarity
  * 返回 0-1, 越大越像 noise
  */
-export function maxNoiseSimilarity(candidateEmb: number[], anchorEmbs: number[][]): number {
+function maxNoiseSimilarity(candidateEmb: number[], anchorEmbs: number[][]): number {
   let max = 0;
   for (const anchorEmb of anchorEmbs) {
     if (anchorEmb.length !== candidateEmb.length) continue;

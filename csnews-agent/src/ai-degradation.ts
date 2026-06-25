@@ -138,14 +138,14 @@ export async function markAsDegraded(
     });
 
     if (!res.ok) {
-      console.error(`[ai-degradation] PATCH ${table} failed: ${res.status} ${await res.text()}`);
+      await logEvent((env as any), 'error', `[ai-degradation] PATCH ${table} failed: ${res.status} ${await res.text()}`, undefined, 'ai');;
       return false;
     }
 
     return true;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[ai-degradation] markAsDegraded error: ${msg}`);
+    await logEvent((env as any), 'error', `[ai-degradation] markAsDegraded error: ${msg}`, undefined, 'ai');;
     return false;
   }
 }

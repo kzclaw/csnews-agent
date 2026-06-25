@@ -40,13 +40,13 @@ export interface EntityCandidate {
 export const ENTITY_CANDIDATES_R2_KEY = 'entity-candidates.json';
 const SELFLEARN_MIN_FREQUENCY = 3;
 const SELFLEARN_NGRAM_SIZES = [2, 3, 4];
-export const SELFLEARN_CONFIDENCE = 0.5;
-export const SELFLEARN_MAX_CANDIDATES = 50;
+const SELFLEARN_CONFIDENCE = 0.5;
+const SELFLEARN_MAX_CANDIDATES = 50;
 
 /**
  * 从文本中提取 n-gram 频率
  */
-export function extractNgramFrequency(
+function extractNgramFrequency(
   text: string,
   sizes: number[] = SELFLEARN_NGRAM_SIZES
 ): Map<string, number> {
@@ -73,7 +73,7 @@ export function extractNgramFrequency(
 /**
  * 合并多个文本的 n-gram 频率
  */
-export function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, number> {
+function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, number> {
   const merged = new Map<string, number>();
   for (const f of freqs) {
     for (const [gram, count] of f) {
@@ -89,7 +89,7 @@ export function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, n
  * 含常见地名关键词 → place
  * 其他 → person
  */
-export function inferEntityType(gram: string): 'person' | 'org' | 'place' {
+function inferEntityType(gram: string): 'person' | 'org' | 'place' {
   if (/公司|集团|科技|AI|银行|学院|大学|社|局|部|委|所|院|校|厂|店|行|司|署/.test(gram))
     return 'org';
   if (/省|市|国|区|县|州|镇|村|路|街|岛|海|河|山|湖|港|城|都|府/.test(gram)) return 'place';
