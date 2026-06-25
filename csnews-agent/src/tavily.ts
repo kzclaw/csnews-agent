@@ -136,3 +136,216 @@ export async function fetchTavilyNews(
     return [];
   }
 }
+
+
+// ============================================================
+// Tavily cron pipeline — runs every 2 hours
+// ============================================================
+// Fetches ~10 articles per query, deduplicates, embeds top-N,
+// assigns topics via Vectorize similarity, batch-inserts, and
+// dual-writes to Vectorize.
+// ============================================================
+
+import { Env } from './shared';
+import {
+  embedTitle,
+  findSimilarForEmbedding,
+} from './process-vector';
+import {
+  createTopicForTitle,
+  updateTopicScoreById,
+  insertNewsBatch,
+  dualWriteVectors,
+  recordTrendForNews,
+} from './process-db';
+
+// ---- cron query list ----
+const TAVILY_QUERIES = [
+  'top trending news today worldwide',
+  'breaking technology business science news',
+];
+
+// ---- shared result shape ----
+interface TavilyResultItem {
+  title: string;
+  url: string;
+  similarity: number | null;
+  stored_reason: string;
+}
+
+interface TavilyPendingItem {
+  title: string;
+  url: string;
+  source: string;
+  category: string | undefined;
+  published_at: string;
+  summary: string | undefined;
+  embedding: number[];
+  topicId: string | undefined;
+  isNewTopic: boolean;
+  newsLevel: string;
+  newsScore: number;
+  matchedSimilarity: number | null;
+}
+
+/**
+ * Full Tavily cron pipeline.
+ * Called by endpoints-process.ts handleTavilyAction.
+ */
+export async function runTavilyPipeline(
+  env: Env,
+  url: URL,
+  cors: Record<string, string>
+): Promise<Response> {
+  const start = Date.now();
+  const apiKey = env.TAVILY_API_KEY;
+  const maxPerQuery = Math.max(
+    1,
+    Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
+  );
+
+  const allArticles: NormalizedArticle[] = [];
+  const fetchErrors: string[] = [];
+
+  for (const query of TAVILY_QUERIES) {
+    const articles = await fetchTavilyNews(apiKey, query, maxPerQuery);
+    if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
+      fetchErrors.push(`query="${query}" returned 0 results`);
+    }
+    allArticles.push(...articles);
+  }
+
+  // Nothing fetched
+  if (allArticles.length === 0) {
+    return new Response(
+      JSON.stringify({
+        source: 'tavily',
+        fetched: 0,
+        inserted: 0,
+        skipped_duplicates: 0,
+        errors: fetchErrors,
+        elapsed_ms: Date.now() - start,
+      }),
+      { headers: { 'Content-Type': 'application/json', ...cors } }
+    );
+  }
+
+  // Deduplicate by URL
+  const seen = new Set<string>();
+  const uniqueArticles = allArticles.filter((a) => {
+    if (seen.has(a.url)) return false;
+    seen.add(a.url);
+    return true;
+  });
+
+  const results: TavilyResultItem[] = [];
+  const pendingNews: TavilyPendingItem[] = [];
+  const EMBED_COUNT = 6;
+
+  for (let i = 0; i < uniqueArticles.length; i++) {
+    const article = uniqueArticles[i];
+    const title = article.title;
+
+    let topicId: string | undefined;
+    let embedding: number[] = [];
+    let matchedSimilarity: number | null = null;
+    let newsLevel = 'follow';
+    let newsScore = 0;
+    let isNewTopic = false;
+    let storedReason = 'lightweight_no_embedding';
+
+    if (i < EMBED_COUNT) {
+      embedding = await embedTitle(env, title);
+
+      if (embedding.length > 0) {
+        const similar = await findSimilarForEmbedding(env, embedding, 0.88, 3);
+        if (similar.length > 0 && similar[0].topic_id) {
+          const top = similar[0];
+          topicId = top.topic_id;
+          const updated = await updateTopicScoreById(env, top.topic_id);
+          newsScore = updated.new_score || 0;
+          newsLevel = updated.new_level || 'follow';
+          matchedSimilarity = top.similarity || null;
+          const simScore = top.similarity || 0;
+          storedReason = simScore < 0.95 ? 'same_topic_new_angle' : 'same_topic_duplicate';
+        }
+      }
+
+      if (!topicId) {
+        const created = await createTopicForTitle(env, title, 'follow');
+        if (created?.id) {
+          topicId = created.id;
+          newsScore = 0;
+          newsLevel = 'follow';
+          isNewTopic = true;
+          storedReason = embedding.length > 0 ? 'new_topic' : 'new_topic_without_embedding';
+        }
+      }
+    }
+
+    pendingNews.push({
+      title,
+      url: article.url,
+      source: 'tavily',
+      category: article.category,
+      published_at: article.published_at,
+      summary: article.summary,
+      embedding,
+      topicId,
+      isNewTopic,
+      newsLevel,
+      newsScore,
+      matchedSimilarity,
+    });
+
+    results.push({
+      title,
+      url: article.url,
+      similarity: matchedSimilarity,
+      stored_reason: storedReason,
+    });
+  }
+
+  const batchNewsArray = pendingNews.map((p) => ({
+    title: p.title,
+    url: p.url || '',
+    source: p.source,
+    category: p.category,
+    hot_score: undefined as number | undefined,
+    published_at: p.published_at,
+    summary: (p.summary || '').substring(0, 200),
+    embedding: p.embedding.length > 0 ? p.embedding : undefined,
+    r2_key: undefined as string | undefined,
+    topic_id: p.topicId,
+    level: p.newsLevel,
+    score: p.newsScore,
+    is_stored_r2: false,
+  }));
+
+  const batchIds = await insertNewsBatch(env, batchNewsArray);
+  dualWriteVectors(env, batchNewsArray, batchIds);
+
+  for (let i = 0; i < pendingNews.length; i++) {
+    const p = pendingNews[i];
+    const newsId = batchIds[i];
+    if (newsId && p.topicId) {
+      await recordTrendForNews(env, newsId, p.topicId, p.isNewTopic);
+    }
+  }
+
+  const inserted = batchIds.filter(Boolean).length;
+  const skipped = results.filter((r) => r.stored_reason === 'same_topic_duplicate').length;
+
+  return new Response(
+    JSON.stringify({
+      source: 'tavily',
+      fetched: uniqueArticles.length,
+      inserted,
+      skipped_duplicates: skipped,
+      errors: fetchErrors,
+      elapsed_ms: Date.now() - start,
+      items: results,
+    }),
+    { headers: { 'Content-Type': 'application/json', ...cors } }
+  );
+}
