@@ -15,7 +15,7 @@
  *   - CORS 头复用 auth.ts corsHeaders() (跟 endpoints.ts 模式一致)
  */
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { corsHeaders } from './auth';
 import { logEvent } from './log';
 import {
@@ -155,15 +155,9 @@ export async function dispatchAction(
   if (action === 'mcp-list') return handleMCPListAction(request, cors);
   if (action === 'feedback-check') {
     const { ok, result, elapsed_ms } = await handleFeedbackCheckAction(env);
-    return new Response(JSON.stringify({ ok, result, elapsed_ms }), {
-      status: ok ? 200 : 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ ok, result, elapsed_ms }, cors, { status: ok ? 200 : 500 });
   }
 
   // unknown action
-  return new Response(JSON.stringify({ error: 'unknown action' }), {
-    status: 400,
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse({ error: 'unknown action' }, cors, { status: 400 });
 }

@@ -10,7 +10,7 @@
  * 协议: JSON-RPC 2.0（不含 SSE）
  */
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { handlePull } from './pull';
 
 // ============================================================
@@ -764,64 +764,40 @@ export async function handleMCPAction(
     // Protocol methods
     const proto = handleMCPProtocolMethod(req);
     if (proto.isProtocol && proto.response) {
-      return new Response(JSON.stringify(proto.response), {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse(proto.response, cors);
     }
 
     // Standard MCP tools/call
     if (req.method === 'tools/call') {
       const response = await handleToolsCall(req, env, ctx);
-      return new Response(JSON.stringify(response), {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse(response, cors);
     }
 
     const validationError = validateRequest(req);
     if (validationError) {
-      return new Response(
-        JSON.stringify(
-          buildErrorResponse(
-            null,
-            MCP_ERROR_CODES.INVALID_REQUEST,
-            `Invalid request: ${validationError}`
-          )
-        ),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
+      return jsonResponse(
+        buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, `Invalid request: ${validationError}`),
+        cors,
+        { status: 400 }
       );
     }
 
     try {
       const text = await executeTool(req.method, env, ctx, params(req));
-      return new Response(JSON.stringify(buildSuccessResponse(req.id, text)), {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse(buildSuccessResponse(req.id, text), cors);
     } catch (e: any) {
-      return new Response(
-        JSON.stringify(
-          buildErrorResponse(
-            req.id,
-            MCP_ERROR_CODES.TOOL_EXECUTION_ERROR,
-            e.message || 'Tool execution failed',
-            { method: req.method }
-          )
-        ),
-        {
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
+      return jsonResponse(
+        buildErrorResponse(req.id, MCP_ERROR_CODES.TOOL_EXECUTION_ERROR, e.message || 'Tool execution failed', {
+          method: req.method,
+        }),
+        cors
       );
     }
   }
 
   // Return batch response (always array)
   const statusCode = responses.some((r) => 'error' in r) ? 200 : 200;
-  return new Response(JSON.stringify(isBatch ? responses : responses[0]), {
-    status: statusCode,
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse(isBatch ? responses : responses[0], cors, { status: statusCode });
 }
 
 // ============================================================

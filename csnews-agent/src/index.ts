@@ -19,6 +19,7 @@ import type {
   TopicRecord,
 } from './types-supabase';
 import { dispatchAction } from './dispatch';
+import { jsonResponse } from './shared';
 interface Env {
   AI: Ai;
   csnews_raw: R2Bucket;
@@ -193,10 +194,7 @@ function authRequest(request: Request, env: Env): Response | null {
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.replace('Bearer ', '');
   if (token !== env.BEARER_TOKEN) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: 'Unauthorized' }, {}, { status: 401 });
   }
   return null;
 }
@@ -443,9 +441,7 @@ export default {
         results.push({ step: 'join', status: -1, reason: 'missing IDs', tid: t0id, nid: t1id });
       }
 
-      return new Response(JSON.stringify({ ts: Date.now(), results }), {
-        headers: { 'Content-Type': 'application/json', ...cors }
-      });
+      return jsonResponse({ ts: Date.now(), results }, cors);
     }
 
     // All other actions → dispatch layer (pull, health, ai-usage, ping, score, etc.)

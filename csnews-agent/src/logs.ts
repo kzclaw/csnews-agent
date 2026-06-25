@@ -6,7 +6,7 @@
 // parses JSON lines, and returns newest-first with optional hour filter.
 // ============================================================
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 
 export async function handleLogsAction(
   request: Request,
@@ -26,10 +26,7 @@ export async function handleLogsAction(
   } else if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
     date = rawDate;
   } else {
-    return new Response(JSON.stringify({ error: "date must be YYYY-MM-DD or 'today'" }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: "date must be YYYY-MM-DD or 'today'" }, cors, { status: 400 });
   }
 
   // ---- hour validation ----
@@ -38,10 +35,7 @@ export async function handleLogsAction(
   if (hourParam !== null) {
     hour = parseInt(hourParam, 10);
     if (isNaN(hour) || hour < 0 || hour > 23) {
-      return new Response(JSON.stringify({ error: 'hour must be 0-23' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'hour must be 0-23' }, cors, { status: 400 });
     }
   }
 
@@ -53,10 +47,7 @@ export async function handleLogsAction(
   const todayDate = new Date(todayUtc + 'T00:00:00Z');
   const diffDays = (todayDate.getTime() - requestedDate.getTime()) / 86400_000;
   if (diffDays > 7 || diffDays < 0) {
-    return new Response(JSON.stringify({ error: 'date range max 7 days (0-7 days back)' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'date range max 7 days (0-7 days back)' }, cors, { status: 400 });
   }
 
   // ---- fetch and parse R2 log files ----

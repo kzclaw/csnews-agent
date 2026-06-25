@@ -5,7 +5,7 @@
 // usage broken down by date, model, and L1-L6 category.
 // ============================================================
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 
 // Map CF Workers AI model names → L1-L6 tier levels
 function modelToLevel(model: string): string {
@@ -16,10 +16,7 @@ function modelToLevel(model: string): string {
 
 export async function handleAiUsageAction(env: Env, cors: Record<string, string>): Promise<Response> {
   if (!env.AI_USAGE_KV) {
-    return new Response(JSON.stringify({ error: 'AI_USAGE_KV binding missing' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'AI_USAGE_KV binding missing' }, cors, { status: 503 });
   }
 
   // ---- build last-7-days date list ----

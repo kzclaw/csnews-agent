@@ -12,7 +12,7 @@
 //   - runKnowledgeAccumulation: cron inline 调用
 // ============================================================
 
-import { Env, supabaseFetch, safeJson, validationError, parseCountHeader, payloadTooLargeResponse } from './shared';
+import { Env, supabaseFetch, safeJson, validationError, parseCountHeader, payloadTooLargeResponse, jsonResponse } from './shared';
 import { logEvent } from './log';
 import {
   validateId,
@@ -159,9 +159,7 @@ export async function handleContentAction(
           }
         : {}),
     };
-    return new Response(JSON.stringify(responseBody), {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse(responseBody, cors);
   }
 
   if (format === 'text') {

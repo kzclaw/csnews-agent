@@ -48,9 +48,7 @@ export async function handlePullAction(
   try {
     const result = await handlePull(env, url, ctx);
     const cacheControl = CACHE_HEADERS[result.type] || 'no-store';
-    return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': cacheControl, ...cors },
-    });
+    return jsonResponse(result, cors, { headers: { 'Cache-Control': cacheControl } });
   } catch (e: any) {
     const status = e.status || 500;
     return jsonResponse({ error: e.message || 'pull failed' }, cors, { status, headers: { 'Cache-Control': 'no-store' } });

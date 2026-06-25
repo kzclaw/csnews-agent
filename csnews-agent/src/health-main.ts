@@ -6,7 +6,7 @@
 // entity/event freshness, Neurons usage, and MCP tools.
 // ============================================================
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { MCP_TOOLS_COUNT } from './mcp-handler';
 import {
   checkLastProcessAt,
@@ -134,8 +134,5 @@ export async function handleHealthAction(
 
   result.checks = checks;
 
-  return new Response(JSON.stringify(result, null, 2), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse(result, cors, { status: 200 });
 }
