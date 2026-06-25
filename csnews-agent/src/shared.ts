@@ -106,3 +106,43 @@ export function jsonResponse(
     headers: { 'Content-Type': 'application/json', ...cors },
   });
 }
+
+/**
+ * 校验失败的统一 400 响应
+ * 替代 endpoints-trend.ts 3 个 handler 中 12 处重复的 Response 构造
+ */
+export function validationError(
+  result: { ok: boolean; error?: string; reason?: string | null },
+  cors: Record<string, string>
+): Response {
+  return new Response(
+    JSON.stringify({ error: result.error ?? 'validation_failed', reason: result.reason ?? null }),
+    { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+  );
+}
+
+/**
+ * 从 Supabase HEAD count=exact 响应中解析总数
+ * 替代 endpoints-trend.ts 中 5 处 parseInt(..., 10) 重复
+ * 业务契约:
+ *   - header 不存在 → 0
+ *   - header 格式异常 → 0
+ */
+export function parseCountHeader(res: Response): number {
+  return parseInt(res.headers.get('content-range')?.split('/')[1] ?? '0', 10);
+}
+
+/**
+ * 载荷超限的统一 413 响应
+ * 替代 endpoints-trend.ts 3 个 handler 中的重复 Response 构造
+ */
+export function payloadTooLargeResponse(
+  reason: string,
+  limitBytes: number,
+  cors: Record<string, string>
+): Response {
+  return new Response(
+    JSON.stringify({ error: 'payload_too_large', reason }),
+    { status: 413, headers: { 'Content-Type': 'application/json', ...cors } }
+  );
+}

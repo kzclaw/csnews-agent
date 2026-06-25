@@ -60,7 +60,11 @@ export async function maybeFissionReport(title: string, env: Env, rScore: number
 // v0.36.20 通用 helper · csnews-audit 修复
 // ============================================================
 
-// R2 JSON 读取 + parse + fallback
+// ============================================================
+// R2 JSON 读取 helpers
+// ============================================================
+
+// R2 JSON 读取 + parse + fallback (已存在)
 // 替代 3 处 knowledge index read + 1 处 content 全文 read 的重复代码
 // 业务契约:
 //   - R2 obj 不存在 → 返回 fallback
@@ -106,6 +110,22 @@ export async function checkRateLimit(
   }
 }
 
+// ============================================================
+// entity/event handler 专用 R2 read helpers
+// 消除 entity + event handler 内 4+1 处重复的 try/catch + R2 read + not-found 模式
+// ============================================================
+
+/**
+ * 读 R2 JSON 并返回 null if not found (不 throw)。
+ * JSON parse 失败仍 throw，供 caller try/catch 处理。
+ * 用于 entity/event handler 的只读 R2 操作。
+ */
+export async function readR2JsonOrNull<T>(env: Env, key: string): Promise<T | null> {
+  const obj = await env.csnews_raw.get(key);
+  if (!obj) return null;
+  return obj.json<T>();
+}
+
 // Rate limit 429 响应 (跟 5 处原 code 完全一致, 含 Retry-After 头)
 export function rateLimitResponse(cors: Record<string, string>, limit: number): Response {
   return new Response(
@@ -117,6 +137,62 @@ export function rateLimitResponse(cors: Record<string, string>, limit: number): 
       status: 429,
       headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
     }
+  );
+}
+
+// ============================================================
+// v0.36.21 endpoint hit counter (content/trend/knowledge)
+// ============================================================
+
+// 替代 3 个 handler 中完全相同的监控计数代码 (endpoints-trend.ts)
+// 业务契约:
+//   - env.PROCESS_STATE 不存在 → 静默跳过 (不阻塞)
+//   - KV put 失败 → 静默跳过 (不阻塞)
+export async function incrementHitCounter(
+  env: Env,
+  ctx: ExecutionContext,
+  counterKeyFn: () => string,
+  limitBytes: number
+): Promise<void> {
+  if (!env.PROCESS_STATE) return;
+  try {
+    const counterKey = counterKeyFn();
+    const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
+    ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
+  } catch {
+    // 监控失败不阻塞
+  }
+}
+
+// ============================================================
+// entity-review 公共 mutation helpers
+// 消除 approve / reject / noise-add / noise-remove 4 个 handler 的主体重复
+// ============================================================
+
+/**
+ * 读 entity-candidates.json (含 candidates + noise 数组)
+ * 失败 throw，供 caller 的 try/catch 处理
+ */
+export async function readCandidatesJson(env: Env): Promise<{
+  candidates: any[];
+  noise: any[];
+  generated_at: string;
+}> {
+  const obj = await env.csnews_raw.get('entity/entity-candidates.json');
+  if (!obj) throw new Error('entity-candidates.json not found');
+  return obj.json<{ candidates: any[]; noise: any[]; generated_at: string }>();
+}
+
+/**
+ * 统一写回 entity-candidates.json (R2 put + trigger re-clustering fire-and-forget)
+ */
+export async function writeCandidatesJson(
+  env: Env,
+  json: { candidates: any[]; noise: any[]; generated_at: string }
+): Promise<void> {
+  await env.csnews_raw.put(
+    'entity/entity-candidates.json',
+    JSON.stringify({ ...json, generated_at: new Date().toISOString() }, null, 2)
   );
 }
 

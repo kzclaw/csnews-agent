@@ -12,7 +12,7 @@
 //   - runKnowledgeAccumulation: cron inline 调用
 // ============================================================
 
-import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
+import { Env, supabaseFetch, safeJson, validationError, parseCountHeader, payloadTooLargeResponse } from './shared';
 import {
   validateId,
   validateFormat,
@@ -43,7 +43,7 @@ import {
   knowledgeR2Key,
   KNOWLEDGE_INDEX_KEY,
 } from './knowledge-validation';
-import { checkRateLimit, rateLimitResponse, readR2Json } from './utils';
+import { checkRateLimit, rateLimitResponse, readR2Json, incrementHitCounter } from './utils';
 import { shouldTriggerAiCall } from './ai-budget';
 import type { NewsHotspotRow, TopicRow, R2ContentData } from './types';
 
@@ -65,27 +65,11 @@ export async function handleContentAction(
   // 1. 输入校验 (业务红线)
   const id = url.searchParams.get('id') || '';
   const idValidation = validateId(id);
-  if (!idValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: idValidation.error, reason: idValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!idValidation.ok) return validationError(idValidation, cors);
 
   const format = (url.searchParams.get('format') || 'json').toLowerCase();
   const formatValidation = validateFormat(format);
-  if (!formatValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: formatValidation.error, reason: formatValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!formatValidation.ok) return validationError(formatValidation, cors);
 
   // 2. 反爬限流 (单 IP 60 req/min, 复用 PROCESS_STATE KV)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -132,28 +116,15 @@ export async function handleContentAction(
   // 5. 大小限制 (单条 ≤ PAYLOAD_LIMIT_BYTES)
   const contentLength = r2Data ? JSON.stringify(r2Data).length : 0;
   if (contentLength > PAYLOAD_LIMIT_BYTES) {
-    return new Response(
-      JSON.stringify({
-        error: 'payload_too_large',
-        reason: `R2 content > ${PAYLOAD_LIMIT_BYTES} bytes, 请用 format=ids 分页`,
-      }),
-      {
-        status: 413,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return payloadTooLargeResponse(
+      `R2 content > ${PAYLOAD_LIMIT_BYTES} bytes, 请用 format=ids 分页`,
+      PAYLOAD_LIMIT_BYTES,
+      cors
     );
   }
 
   // 6. 监控计数 (r2_content_endpoint_hits_24h) - 复用 PROCESS_STATE
-  if (env.PROCESS_STATE) {
-    try {
-      const counterKey = dailyHitsKeyForToday();
-      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
-      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
-    } catch {
-      // 监控失败不阻塞
-    }
-  }
+  ctx.waitUntil(incrementHitCounter(env, ctx, dailyHitsKeyForToday, PAYLOAD_LIMIT_BYTES));
 
   // 7. 按 format 渲染响应
   if (format === 'json') {
@@ -251,39 +222,15 @@ export async function handleTrendAction(
 ): Promise<Response> {
   // 1. 输入校验
   const typeValidation = validateType(url.searchParams.get('type'));
-  if (!typeValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!typeValidation.ok) return validationError(typeValidation, cors);
   const type = typeValidation.reason!;
 
   const sinceValidation = validateSince(url.searchParams.get('since'));
-  if (!sinceValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!sinceValidation.ok) return validationError(sinceValidation, cors);
   const sinceIso = sinceValidation.since!;
 
   const limitValidation = validateLimit(url.searchParams.get('limit'));
-  if (!limitValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!limitValidation.ok) return validationError(limitValidation, cors);
   const limit = limitValidation.limit;
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
@@ -319,8 +266,7 @@ export async function handleTrendAction(
             `/rest/v1/news_topic_members?topic_id=eq.${t.id}&select=news_id&limit=0`,
             { method: 'HEAD', headers: { Prefer: 'count=exact' } }
           );
-          const totalHeader = countRes.headers.get('content-range');
-          const total = totalHeader ? parseInt(totalHeader.split('/')[1] || '0', 10) : 0;
+          const total = parseCountHeader(countRes);
           return {
             topic_id: t.id,
             topic_key: t.topic_key,
@@ -352,19 +298,13 @@ export async function handleTrendAction(
               `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${nowMinus1h.toISOString()}&select=news_id&limit=0`,
               { method: 'HEAD', headers: { Prefer: 'count=exact' } }
             );
-            const last1hTotal = parseInt(
-              last1hRes.headers.get('content-range')?.split('/')[1] || '0',
-              10
-            );
+            const last1hTotal = parseCountHeader(last1hRes);
             const sinceRes = await supabaseFetch(
               env,
               `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`,
               { headers: { Prefer: 'count=exact' } }
             );
-            const sinceTotal = parseInt(
-              sinceRes.headers.get('content-range')?.split('/')[1] || '0',
-              10
-            );
+            const sinceTotal = parseCountHeader(sinceRes);
             const hourlyAvg = sinceTotal / 24;
             const velocityRatio = hourlyAvg > 0 ? last1hTotal / hourlyAvg : 0;
             return {
@@ -395,19 +335,13 @@ export async function handleTrendAction(
               `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo.toISOString()}&select=news_id&limit=0`,
               { method: 'HEAD', headers: { Prefer: 'count=exact' } }
             );
-            const last1hTotal = parseInt(
-              last1hRes.headers.get('content-range')?.split('/')[1] || '0',
-              10
-            );
+            const last1hTotal = parseCountHeader(last1hRes);
             const between1h2hRes = await supabaseFetch(
               env,
               `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo.toISOString()}&joined_at=lt.${oneHourAgo.toISOString()}&select=news_id&limit=0`,
               { method: 'HEAD', headers: { Prefer: 'count=exact' } }
             );
-            const between1h2hTotal = parseInt(
-              between1h2hRes.headers.get('content-range')?.split('/')[1] || '0',
-              10
-            );
+            const between1h2hTotal = parseCountHeader(between1h2hRes);
             const acceleration = last1hTotal - between1h2hTotal;
             return {
               topic_id: t.id,
@@ -438,28 +372,15 @@ export async function handleTrendAction(
   };
   const responseStr = JSON.stringify(responseBody);
   if (responseStr.length > TREND_PAYLOAD_LIMIT_BYTES) {
-    return new Response(
-      JSON.stringify({
-        error: 'payload_too_large',
-        reason: `trend response > ${TREND_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
-      }),
-      {
-        status: 413,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return payloadTooLargeResponse(
+      `trend response > ${TREND_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
+      TREND_PAYLOAD_LIMIT_BYTES,
+      cors
     );
   }
 
   // 6. 监控计数
-  if (env.PROCESS_STATE) {
-    try {
-      const counterKey = trendHitsKeyForToday();
-      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
-      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
-    } catch {
-      // 监控失败不阻塞
-    }
-  }
+  ctx.waitUntil(incrementHitCounter(env, ctx, trendHitsKeyForToday, TREND_PAYLOAD_LIMIT_BYTES));
 
   return new Response(responseStr, {
     headers: { 'Content-Type': 'application/json', ...cors },
@@ -481,51 +402,19 @@ export async function handleKnowledgeAction(
 ): Promise<Response> {
   // 1. 输入校验 (跟 trend 同款, 独立 validation import)
   const typeValidation = knowledgeValidateType(url.searchParams.get('type'));
-  if (!typeValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: typeValidation.error, reason: typeValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!typeValidation.ok) return validationError(typeValidation, cors);
   const type = typeValidation.reason!;
 
   const sinceValidation = knowledgeValidateSince(url.searchParams.get('since'));
-  if (!sinceValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: sinceValidation.error, reason: sinceValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!sinceValidation.ok) return validationError(sinceValidation, cors);
   const sinceIso = sinceValidation.since!;
 
   const limitValidation = knowledgeValidateLimit(url.searchParams.get('limit'));
-  if (!limitValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: limitValidation.error, reason: limitValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!limitValidation.ok) return validationError(limitValidation, cors);
   const limit = limitValidation.limit;
 
   const topicIdValidation = validateTopicId(url.searchParams.get('topic_id'), type);
-  if (!topicIdValidation.ok) {
-    return new Response(
-      JSON.stringify({ error: topicIdValidation.error, reason: topicIdValidation.reason }),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
-  }
+  if (!topicIdValidation.ok) return validationError(topicIdValidation, cors);
   const topicId = topicIdValidation.topicId;
 
   // 2. 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
@@ -566,8 +455,7 @@ export async function handleKnowledgeAction(
     const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
     const sinceMs = new Date(sinceIso).getTime();
     items = allIndex
-      .filter((k) => k?.topic_id === topicId)
-      .filter((k) => k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
+      .filter((k) => k?.topic_id === topicId && k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, limit);
     description = `knowledge topic 详情 (topic_id=${topicId}, 累积的所有 knowledge 记录)`;
@@ -585,28 +473,15 @@ export async function handleKnowledgeAction(
   };
   const responseStr = JSON.stringify(responseBody);
   if (responseStr.length > KNOWLEDGE_PAYLOAD_LIMIT_BYTES) {
-    return new Response(
-      JSON.stringify({
-        error: 'payload_too_large',
-        reason: `knowledge response > ${KNOWLEDGE_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
-      }),
-      {
-        status: 413,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return payloadTooLargeResponse(
+      `knowledge response > ${KNOWLEDGE_PAYLOAD_LIMIT_BYTES} bytes, 请用 limit 调小`,
+      KNOWLEDGE_PAYLOAD_LIMIT_BYTES,
+      cors
     );
   }
 
   // 5. 监控计数 (跟 trend 同模式, 独立 prefix)
-  if (env.PROCESS_STATE) {
-    try {
-      const counterKey = knowledgeHitsKeyForToday();
-      const cur = parseInt((await env.PROCESS_STATE.get(counterKey)) || '0', 10);
-      ctx.waitUntil(env.PROCESS_STATE.put(counterKey, String(cur + 1), { expirationTtl: 86400 }));
-    } catch {
-      // 监控失败不阻塞
-    }
-  }
+  ctx.waitUntil(incrementHitCounter(env, ctx, knowledgeHitsKeyForToday, KNOWLEDGE_PAYLOAD_LIMIT_BYTES));
 
   return new Response(responseStr, {
     headers: { 'Content-Type': 'application/json', ...cors },
@@ -645,35 +520,26 @@ export async function runKnowledgeAccumulation(
     for (const t of topics) {
       try {
         // 4.1 24h news count
-        const sinceRes = await supabaseFetch(
+        const since24hRes = await supabaseFetch(
           env,
           `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${sinceIso}&select=news_id&limit=0`,
           { method: 'HEAD', headers: { Prefer: 'count=exact' } }
         );
-        const since24hTotal = parseInt(
-          sinceRes.headers.get('content-range')?.split('/')[1] || '0',
-          10
-        );
+        const since24hTotal = parseCountHeader(since24hRes);
         // 4.2 1h 增量
         const last1hRes = await supabaseFetch(
           env,
           `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${oneHourAgo}&select=news_id&limit=0`,
           { method: 'HEAD', headers: { Prefer: 'count=exact' } }
         );
-        const last1hTotal = parseInt(
-          last1hRes.headers.get('content-range')?.split('/')[1] || '0',
-          10
-        );
+        const last1hTotal = parseCountHeader(last1hRes);
         // 4.3 2h 增量
         const between1h2hRes = await supabaseFetch(
           env,
           `/rest/v1/news_topic_members?topic_id=eq.${t.id}&joined_at=gte.${twoHourAgo}&joined_at=lt.${oneHourAgo}&select=news_id&limit=0`,
           { method: 'HEAD', headers: { Prefer: 'count=exact' } }
         );
-        const between1h2hTotal = parseInt(
-          between1h2hRes.headers.get('content-range')?.split('/')[1] || '0',
-          10
-        );
+        const between1h2hTotal = parseCountHeader(between1h2hRes);
         // 4.4 计算 velocity + acceleration
         const hourlyAvg = since24hTotal / 24;
         const velocityRatio = hourlyAvg > 0 ? last1hTotal / hourlyAvg : 0;
