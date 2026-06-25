@@ -6,6 +6,18 @@
  * - 所有请求需带 Bearer Token(BEARER_TOKEN env var)
  * - CORS 仅允许已授权来源
  */
+
+import type {
+  AiTextResponse,
+  AiEmbeddingResponse,
+  ZakerHotResponse,
+  ZakerHotItem,
+  CleanupStaleResult,
+  SimilarNewsItem,
+  UpdateTopicScoreResult,
+  TrendSnapshotResult,
+  TopicRecord,
+} from './types-supabase';
 interface Env {
   AI: Ai;
   csnews_raw: R2Bucket;
@@ -46,49 +58,50 @@ async function safeJson(res: Response): Promise<any> {
 // ====== News Self Growth 核心逻辑 ======
 
 // 清理过期话题簇(跟进7天/重要14天/爆炸28天)
-async function cleanupStaleTopics(env: Env) {
-  const { data } = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
+async function cleanupStaleTopics(env: Env): Promise<CleanupStaleResult> {
+  const raw = await (await supabaseFetch(env, '/rest/v1/rpc/cleanup_stale_topics', {
     method: 'POST',
-  })).json() as any;
-  return data?.[0] || { deleted_topic_count: 0, deleted_news_count: 0 };
+  })).json() as unknown as { data: CleanupStaleResult[] } | null;
+  if (!raw) return { deleted_topic_count: 0, deleted_news_count: 0 };
+  return raw.data?.[0] ?? { deleted_topic_count: 0, deleted_news_count: 0 };
 }
 
 // 向量查重:查相似新闻
-async function findSimilarNews(env: Env, embedding: number[], threshold = 0.88, matchCount = 5) {
+async function findSimilarNews(env: Env, embedding: number[], threshold = 0.88, matchCount = 5): Promise<SimilarNewsItem[]> {
   const res = await supabaseFetch(env, '/rest/v1/rpc/find_similar_news', {
     method: 'POST',
     body: JSON.stringify({ query_embedding: embedding, threshold, match_count: matchCount }),
   });
-  const data = await safeJson(res) as any[];
+  const data = await safeJson(res) as unknown as SimilarNewsItem[];
   return data || [];
 }
 
 // 更新话题簇积分
-async function updateTopicScore(env: Env, topicId: string, delta = 1) {
+async function updateTopicScore(env: Env, topicId: string, delta = 1): Promise<UpdateTopicScoreResult> {
   const res = await supabaseFetch(env, '/rest/v1/rpc/update_topic_score', {
     method: 'POST',
     body: JSON.stringify({ p_topic_id: topicId, p_score_delta: delta }),
   });
-  const data = await safeJson(res) as any[];
-  return data?.[0] || { new_score: 0, new_level: 'follow', upgraded: false, fission_triggered: false };
+  const data = await safeJson(res) as unknown as UpdateTopicScoreResult[];
+  return data?.[0] ?? { new_score: 0, new_level: 'follow', upgraded: false, fission_triggered: false };
 }
 
 // 记录 TIE-lite 趋势快照并按规则触发 warning，不调用 LLM
-async function recordTrendSnapshot(env: Env, topicId: string) {
+async function recordTrendSnapshot(env: Env, topicId: string): Promise<TrendSnapshotResult | null> {
   try {
     const res = await supabaseFetch(env, '/rest/v1/rpc/record_trend_snapshot', {
       method: 'POST',
       body: JSON.stringify({ p_topic_id: topicId }),
     });
-    const data = await safeJson(res) as any[];
-    return Array.isArray(data) ? data[0] || null : null;
+    const data = await safeJson(res) as unknown as TrendSnapshotResult[];
+    return Array.isArray(data) ? data[0] ?? null : null;
   } catch {
     return null;
   }
 }
 
 // 插入话题簇
-async function createTopic(env: Env, topicKey: string, level = 'follow', firstNewsId?: string): Promise<any> {
+async function createTopic(env: Env, topicKey: string, level = 'follow', firstNewsId?: string): Promise<TopicRecord> {
   const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   await supabaseFetch(env, '/rest/v1/topics', {
     method: 'POST',
@@ -326,7 +339,7 @@ async function maybeFissionReport(title: string, env: Env, rScore: number): Prom
       ],
       max_tokens: 200,
       temperature: 0.3,
-    }) as any;
+    }) as AiTextResponse;
     return extractText(resp) || '(无AI输出)';
   } catch (e: any) {
     return `(AI错误: ${e.message})`;
@@ -434,7 +447,7 @@ export default {
       const r = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
         messages: [{ role: 'user', content: '说一段话介绍自己' }],
         max_tokens: 100,
-      }) as any;
+      }) as AiTextResponse;
       return new Response(JSON.stringify({
         ok: true,
         model: 'llama-3-8b-instruct',
@@ -558,7 +571,7 @@ export default {
           ],
           max_tokens: 200,
           temperature: 0.3,
-        }) as any;
+        }) as AiTextResponse;
         const text = extractText(resp);
         const queries = text.split('|').map(q => q.trim()).filter(q => q.length > 0 && q.length <= 20);
         return new Response(JSON.stringify({ seed, queries, count: queries.length }), {
@@ -629,10 +642,10 @@ export default {
       try {
         const resp = await env.AI.run('@cf/baai/bge-m3', {
           text: [text],
-        }) as any;
+        }) as AiEmbeddingResponse;
 
         // bge-m3 返回格式:{ shape: [n, dim], data: [...], response: string }
-        const raw = resp as any;
+        const raw = resp;
         // 尝试多种路径取 embedding
         let embedding: number[] = [];
         if (Array.isArray(raw?.data) && raw.data.length > 0) {
@@ -673,8 +686,8 @@ export default {
     if (action === 'zaker-hot') {
       try {
         const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
-        const json = await r.json() as any;
-        const list: any[] = json?.data?.list || [];
+        const json = await r.json() as ZakerHotResponse;
+        const list: ZakerHotItem[] = json?.data?.list ?? [];
         const results = [];
 
         for (const item of list.slice(0, 1)) {
@@ -715,12 +728,12 @@ export default {
     // -------- News Self Growth 主流程(ZAKER → 查重 → 积分 → R2)--------
     if (action === 'process') {
       // Step 0: 清理过期话题簇(1 subrequest)
-      const cleaned = await cleanupStaleTopics(env) as any;
+      const cleaned = await cleanupStaleTopics(env);
 
       // Step 1: 拉 ZAKER 热点(1 subrequest)
       const r = await fetch('https://skills.myzaker.com/api/v1/article/hot?v=1.0.3');
-      const json = await r.json() as any;
-      const list: any[] = json?.data?.list || [];
+      const json = await r.json() as ZakerHotResponse;
+      const list: ZakerHotItem[] = json?.data?.list ?? [];
       if (list.length === 0) {
         return new Response(JSON.stringify({ error: 'no news' }), { headers: { 'Content-Type': 'application/json', ...cors } });
       }
@@ -756,8 +769,8 @@ export default {
         // 仅前 FULL_COUNT 条做 embedding + 向量查重(Workers AI CPU 限制)
         if (i < FULL_COUNT) {
           try {
-            const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as any;
-            const raw = embResp as any;
+            const embResp = await env.AI.run('@cf/baai/bge-m3', { text: [title] }) as AiEmbeddingResponse;
+            const raw = embResp;
             if (Array.isArray(raw?.data) && raw.data.length > 0) {
               const it = raw.data[0];
               embedding = Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
@@ -769,7 +782,7 @@ export default {
             if (similar.length > 0 && similar[0].topic_id) {
               const top = similar[0];
               topicId = top.topic_id;
-              const updated = await updateTopicScore(env, top.topic_id, 1) as any;
+              const updated = await updateTopicScore(env, top.topic_id, 1);
               newsScore = updated.new_score || 0;
               newsLevel = updated.new_level || 'follow';
               fission = updated.fission_triggered || false;
@@ -792,7 +805,7 @@ export default {
 
           if (!topicId) {
             const topicKey = title.slice(0, 8).replace(/[^a-zA-Z0-9]/g, '') + Math.abs(hashStr(title)).toString(36);
-            const created = await createTopic(env, topicKey, 'follow') as any;
+            const created = await createTopic(env, topicKey, 'follow');
             if (created?.id) {
               topicId = created.id;
               newsScore = 0;
