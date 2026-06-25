@@ -10,7 +10,7 @@ binding = "csnews_raw"
 
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"
-id = "REPLACE_WITH_YOUR_KV_ID"
+id = "470a9354d39241a09e311cdac06a1c69"
 
 [vars]
 AI_BUDGET_DAILY_LIMIT = "10000"
