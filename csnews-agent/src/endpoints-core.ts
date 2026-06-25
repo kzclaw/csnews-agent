@@ -11,7 +11,7 @@
 //   - 错误处理: catch → JSON { error: e.message }, status 500
 // ============================================================
 
-import { Env, getSupabaseHost } from './shared';
+import { Env, getSupabaseHost, jsonResponse } from './shared';
 import { NewsItem } from './types';
 import { supabaseHeaders } from './utils';
 import { handlePull } from './pull';
@@ -53,10 +53,7 @@ export async function handlePullAction(
     });
   } catch (e: any) {
     const status = e.status || 500;
-    return new Response(JSON.stringify({ error: e.message || 'pull failed' }), {
-      status,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors },
-    });
+    return jsonResponse({ error: e.message || 'pull failed' }, cors, { status, headers: { 'Cache-Control': 'no-store' } });
   }
 }
 
@@ -67,9 +64,7 @@ export async function handlePingAction(
   url: URL,
   cors: Record<string, string>
 ): Promise<Response> {
-  return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse({ ok: true, ts: Date.now() }, cors);
 }
 
 // ===================== model-test =====================
@@ -85,16 +80,7 @@ export async function handleModelTestAction(
     messages: [{ role: 'user', content: '说一段话介绍自己' }],
     max_tokens: 100,
   })) as LlamaAIResponse;
-  return new Response(
-    JSON.stringify({
-      ok: true,
-      model: 'llama-3-8b-instruct',
-      response: extractText(r).substring(0, 200),
-    }),
-    {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    }
-  );
+  return jsonResponse({ ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) }, cors);
 }
 
 // ===================== ai-test =====================
@@ -106,9 +92,7 @@ export async function handleAiTestAction(
 ): Promise<Response> {
   const title = url.searchParams.get('title') || 'OpenAI发布GPT-5,AI行业迎来新一轮革命';
   const report = await maybeFissionReport(title, env, 9.0); // test always uses high score
-  return new Response(JSON.stringify({ title, report }), {
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse({ title, report }, cors);
 }
 
 // ===================== score =====================
@@ -120,10 +104,7 @@ export async function handleScoreAction(
 ): Promise<Response> {
   const title = url.searchParams.get('title');
   if (!title) {
-    return new Response(JSON.stringify({ error: 'missing title param' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'missing title param' }, cors, { status: 400 });
   }
 
   const rule = scoreRule(title);
@@ -135,18 +116,7 @@ export async function handleScoreAction(
     aiReport = await maybeFissionReport(title, env, rule.score);
   }
 
-  return new Response(
-    JSON.stringify({
-      title,
-      score: rule.score,
-      category,
-      reason: rule.reason,
-      ai_report: aiReport,
-    }),
-    {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    }
-  );
+  return jsonResponse({ title, score: rule.score, category, reason: rule.reason, ai_report: aiReport }, cors);
 }
 
 // ===================== classify =====================
@@ -167,132 +137,49 @@ export async function handleClassifyAction(
   if (type === 'classify') {
     const title = url.searchParams.get('title');
     if (!title) {
-      return new Response(JSON.stringify({ error: 'missing title param' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'missing title param' }, cors, { status: 400 });
     }
     const result = await classifyBySemantic(title, env);
     const kwCat = classifyRule(title);
-    return new Response(
-      JSON.stringify({
-        title,
-        type: 'classify',
-        description: 'bge-m3 semantic 自分类',
-        category: result.category,
-        confidence: result.confidence,
-        top_scores: result.top_scores,
-        legacy_keyword_category: kwCat,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ title, type: 'classify', description: 'bge-m3 semantic 自分类', category: result.category, confidence: result.confidence, top_scores: result.top_scores, legacy_keyword_category: kwCat }, cors);
   }
 
   if (type === 'seeds') {
     const data = await loadCategorySeeds(env);
-    return new Response(
-      JSON.stringify({
-        type: 'seeds',
-        description: 'category seeds 增删入口 (R2 category-seeds.json · 0 硬编码 const)',
-        categories: data.categories,
-        updated_at: data.updated_at,
-        updated_count: data.updated_count,
-        total_categories: Object.keys(data.categories).length,
-        total_seeds: Object.values(data.categories).reduce((sum, seeds) => sum + seeds.length, 0),
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ type: 'seeds', description: 'category seeds 增删入口 (R2 category-seeds.json · 0 硬编码 const)', categories: data.categories, updated_at: data.updated_at, updated_count: data.updated_count, total_categories: Object.keys(data.categories).length, total_seeds: Object.values(data.categories).reduce((sum, seeds) => sum + seeds.length, 0) }, cors);
   }
 
   if (type === 'add-seed') {
     const category = url.searchParams.get('category');
     const seed = url.searchParams.get('seed');
     if (!category || !seed) {
-      return new Response(JSON.stringify({ error: 'missing category or seed param' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'missing category or seed param' }, cors, { status: 400 });
     }
     const data = await addSeedToCategory(env, category, seed);
-    return new Response(
-      JSON.stringify({
-        type: 'add-seed',
-        description: 'R2 持久化加 seed',
-        category,
-        seed,
-        updated_count: data.updated_count,
-        updated_at: data.updated_at,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ type: 'add-seed', description: 'R2 持久化加 seed', category, seed, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
   }
 
   if (type === 'remove-seed') {
     const category = url.searchParams.get('category');
     const seed = url.searchParams.get('seed');
     if (!category || !seed) {
-      return new Response(JSON.stringify({ error: 'missing category or seed param' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'missing category or seed param' }, cors, { status: 400 });
     }
     const data = await removeSeedFromCategory(env, category, seed);
-    return new Response(
-      JSON.stringify({
-        type: 'remove-seed',
-        description: 'R2 持久化删 seed',
-        category,
-        seed,
-        updated_count: data.updated_count,
-        updated_at: data.updated_at,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ type: 'remove-seed', description: 'R2 持久化删 seed', category, seed, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
   }
 
   if (type === 'review') {
     const title = url.searchParams.get('title');
     const correctCategory = url.searchParams.get('correct_category');
     if (!title || !correctCategory) {
-      return new Response(JSON.stringify({ error: 'missing title or correct_category param' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'missing title or correct_category param' }, cors, { status: 400 });
     }
     const data = await addSeedToCategory(env, correctCategory, title);
-    return new Response(
-      JSON.stringify({
-        type: 'review',
-        description: '自进化闭环: 分类错 review → seeds 自动更新',
-        title,
-        correct_category: correctCategory,
-        updated_count: data.updated_count,
-        updated_at: data.updated_at,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ type: 'review', description: '自进化闭环: 分类错 review → seeds 自动更新', title, correct_category: correctCategory, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
   }
 
-  return new Response(
-    JSON.stringify({
-      error: 'invalid_type',
-      reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}`,
-    }),
-    {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    }
-  );
+  return jsonResponse({ error: 'invalid_type', reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}` }, cors, { status: 400 });
 }
 
 // ===================== batch-score =====================
@@ -306,10 +193,7 @@ export async function handleBatchScoreAction(
   try {
     body = await request.json();
   } catch {
-    return new Response(JSON.stringify({ error: 'invalid JSON body' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'invalid JSON body' }, cors, { status: 400 });
   }
 
   const items = body?.items || [];
@@ -348,23 +232,11 @@ export async function handleFissionAction(
 ): Promise<Response> {
   const seed = url.searchParams.get('seed') || url.searchParams.get('title');
   if (!seed) {
-    return new Response(JSON.stringify({ error: 'missing seed param' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'missing seed param' }, cors, { status: 400 });
   }
   const r = scoreRule(seed);
   if (r.score < AI_ROUTE_R_THRESHOLD) {
-    return new Response(
-      JSON.stringify({
-        seed,
-        queries: [],
-        count: 0,
-        skipped: true,
-        reason: `R=${r.score} < ${AI_ROUTE_R_THRESHOLD}, AI跳过`,
-      }),
-      { headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({ seed, queries: [], count: 0, skipped: true, reason: `R=${r.score} < ${AI_ROUTE_R_THRESHOLD}, AI跳过` }, cors);
   }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
@@ -383,14 +255,9 @@ export async function handleFissionAction(
       .split('|')
       .map((q) => q.trim())
       .filter((q) => q.length > 0 && q.length <= 20);
-    return new Response(JSON.stringify({ seed, queries, count: queries.length }), {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ seed, queries, count: queries.length }, cors);
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
 }
 
@@ -407,10 +274,7 @@ export async function handleSaveAction(
   const source = url.searchParams.get('source') || 'zaker';
 
   if (!title) {
-    return new Response(JSON.stringify({ error: 'missing title' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'missing title' }, cors, { status: 400 });
   }
 
   try {
@@ -420,14 +284,9 @@ export async function handleSaveAction(
     await env.csnews_raw.put(key, JSON.stringify(item), {
       httpMetadata: { contentType: 'application/json' },
     });
-    return new Response(JSON.stringify({ ok: true, key, item }), {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ ok: true, key, item }, cors);
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
 }
 
@@ -458,18 +317,7 @@ export async function handleListAction(
       }
     })
   );
-  return new Response(
-    JSON.stringify({
-      count: items.length,
-      total: list.objects.length,
-      truncated: list.objects.length > limit,
-      order,
-      items,
-    }),
-    {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    }
-  );
+  return jsonResponse({ count: items.length, total: list.objects.length, truncated: list.objects.length > limit, order, items }, cors);
 }
 
 // ===================== embed =====================
@@ -481,10 +329,7 @@ export async function handleEmbedAction(
 ): Promise<Response> {
   const text = url.searchParams.get('text') || url.searchParams.get('title') || '';
   if (!text) {
-    return new Response(JSON.stringify({ error: 'missing text param' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: 'missing text param' }, cors, { status: 400 });
   }
 
   try {
@@ -503,17 +348,7 @@ export async function handleEmbedAction(
     }
 
     if (!embedding || embedding.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: 'embedding empty',
-          shape: raw?.shape,
-          keys: raw ? Object.keys(raw) : [],
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
-      );
+      return jsonResponse({ error: 'embedding empty', shape: raw?.shape, keys: raw ? Object.keys(raw) : [] }, cors, { status: 500 });
     }
 
     // 存 R2
@@ -526,23 +361,9 @@ export async function handleEmbedAction(
       }
     );
 
-    return new Response(
-      JSON.stringify({
-        text,
-        dim: embedding.length,
-        model: '@cf/baai/bge-m3',
-        sample: embedding.slice(0, 5),
-        key,
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({ text, dim: embedding.length, model: '@cf/baai/bge-m3', sample: embedding.slice(0, 5), key }, cors);
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
 }
 
@@ -584,14 +405,9 @@ export async function handleZakerHotAction(
       results.push({ title, category, score: rule.score });
     }
 
-    return new Response(JSON.stringify({ count: results.length, items: results }), {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ count: results.length, items: results }, cors);
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
 }
 
@@ -631,27 +447,11 @@ export async function handleRescoreAction(
     );
     if (!newsRes.ok) {
       const errText = await newsRes.text();
-      return new Response(
-        JSON.stringify({ error: 'supabase_read_failed', reason: errText.slice(0, 200) }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
-      );
+      return jsonResponse({ error: 'supabase_read_failed', reason: errText.slice(0, 200) }, cors, { status: 500 });
     }
     const newsList = (await newsRes.json()) as NewsHotspotRow[];
     if (newsList.length === 0) {
-      return new Response(
-        JSON.stringify({
-          type: 'rescore',
-          total: 0,
-          dry_run: dryRun,
-          message: 'no news to rescore',
-        }),
-        {
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
-      );
+      return jsonResponse({ type: 'rescore', total: 0, dry_run: dryRun, message: 'no news to rescore' }, cors);
     }
 
     // 2. 准备 input texts (title + summary 混合, 跟新分类逻辑一致)
@@ -749,29 +549,15 @@ export async function handleRescoreAction(
       errorSamples.push('ctx.waitUntil not available; cannot run async update');
     }
 
-    return new Response(
-      JSON.stringify({
-        type: 'rescore',
-        mode,
-        dry_run: dryRun,
-        total: newsList.length,
-        changed,
-        unchanged,
-        errors,
-        updated: dryRun ? 0 : updated,
-        update_errors: dryRun ? 0 : updateErrors,
-        error_samples: errorSamples.length > 0 ? errorSamples : undefined,
-        sample: diffs.slice(0, 5),
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
-    );
+    return jsonResponse({
+      type: 'rescore', mode, dry_run: dryRun,
+      total: newsList.length, changed, unchanged, errors,
+      updated: dryRun ? 0 : updated,
+      update_errors: dryRun ? 0 : updateErrors,
+      error_samples: errorSamples.length > 0 ? errorSamples : undefined,
+      sample: diffs.slice(0, 5), timestamp: new Date().toISOString(),
+    }, cors);
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...cors },
-    });
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
 }
