@@ -5,38 +5,46 @@
 import { Env } from './shared';
 import { getBudgetStatus } from './ai-budget';
 
+// Map CF Workers AI model names → L1-L6 tier levels
+function modelToLevel(model: string): string {
+  if (model === '@cf/meta/llama-3-8b-instruct') return 'L6';
+  if (model === '@cf/baai/bge-m3') return 'L3';
+  return 'L1'; // unknown/default
+}
+
 // ============================================================
 // 1. ai_budget_today
 // ============================================================
 export async function checkAiBudget(env: Env): Promise<{
   ai_budget_today:
-    | { used: number; tier: string; remaining: number; quota: number }
+    | { used: number; tier: string; remaining: number; daily_limit: number }
     | { error: string };
   checks: {
     ai_budget_today: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
   };
 }> {
   let aiBudgetToday:
-    | { used: number; tier: string; remaining: number; quota: number }
+    | { used: number; tier: string; remaining: number; daily_limit: number }
     | { error: string } = {
     used: 0,
     tier: 'ok',
     remaining: 0,
-    quota: 0,
+    daily_limit: 10000,
   };
   const checks: any = {};
 
   try {
     const budget = await getBudgetStatus(env);
+    const tierName = budget.status === 'normal' ? 'ok' : budget.status;
     aiBudgetToday = {
       used: budget.used,
-      tier: budget.tier,
+      tier: tierName,
       remaining: budget.remaining,
-      quota: budget.quota,
+      daily_limit: budget.limit,
     };
     checks.ai_budget_today = {
-      status: budget.tier === 'shutdown' ? 'down' : budget.tier === 'critical' ? 'degraded' : 'ok',
-      detail: `daily used: ${budget.used} / ${budget.quota} (${budget.tier})`,
+      status: budget.status === 'shutdown' ? 'down' : budget.status === 'critical' ? 'degraded' : 'ok',
+      detail: `daily used: ${budget.used} / ${budget.limit} (${budget.status})`,
     };
   } catch (e: any) {
     aiBudgetToday = { error: e?.message || 'ai_budget calc failed' };
@@ -90,7 +98,9 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
         totalNeurons = record.total ?? 0;
         for (const call of record.calls ?? []) {
           const model = call.model || 'unknown';
-          breakdown[model] = (breakdown[model] || 0) + 1;
+          // Aggregate by L1-L6 tier levels
+          const level = modelToLevel(model);
+          breakdown[level] = (breakdown[level] || 0) + 1;
           callCount++;
         }
       } catch {
@@ -98,21 +108,22 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
       }
     }
 
-    const models = Object.keys(breakdown);
+    const levels = Object.keys(breakdown);
     checks.ai_calls_breakdown = {
       status: 'ok',
       detail:
-        models.length > 0
-          ? `${callCount} calls across ${models.length} model(s): ${models.join(', ')}`
+        levels.length > 0
+          ? `${callCount} calls across ${levels.length} level(s): ${levels.join(', ')}`
           : 'no AI calls recorded today',
     };
 
     const budget = await getBudgetStatus(env);
+    const statusName = budget.status === 'normal' ? 'ok' : budget.status;
 
     return {
       ai_calls_breakdown: breakdown,
       neurons_used_today: totalNeurons,
-      ai_budget_status: budget.tier,
+      ai_budget_status: statusName,
       checks: { ai_calls_breakdown: checks.ai_calls_breakdown },
     };
   } catch (e: any) {

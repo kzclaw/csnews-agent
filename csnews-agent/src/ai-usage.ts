@@ -2,10 +2,17 @@
 // AI usage aggregation endpoint handler
 // ============================================================
 // ?action=ai-usage — reads AI_USAGE_KV and returns 7-day aggregated
-// usage broken down by date and model.
+// usage broken down by date, model, and L1-L6 category.
 // ============================================================
 
 import { Env } from './shared';
+
+// Map CF Workers AI model names → L1-L6 tier levels
+function modelToLevel(model: string): string {
+  if (model === '@cf/meta/llama-3-8b-instruct') return 'L6';
+  if (model === '@cf/baai/bge-m3') return 'L3';
+  return 'L1'; // unknown/default
+}
 
 export async function handleAiUsageAction(env: Env, cors: Record<string, string>): Promise<Response> {
   if (!env.AI_USAGE_KV) {
@@ -30,6 +37,8 @@ export async function handleAiUsageAction(env: Env, cors: Record<string, string>
 
   type DayModelAgg = { calls: number; neurons: number };
   const aggregated: Record<string, Record<string, DayModelAgg>> = {};
+  // L1-L6 category totals
+  const levelTotals: Record<string, { calls: number; neurons: number }> = {};
 
   for (let i = 0; i < kvResults.length; i++) {
     const result = kvResults[i];
@@ -44,9 +53,17 @@ export async function handleAiUsageAction(env: Env, cors: Record<string, string>
         };
         for (const call of record.calls ?? []) {
           const model = call.model || 'unknown';
+          const level = modelToLevel(model);
+
+          // by model
           if (!aggregated[date][model]) aggregated[date][model] = { calls: 0, neurons: 0 };
           aggregated[date][model].calls++;
           aggregated[date][model].neurons += call.neurons;
+
+          // by L1-L6 level
+          if (!levelTotals[level]) levelTotals[level] = { calls: 0, neurons: 0 };
+          levelTotals[level].calls++;
+          levelTotals[level].neurons += call.neurons;
         }
       } catch {
         /* parse failed — skip */
@@ -63,8 +80,25 @@ export async function handleAiUsageAction(env: Env, cors: Record<string, string>
   }
   entries.sort((a, b) => b.date.localeCompare(a.date));
 
+  // Build L1-L6 category summary
+  const levels = ['L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
+  const callsByLevel: Record<string, number> = {};
+  for (const l of levels) {
+    callsByLevel[l] = levelTotals[l]?.calls ?? 0;
+  }
+
   return new Response(
-    JSON.stringify({ days: 7, entries, total_entries: entries.length }, null, 2),
+    JSON.stringify(
+      {
+        days: 7,
+        entries,
+        total_entries: entries.length,
+        // L1-L6 category breakdown
+        ai_calls_breakdown: callsByLevel,
+      },
+      null,
+      2
+    ),
     { status: 200, headers: { 'Content-Type': 'application/json', ...cors } }
   );
 }

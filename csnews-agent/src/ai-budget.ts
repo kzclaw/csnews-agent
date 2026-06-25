@@ -11,15 +11,15 @@
 // KVNamespace 类型来自 worker-configuration.d.ts（wrangler types 生成）
 // ===========================
 export interface AiBudgetEnv {
-  AI_USAGE_KV: {
+  AI_USAGE_KV?: {
     get(key: string, type?: 'text'): Promise<string | null>;
     put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
     delete(key: string): Promise<void>;
   };
-  AI_BUDGET_DAILY_LIMIT?: string;
-  AI_BUDGET_WARNING_THRESHOLD?: string;
-  AI_BUDGET_CRITICAL_THRESHOLD?: string;
-  AI_BUDGET_SHUTDOWN_THRESHOLD?: string;
+  AI_BUDGET_DAILY_LIMIT?: number;
+  AI_BUDGET_WARNING_THRESHOLD?: number;
+  AI_BUDGET_CRITICAL_THRESHOLD?: number;
+  AI_BUDGET_SHUTDOWN_THRESHOLD?: number;
 }
 
 // ===========================
@@ -27,6 +27,7 @@ export interface AiBudgetEnv {
 // ===========================
 function getLimit(env: AiBudgetEnv, key: keyof AiBudgetEnv, fallback: number): number {
   const val = env[key];
+  if (typeof val === 'number') return val;
   if (typeof val === 'string') {
     const n = parseInt(val, 10);
     return isNaN(n) ? fallback : n;
@@ -77,6 +78,7 @@ export async function recordAiCall(
   neurons: number,
   env: AiBudgetEnv,
 ): Promise<void> {
+  if (!env.AI_USAGE_KV) return;
   const key = kvKey();
   const raw = await env.AI_USAGE_KV.get(key, 'text');
   const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } =
@@ -95,6 +97,7 @@ export async function recordAiCall(
  * 读取今日累计 Neurons 用量
  */
 export async function getDailyUsage(env: AiBudgetEnv): Promise<number> {
+  if (!env.AI_USAGE_KV) return 0;
   const key = kvKey();
   const raw = await env.AI_USAGE_KV.get(key, 'text');
   if (!raw) return 0;
@@ -149,6 +152,7 @@ export async function getBudgetStatus(env: AiBudgetEnv): Promise<BudgetStatusRes
  * 由 wrangler.toml 的 `triggers.crons = ["0 0 * * *"]` 触发
  */
 export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTotal: number }> {
+  if (!env.AI_USAGE_KV) return { previousTotal: 0 };
   const key = kvKey();
   const raw = await env.AI_USAGE_KV.get(key, 'text');
   let previousTotal = 0;
@@ -184,6 +188,7 @@ export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTot
  *   // proceed with LLM call...
  */
 export function shouldTriggerAiCall(
+  _env: AiBudgetEnv,
   level: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6',
   _severity?: number,
   _dailyUsed?: number,
