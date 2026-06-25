@@ -51,7 +51,7 @@ const triggerEventRecluster = async (env: Env): Promise<void> => {
   try {
     await runEventProcess(env);
   } catch (e: any) {
-    console.error(`[handleEntityAction] event re-clustering failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[handleEntityAction] event re-clustering failed: ${e?.message || e}`, undefined, 'entity');
   }
 };
 

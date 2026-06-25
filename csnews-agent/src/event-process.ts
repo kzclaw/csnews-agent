@@ -32,7 +32,7 @@ export async function runEventProcess(env: Env): Promise<{
   try {
     entities = await loadReviewedCandidates(env);
   } catch (e: any) {
-    console.error(`[event-process] loadReviewedCandidates failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-process] loadReviewedCandidates failed: ${e?.message || e}`, undefined, 'event');
     return { clusters: 0, threshold: 0, written: 0, errors: 1 };
   }
 

@@ -63,16 +63,16 @@ export async function detectSemanticRelations(
 
     if (!res.ok) {
       const text = await res.text();
-      console.error(`[event-semantic-detector] exec failed: ${res.status} ${text}`);
+      await logEvent(env, 'error', `[event-semantic-detector] exec failed: ${res.status} ${text}`, undefined, 'event');
       return { detected: 0, errors: 1 };
     }
 
     const data = await res.json();
     const count = Array.isArray(data) ? data.length : 0;
-    console.log(`[event-semantic-detector] detected ${count} semantic relations (threshold=${threshold})`);
+    await logEvent(env, 'info', `[event-semantic-detector] detected ${count} semantic relations (threshold=${threshold})`, undefined, 'event');
     return { detected: count, errors: 0 };
   } catch (e: any) {
-    console.error(`[event-semantic-detector] error: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-semantic-detector] error: ${e?.message || e}`, undefined, 'event');
     return { detected: 0, errors: 1 };
   }
 }
@@ -108,7 +108,7 @@ export async function getSemanticPairs(
     if (!res.ok) return [];
     return await res.json();
   } catch (e: any) {
-    console.error(`[event-semantic-detector] error: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-semantic-detector] error: ${e?.message || e}`, undefined, 'event');
     return [];
   }
 }

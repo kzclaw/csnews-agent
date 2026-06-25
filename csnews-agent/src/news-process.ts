@@ -33,7 +33,7 @@ export async function findSimilarNews(
   matchCount = 5
 ): Promise<SimilarNewsItem[]> {
   // Try Vectorize first
-  const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
+  const vectorClient = new VectorizeClient(env.VECTORIZE, env);
   if (vectorClient.isAvailable()) {
     try {
       const vectorResults = await vectorClient.query(embedding, matchCount);
@@ -56,18 +56,18 @@ export async function findSimilarNews(
               topic_id: n.topic_id!,
               similarity: scoreMap.get(n.id) || 0,
             }));
-          console.log(`[findSimilarNews] Vectorize hit: ${results.length} results`);
+          await logEvent(env, 'info', `[findSimilarNews] Vectorize hit: ${results.length} results`, undefined, 'process');
           return results;
         }
-        console.warn('[findSimilarNews] Failed to fetch topic_ids from Supabase');
+        await logEvent(env, 'warn', '[findSimilarNews] Failed to fetch topic_ids from Supabase', undefined, 'process');
       }
     } catch (err) {
-      console.warn('[findSimilarNews] Vectorize query failed, falling back to Supabase:', err);
+      await logEvent(env, 'warn', '[findSimilarNews] Vectorize query failed, falling back to Supabase', { err: err as any }, 'process');
     }
   }
 
   // Phase 2: Fall back to Supabase pgvector
-  console.log('[findSimilarNews] Using Supabase fallback');
+  await logEvent(env, 'info', '[findSimilarNews] Using Supabase fallback', undefined, 'process');
   const res = await supabaseFetch(env, '/rest/v1/rpc/find_similar_news', {
     method: 'POST',
     body: JSON.stringify({ query_embedding: embedding, threshold, match_count: matchCount }),
@@ -156,7 +156,7 @@ export async function insertNewsHotspot(
 
   // Dual-write embedding to Vectorize
   if (news.embedding && news.embedding.length > 0) {
-    const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
+    const vectorClient = new VectorizeClient(env.VECTORIZE, env);
     vectorClient
       .upsert(news.embedding, id, {
         title: news.title,
@@ -303,9 +303,9 @@ export async function dualWriteEmbeddingsToVectorize(
   }>,
   ids: string[]
 ): Promise<void> {
-  const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
+  const vectorClient = new VectorizeClient(env.VECTORIZE, env);
   if (!vectorClient.isAvailable()) {
-    console.warn('[Vectorize] binding not available, skipping dual-write');
+    await logEvent(env, 'warn', '[Vectorize] binding not available, skipping dual-write', undefined, 'process');
     return;
   }
 
@@ -336,9 +336,9 @@ export async function dualWriteEmbeddingsToVectorize(
 
   try {
     await env.VECTORIZE!.upsert(vectors);
-    console.log(`[Vectorize] dual-write batch upserted ${vectors.length} vectors`);
+    await logEvent(env, 'info', `[Vectorize] dual-write batch upserted ${vectors.length} vectors`, undefined, 'process');
   } catch (err) {
-    console.error('[Vectorize] dual-write batch failed:', err);
+    await logEvent(env, 'error', '[Vectorize] dual-write batch failed', { err: err as any }, 'process');
     // Don't throw — Vectorize failure should not block process flow
   }
 }

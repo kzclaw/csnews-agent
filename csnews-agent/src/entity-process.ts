@@ -137,7 +137,7 @@ export async function writeEntitiesHotLayer(
       const errText = await res.text();
       throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
     }
-    console.log(`[entity-process] writeEntitiesHotLayer wrote=${entities.length}`);
+    await logEvent(env, 'info', `[entity-process] writeEntitiesHotLayer wrote=${entities.length}`, undefined, 'entity');
     return { written: entities.length, errors: 0 };
   } catch (e: any) {
     await logEvent(env, 'error', `[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`, undefined, 'entity');

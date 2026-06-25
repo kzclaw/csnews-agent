@@ -106,19 +106,20 @@ function normalizeTavilyResult(result: TavilySearchResult): NormalizedArticle {
  * @returns NormalizedArticle[] — empty if API key is missing or invalid
  */
 export async function fetchTavilyNews(
+  env: Env,
   apiKey: string | undefined,
   query: string,
   maxResults = 10
 ): Promise<NormalizedArticle[]> {
   // Guard: no key configured
   if (!apiKey) {
-    console.warn('[Tavily] TAVILY_API_KEY not configured — skipping fetch');
+    await logEvent(env, 'warn', '[Tavily] TAVILY_API_KEY not configured — skipping fetch', undefined, 'tavily');
     return [];
   }
 
   // Test/mock mode: placeholder key
   if (apiKey === 'YOUR_KEY_HERE') {
-    console.log('[Tavily] mock mode: returning 3 test articles');
+    await logEvent(env, 'info', '[Tavily] mock mode: returning 3 test articles', undefined, 'tavily');
     return MOCK_ARTICLES;
   }
 
@@ -136,17 +137,17 @@ export async function fetchTavilyNews(
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[Tavily] HTTP ${res.status}: ${errText.slice(0, 300)}`);
+      await logEvent(env, 'error', `[Tavily] HTTP ${res.status}: ${errText.slice(0, 300)}`, undefined, 'tavily');
       return [];
     }
 
     const json = (await res.json()) as TavilySearchResponse;
     const results = json.results || [];
 
-    console.log(`[Tavily] fetched ${results.length} results for query "${query}"`);
+    await logEvent(env, 'info', `[Tavily] fetched ${results.length} results for query "${query}"`, undefined, 'tavily');
     return results.map(normalizeTavilyResult);
   } catch (err) {
-    console.error('[Tavily] fetch failed:', err);
+    await logEvent(env, 'error', '[Tavily] fetch failed', { err: err as any }, 'tavily');
     return [];
   }
 }
@@ -210,7 +211,7 @@ export async function runTavilyPipeline(
   const fetchErrors: string[] = [];
 
   for (const query of TAVILY_QUERIES) {
-    const articles = await fetchTavilyNews(apiKey, query, maxPerQuery);
+    const articles = await fetchTavilyNews(env, apiKey, query, maxPerQuery);
     if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
       fetchErrors.push(`query="${query}" returned 0 results`);
     }

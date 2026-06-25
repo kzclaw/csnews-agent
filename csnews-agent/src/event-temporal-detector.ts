@@ -37,13 +37,13 @@ export async function detectTemporalRelations(env: Env): Promise<{
   });
 
   if (!res.ok) {
-    console.error(`[event-temporal-detector] fetch failed: ${res.status}`);
+    await logEvent(env, 'error', `[event-temporal-detector] fetch failed: ${res.status}`, undefined, 'event');
     return { detected: 0, errors: 1 };
   }
 
   const events: Event[] = await res.json();
   if (events.length < 2) {
-    console.log('[event-temporal-detector] < 2 events, skipping');
+    await logEvent(env, 'info', '[event-temporal-detector] < 2 events, skipping', undefined, 'event');
     return { detected: 0, errors: 0 };
   }
 
@@ -68,7 +68,7 @@ export async function detectTemporalRelations(env: Env): Promise<{
   }
 
   if (pairs.length === 0) {
-    console.log('[event-temporal-detector] no temporal pairs found');
+    await logEvent(env, 'info', '[event-temporal-detector] no temporal pairs found', undefined, 'event');
     return { detected: 0, errors: 0 };
   }
 
@@ -112,11 +112,11 @@ export async function detectTemporalRelations(env: Env): Promise<{
     if (insertRes.ok || insertRes.status === 409) {
       inserted++;
     } else {
-      console.error(`[event-temporal-detector] insert failed: ${insertRes.status}`);
+      await logEvent(env, 'error', `[event-temporal-detector] insert failed: ${insertRes.status}`, undefined, 'event');
     }
   }
 
-  console.log(`[event-temporal-detector] detected ${inserted} new temporal relations`);
+  await logEvent(env, 'info', `[event-temporal-detector] detected ${inserted} new temporal relations`, undefined, 'event');
   return { detected: inserted, errors: 0 };
 }
 

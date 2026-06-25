@@ -86,16 +86,16 @@ export async function detectCausalRelations(env: Env): Promise<{
 
     if (!res.ok) {
       const text = await res.text();
-      console.error(`[event-causal-detector] exec failed: ${res.status} ${text}`);
+      await logEvent(env, 'error', `[event-causal-detector] exec failed: ${res.status} ${text}`, undefined, 'event');
       return { detected: 0, errors: 1 };
     }
 
     const data = await res.json();
     const count = Array.isArray(data) ? data.length : 0;
-    console.log(`[event-causal-detector] detected ${count} causal relations`);
+    await logEvent(env, 'info', `[event-causal-detector] detected ${count} causal relations`, undefined, 'event');
     return { detected: count, errors: 0 };
   } catch (e: any) {
-    console.error(`[event-causal-detector] error: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-causal-detector] error: ${e?.message || e}`, undefined, 'event');
     return { detected: 0, errors: 1 };
   }
 }
@@ -148,7 +148,7 @@ export async function getCausalPairs(env: Env): Promise<CausalRelation[]> {
     if (!res.ok) return [];
     return await res.json();
   } catch (e: any) {
-    console.error(`[event-causal-detector] error: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-causal-detector] error: ${e?.message || e}`, undefined, 'event');
     return [];
   }
 }

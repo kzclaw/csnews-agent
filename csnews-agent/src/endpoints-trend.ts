@@ -626,7 +626,7 @@ export async function runKnowledgeGeneration(
 ): Promise<{ written: number; skipped: number; errors: number }> {
   // Phase 2: 预算检查 L6（Knowledge generation）
   if (!(await shouldTriggerAiCall(env, 'L6'))) {
-    console.warn('[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold');
+    await logEvent(env, 'warn', '[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold', undefined, 'trend');
     return { written: 0, skipped: 0, errors: 0 };
   }
 
@@ -685,7 +685,7 @@ export async function runKnowledgeGeneration(
           await safeJson(topicRes);
         const topic = topics[0];
         if (!topic) {
-          console.warn(`[knowledge-gen] topic ${w.topic_id} not found for warning ${w.id}`);
+          await logEvent(env, 'warn', `[knowledge-gen] topic ${w.topic_id} not found for warning ${w.id}`, undefined, 'trend');
           skipped++;
           continue;
         }
@@ -807,12 +807,12 @@ export async function runKnowledgeGeneration(
           if (!errText.includes('23505')) {
             throw new Error(`knowledge insert failed HTTP ${insertRes.status}: ${errText.slice(0, 200)}`);
           }
-          console.log(`[knowledge-gen] warning ${w.id} already inserted (idempotent skip)`);
+          await logEvent(env, 'info', `[knowledge-gen] warning ${w.id} already inserted (idempotent skip)`, undefined, 'trend');
           skipped++;
           continue;
         }
         const inserted: Array<{ id: string }> = await safeJson(insertRes);
-        console.log(`[knowledge-gen] wrote knowledge id=${inserted[0]?.id} r2=${r2Key} warning=${w.id}`);
+        await logEvent(env, 'info', `[knowledge-gen] wrote knowledge id=${inserted[0]?.id} r2=${r2Key} warning=${w.id}`, undefined, 'trend');
         written++;
       } catch (e: any) {
         errors++;
