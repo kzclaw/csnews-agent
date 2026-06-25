@@ -8,6 +8,7 @@
  * 备选路径: 通过 REST API 拉取 events + TypeScript 计算
  */
 import { Env, supabaseFetch } from './shared';
+import { logEvent } from './log';
 
 export interface SemanticRelation {
   from_event_id: string;

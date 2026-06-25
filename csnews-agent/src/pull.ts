@@ -13,6 +13,7 @@
  */
 
 import { Env, supabaseFetch, safeJson } from './shared';
+import { logEvent } from './log';
 import {
   cacheGet,
   cacheSet,

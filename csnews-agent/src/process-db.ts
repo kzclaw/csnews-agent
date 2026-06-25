@@ -17,6 +17,7 @@ import type {
   InsertedNewsHotspotRow,
   CreatedTopicRow,
 } from './types';
+import { logEvent } from './log';
 
 export interface NewsBatchItem {
   title: string;
@@ -83,8 +84,8 @@ export async function dualWriteVectors(
   newsList: Array<{ title: string; category?: string; embedding?: number[] }>,
   ids: string[]
 ): Promise<void> {
-  dualWriteEmbeddingsToVectorize(env, newsList, ids).catch((err) => {
-    console.error('[Vectorize] dual-write failed:', err);
+  dualWriteEmbeddingsToVectorize(env, newsList, ids).catch(async (err) => {
+    await logEvent(env, 'error', '[Vectorize] dual-write failed', { err }, 'process');
   });
 }
 

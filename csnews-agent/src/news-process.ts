@@ -33,7 +33,7 @@ export async function findSimilarNews(
   matchCount = 5
 ): Promise<SimilarNewsItem[]> {
   // Try Vectorize first
-  const vectorClient = new VectorizeClient(env.VECTORIZE);
+  const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
   if (vectorClient.isAvailable()) {
     try {
       const vectorResults = await vectorClient.query(embedding, matchCount);
@@ -97,15 +97,13 @@ export async function recordTrendSnapshot(env: Env, topicId: string) {
     });
     if (!res.ok) {
       const errText = await res.text();
-      console.error(
-        `[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0, 200)}`
-      );
+      await logEvent(env, 'error', `[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0, 200)}`, undefined, 'process');
       return null;
     }
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
-    console.error(`[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`);
+    await logEvent(env, 'error', `[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`, undefined, 'process');
     return null;
   }
 }
@@ -158,14 +156,14 @@ export async function insertNewsHotspot(
 
   // Dual-write embedding to Vectorize
   if (news.embedding && news.embedding.length > 0) {
-    const vectorClient = new VectorizeClient(env.VECTORIZE);
+    const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
     vectorClient
       .upsert(news.embedding, id, {
         title: news.title,
         category: news.category || '',
       })
-      .catch((err) => {
-        console.error('[Vectorize] dual-write failed:', err);
+      .catch(async (err) => {
+        await logEvent(env, 'error', '[Vectorize] dual-write failed', { err }, 'process');
       });
   }
 
@@ -305,7 +303,7 @@ export async function dualWriteEmbeddingsToVectorize(
   }>,
   ids: string[]
 ): Promise<void> {
-  const vectorClient = new VectorizeClient(env.VECTORIZE);
+  const vectorClient = new VectorizeClient(env.VECTORIZE, env.csnews_raw);
   if (!vectorClient.isAvailable()) {
     console.warn('[Vectorize] binding not available, skipping dual-write');
     return;
@@ -360,16 +358,14 @@ export async function recordTrendWithMember(
     });
     if (!res.ok) {
       const errText = await res.text();
-      console.error(
-        `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`
-      );
+      await logEvent(env, 'error', `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`, undefined, 'process');
       return null;
     }
     // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
-    console.error(`record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`);
+    await logEvent(env, 'error', `record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`, undefined, 'process');
     return null;
   }
 }

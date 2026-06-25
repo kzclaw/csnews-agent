@@ -13,6 +13,7 @@
 // ============================================================
 
 import { Env, supabaseFetch, safeJson, validationError, parseCountHeader, payloadTooLargeResponse } from './shared';
+import { logEvent } from './log';
 import {
   validateId,
   validateFormat,
@@ -587,7 +588,7 @@ export async function runKnowledgeAccumulation(
         written++;
       } catch (e: any) {
         errors++;
-        console.error(`[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`);
+        await logEvent(env, 'error', `[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`, undefined, 'trend');
       }
     }
 
@@ -605,7 +606,7 @@ export async function runKnowledgeAccumulation(
 
     return { written, errors };
   } catch (e: any) {
-    console.error(`[knowledge] accumulation job failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[knowledge] accumulation job failed: ${e?.message || e}`, undefined, 'trend');
     return { written, errors: errors + 1 };
   }
 }
@@ -815,13 +816,13 @@ export async function runKnowledgeGeneration(
         written++;
       } catch (e: any) {
         errors++;
-        console.error(`[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`);
+        await logEvent(env, 'error', `[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`, undefined, 'trend');
       }
     }
 
     return { written, skipped, errors };
   } catch (e: any) {
-    console.error(`[knowledge-gen] job failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[knowledge-gen] job failed: ${e?.message || e}`, undefined, 'trend');
     return { written, skipped: 0, errors: errors + 1 };
   }
 }

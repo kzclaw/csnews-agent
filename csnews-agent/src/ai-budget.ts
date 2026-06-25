@@ -10,7 +10,7 @@
 // Env 接口扩展（KV binding）
 // KVNamespace 类型来自 worker-configuration.d.ts（wrangler types 生成）
 // ===========================
-export interface AiBudgetEnv {
+interface AiBudgetEnv {
   AI_USAGE_KV?: {
     get(key: string, type?: 'text'): Promise<string | null>;
     put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
@@ -118,7 +118,7 @@ export async function getDailyUsage(env: AiBudgetEnv): Promise<number> {
  */
 export type BudgetStatus = 'normal' | 'warning' | 'critical' | 'shutdown';
 
-export interface BudgetStatusResult {
+interface BudgetStatusResult {
   status: BudgetStatus;
   used: number;
   limit: number;

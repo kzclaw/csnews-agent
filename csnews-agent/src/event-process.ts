@@ -7,6 +7,7 @@
 import { Env } from './shared';
 import { runEventClustering, type EventCluster } from './event-cluster';
 import { loadReviewedCandidates, type EntityFinalized } from './entity-process';
+import { logEvent } from './log';
 export { runEventClustering };
 
 export const EVENT_CLUSTERS_R2_KEY = 'event-clusters.json';
@@ -73,7 +74,7 @@ export async function runEventProcess(env: Env): Promise<{
       errors: 0,
     };
   } catch (e: any) {
-    console.error(`[event-process] R2 put failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[event-process] R2 put failed: ${e?.message || e}`, undefined, 'event');
     return { clusters: result.clusters.length, threshold: result.threshold, written: 0, errors: 1 };
   }
 }

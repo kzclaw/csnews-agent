@@ -17,9 +17,9 @@ import { Env } from './shared';
 
 export const ENTITY_NOISE_ANCHORS_R2_KEY = 'entity-noise-anchors.json';
 export const NOISE_THRESHOLD_DEFAULT = 0.85;
-export const NOISE_THRESHOLD_MIN = 0.5;
-export const NOISE_THRESHOLD_MAX = 0.99;
-export const NOISE_ANCHORS_DEFAULT: string[] = [
+const NOISE_THRESHOLD_MIN = 0.5;
+const NOISE_THRESHOLD_MAX = 0.99;
+const NOISE_ANCHORS_DEFAULT: string[] = [
   // 18:09 确定 batch incorrect 20 noise anchors
   // 17 通用词
   '回应',
@@ -53,7 +53,7 @@ export const NOISE_ANCHORS_DEFAULT: string[] = [
   '6月1',
 ];
 
-export interface NoiseAnchorsData {
+interface NoiseAnchorsData {
   anchors: string[];
   threshold: number;
   updated_at: string;

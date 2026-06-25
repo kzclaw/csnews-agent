@@ -5,6 +5,7 @@
  * 每日 cron 触发一次
  */
 import { Env } from './shared';
+import { logEvent } from './log';
 import { detectTemporalRelations } from './event-temporal-detector';
 import { detectSemanticRelations } from './event-semantic-detector';
 import { detectCausalRelations } from './event-causal-detector';

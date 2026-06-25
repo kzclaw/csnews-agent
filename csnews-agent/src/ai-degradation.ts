@@ -7,7 +7,7 @@
 // Env 接口
 // R2Bucket 类型来自 worker-configuration.d.ts（wrangler types 生成）
 // ===========================
-export interface AiDegradationEnv {
+interface AiDegradationEnv {
   csnews_raw: {
     put(key: string, value: string | ArrayBuffer, options?: { httpMetadata?: { contentType?: string } }): Promise<void>;
     get(key: string): Promise<{ text(): Promise<string> } | null>;
@@ -16,6 +16,7 @@ export interface AiDegradationEnv {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;
 }
+import { logEvent } from './log';
 
 type DegradationLevel = 'L4' | 'L5' | 'L6';
 
@@ -26,7 +27,7 @@ type DegradationLevel = 'L4' | 'L5' | 'L6';
 /**
  * 各层级的降级说明（供调用方展示 / 写入日志）
  */
-export function getDegradationMessage(level: DegradationLevel): string {
+function getDegradationMessage(level: DegradationLevel): string {
   switch (level) {
     case 'L4':
       return 'AI budget exceeded — async LLM analysis skipped, manual review needed';

@@ -17,6 +17,7 @@
  */
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
+import { logEvent } from './log';
 import { ENTITY_CANDIDATES_R2_KEY, type EntityCandidate } from './entity-selflearn';
 
 export const ENTITY_FINALIZED_R2_KEY = 'entity-finalized.json';
@@ -52,7 +53,7 @@ export async function runEntityProcess(
   try {
     reviewed = await loadReviewedCandidates(env);
   } catch (e: any) {
-    console.error(`[entity-process] loadReviewedCandidates failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[entity-process] loadReviewedCandidates failed: ${e?.message || e}`, undefined, 'entity');
     return { written: 0, errors: 1, finalized: 0 };
   }
 
@@ -75,7 +76,7 @@ export async function runEntityProcess(
       )
     );
   } catch (e: any) {
-    console.error(`[entity-process] R2 put failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[entity-process] R2 put failed: ${e?.message || e}`, undefined, 'entity');
     return { written: 0, errors: 1, finalized: 0 };
   }
 
@@ -139,7 +140,7 @@ export async function writeEntitiesHotLayer(
     console.log(`[entity-process] writeEntitiesHotLayer wrote=${entities.length}`);
     return { written: entities.length, errors: 0 };
   } catch (e: any) {
-    console.error(`[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`, undefined, 'entity');
     return { written: 0, errors: entities.length };
   }
 }

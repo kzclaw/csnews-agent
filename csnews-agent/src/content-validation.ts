@@ -14,12 +14,12 @@
 // UUID v4 regex (RFC 4122 简化版, 接受 v1-5 因为 Supabase uuid-ossp / pgcrypto 都可能生成)
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const ALLOWED_FORMATS = ['text', 'html', 'json'] as const;
-export type ContentFormat = (typeof ALLOWED_FORMATS)[number];
+const ALLOWED_FORMATS = ['text', 'html', 'json'] as const;
+type ContentFormat = (typeof ALLOWED_FORMATS)[number];
 
 export const RATE_LIMIT_PER_MIN = 60;
 export const RATE_KEY_PREFIX = 'content_rate:';
-export const CONTENT_HITS_KEY_PREFIX = 'r2_content_hits:';
+const CONTENT_HITS_KEY_PREFIX = 'r2_content_hits:';
 
 export const PAYLOAD_LIMIT_BYTES = 1024 * 1024; // 1 MB
 

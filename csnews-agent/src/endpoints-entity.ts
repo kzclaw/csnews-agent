@@ -13,6 +13,7 @@
 
 import { Env, jsonResponse } from './shared';
 import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
+import { logEvent } from './log';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
 import {
   ENTITY_NOISE_ANCHORS_R2_KEY,

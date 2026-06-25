@@ -6,6 +6,7 @@
  * sub_type: policy_market | announcement_reaction | investigation_response | sanction_reaction | earnings_investigation
  */
 import { Env, supabaseFetch } from './shared';
+import { logEvent } from './log';
 
 export interface CausalRelation {
   from_event_id: string;

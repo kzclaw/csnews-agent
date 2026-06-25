@@ -24,6 +24,7 @@ import {
   type FilterResult,
 } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
+import { logEvent } from './log';
 
 export interface EntityCandidate {
   uuid: string;
@@ -37,11 +38,10 @@ export interface EntityCandidate {
 }
 
 export const ENTITY_CANDIDATES_R2_KEY = 'entity-candidates.json';
-export const SELFLEARN_MIN_FREQUENCY = 3;
-export const SELFLEARN_NGRAM_SIZES = [2, 3, 4];
+const SELFLEARN_MIN_FREQUENCY = 3;
+const SELFLEARN_NGRAM_SIZES = [2, 3, 4];
 export const SELFLEARN_CONFIDENCE = 0.5;
 export const SELFLEARN_MAX_CANDIDATES = 50;
-export const SELFLEARN_BATCH_SIZE = 50;
 
 /**
  * 从文本中提取 n-gram 频率
@@ -330,7 +330,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{
       noise_anchors_count: noiseAnchorsData.anchors.length,
     };
   } catch (e: any) {
-    console.error(`[entity-selflearn] failed: ${e?.message || e}`);
+    await logEvent(env, 'error', `[entity-selflearn] failed: ${e?.message || e}`, undefined, 'entity');
     return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
   }
 }

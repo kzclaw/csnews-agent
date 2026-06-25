@@ -85,19 +85,19 @@ export function getSeedMeta(value: any): SeedEnvelope<unknown>['_seed'] | null {
 export const CACHE_PREFIX = 'cache:';
 
 /** Negative Sentinel key 前缀 (标记上游故障, 30s 内跳过重试) */
-export const NEG_SENTINEL_PREFIX = '__CSNEWS_NEG__';
+const NEG_SENTINEL_PREFIX = '__CSNEWS_NEG__';
 
 /** Negative Sentinel TTL = 30s (上游故障时保护 AI budget) */
-export const NEG_SENTINEL_TTL = 30;
+const NEG_SENTINEL_TTL = 30;
 
 /** 默认 TTL = 1h (跟 cron 整点对齐) */
-export const DEFAULT_TTL_SECONDS = 60 * 60;
+const DEFAULT_TTL_SECONDS = 60 * 60;
 
 /** Pull 端点 TTL = 60s (热点数据快速失效，减少 stale) */
 export const PULL_TTL_SECONDS = 60;
 
 /** 防御性 value size cap = 25MB (KV hard limit) */
-export const MAX_VALUE_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_VALUE_SIZE_BYTES = 25 * 1024 * 1024;
 
 /** SHA-256 hex 截取长度 (32 字符固定 cache key) */
 const HASH_LENGTH = 32;

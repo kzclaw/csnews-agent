@@ -5,6 +5,7 @@
  * sub_type: 'simultaneous' (<1h) | 'follow_up' (1-24h)
  */
 import { Env, supabaseFetch } from './shared';
+import { logEvent } from './log';
 
 export interface TemporalRelation {
   from_event_id: string;

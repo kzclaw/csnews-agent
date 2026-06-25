@@ -20,7 +20,7 @@ export const CATEGORY_SEEDS_R2_KEY = 'category-seeds.json';
  * (18:43 确定 0 硬编码 = R2 持久化是主路径, 这是 R2 不存在时的 fallback)
  * (5h 配额期外 review R2 增删 seeds 即可生效, 0 维护成本)
  */
-export const DEFAULT_CATEGORY_SEEDS: Record<string, string[]> = {
+const DEFAULT_CATEGORY_SEEDS: Record<string, string[]> = {
   科技: ['人工智能发布', '开源代码', '芯片量产', '算法升级', '技术突破'],
   财经: ['股市涨跌', '汇率波动', '央行利率', '财报数据', 'GDP 增长'],
   国际: ['外交峰会', '联合国决议', '制裁措施', '军事演习', '贸易协定'],
@@ -33,7 +33,7 @@ export const DEFAULT_CATEGORY_SEEDS: Record<string, string[]> = {
   法律: ['法院判决', '警方通报', '检方公诉', '立法修改', '司法解释'],
 };
 
-export interface CategorySeedsData {
+interface CategorySeedsData {
   categories: Record<string, string[]>;
   updated_at: string;
   updated_count: number;

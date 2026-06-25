@@ -13,6 +13,7 @@
 // ============================================================
 
 import { Env, getSupabaseHost } from './shared';
+import { logEvent } from './log';
 import { supabaseHeaders } from './utils';
 
 /**

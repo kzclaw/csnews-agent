@@ -4,6 +4,8 @@
 // Vectorize requires flat number[] arrays, not number[][]
 // Types are defined globally in cf-types.d.ts (ambient declarations)
 
+import type { R2Bucket } from '@cloudflare/workers-types';
+
 /**
  * VectorizeClient — wrapper around the Vectorize binding for news_hotspots embeddings.
  *
@@ -14,9 +16,11 @@
  */
 export class VectorizeClient {
   private index: Vectorize | undefined;
+  private env_r2: R2Bucket | undefined;
 
-  constructor(vectorize: Vectorize | undefined) {
+  constructor(vectorize: Vectorize | undefined, env_r2?: R2Bucket | undefined) {
     this.index = vectorize;
+    this.env_r2 = env_r2;
   }
 
   /**

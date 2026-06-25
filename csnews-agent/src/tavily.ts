@@ -5,6 +5,20 @@
 // Cross-source dedup: each article is checked against Vectorize
 // before insertion (similarity > 0.88 → skip).
 
+import { Env } from './shared';
+import { logEvent } from './log';
+import {
+  embedTitle,
+  findSimilarForEmbedding,
+} from './process-vector';
+import {
+  createTopicForTitle,
+  updateTopicScoreById,
+  insertNewsBatch,
+  dualWriteVectors,
+  recordTrendForNews,
+} from './process-db';
+
 /**
  * Normalized article shape shared by all data sources.
  * Used by the batch-insert pipeline in endpoints-process.ts.
@@ -146,18 +160,6 @@ export async function fetchTavilyNews(
 // dual-writes to Vectorize.
 // ============================================================
 
-import { Env } from './shared';
-import {
-  embedTitle,
-  findSimilarForEmbedding,
-} from './process-vector';
-import {
-  createTopicForTitle,
-  updateTopicScoreById,
-  insertNewsBatch,
-  dualWriteVectors,
-  recordTrendForNews,
-} from './process-db';
 
 // ---- cron query list ----
 const TAVILY_QUERIES = [

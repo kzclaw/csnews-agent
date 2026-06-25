@@ -52,7 +52,7 @@ import { handleFeedbackCheckAction } from './feedback';
  * 20 个支持 action（白名单）
  * 加新 action 时: ALLOWED_ACTIONS 加 + 此文件 describe 块补 1 个 it
  */
-export const ALLOWED_ACTIONS = [
+const ALLOWED_ACTIONS = [
   'pull',
   'ping',
   'model-test',
@@ -81,18 +81,18 @@ export const ALLOWED_ACTIONS = [
   'tavily',
   'proxy',
 ] as const;
-export type Action = (typeof ALLOWED_ACTIONS)[number];
+type Action = (typeof ALLOWED_ACTIONS)[number];
 
 /**
  * 默认 action (空 action 时的 fallback, v0.33 确定 'ping' = 健康检查)
  */
-export const DEFAULT_ACTION: Action = 'ping';
+const DEFAULT_ACTION: Action = 'ping';
 
 /**
  * CORS preflight (OPTIONS) 响应
  * v0.33 确定: 所有 endpoint 统一 OPTIONS 处理
  */
-export function handleCorsPreflight(request: Request): Response | null {
+function handleCorsPreflight(request: Request): Response | null {
   if (request.method === 'OPTIONS') {
     const origin = request.headers.get('Origin');
     return new Response(null, { headers: corsHeaders(origin) });
