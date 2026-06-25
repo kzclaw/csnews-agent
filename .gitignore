@@ -47,6 +47,8 @@ verifier/
 .privacy-patterns.txt.example
 csnews-agent/scripts/check-privacy.sh
 csnews-agent/validate/privacy-grep.contract.ts
+# 排除测试文件（validate/ 目录整体不入仓库）
+csnews-agent/validate/
 
 # Wrangler local cache + build outputs
 .wrangler/
