@@ -38,3 +38,5 @@ yarn-error.log*
 
 # Local privacy patterns (per-developer, copy from .privacy-patterns.txt.example at repo root)
 .privacy-patterns.txt
+# wrangler prod config (real IDs)
+wrangler.prod.toml

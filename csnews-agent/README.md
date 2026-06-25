@@ -181,6 +181,17 @@ wrangler secret put SUPABASE_SERVICE_KEY
 wrangler r2 bucket create csnews-raw
 ```
 
+### KV Namespace（AI Budget Tracking）
+
+```bash
+wrangler kv:namespace create AI_USAGE_KV
+# 输出: { id: "xxxxxxxx" }
+```
+
+`wrangler.toml` 里的 `id = "YOUR_NAMESPACE_ID"` 需要替换成真实 ID。
+
+**生产部署**：CF GitHub Integration 的 "Configuration file" 需设为 `wrangler.prod.toml`（已加入 `.gitignore`，本地持有）。
+
 ---
 
 ## 📁 目录结构
