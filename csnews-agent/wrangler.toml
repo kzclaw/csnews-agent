@@ -75,6 +75,6 @@ AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
 #   - 业务: 查 open warnings → record_feedback RPC → 调 score_rule_weights → 写 R2 accuracy
 # log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 0 * * *", "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
+crons = [ "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
 
 
