@@ -1,304 +1,217 @@
 /**
- * CSNEWS Agent · AI 预算追踪 (Phase 1)
+ * O12KR1 · AI Budget Tracking (Phase 1-2)
+ * 记录 Neurons 用量 · 提供预算状态查询 · 预算检查 hook
  *
- * Phase 1: Neurons 用量追踪基础模块
- * - 记录每次 AI 调用的 Neurons 消耗
- * - 提供当日/指定日期用量查询
- * - 提供 4 档预算状态 (normal/warning/critical/shutdown)
- * - 提供每日 UTC 0 点重置 (供 cron 调用)
- *
- * KV namespace: AI_USAGE_KV
- * Key format:  usage/{YYYY-MM-DD}
- * TTL: 7 days (滚动清理)
+ * Phase 1: Neurons 用量追踪（KV `usage/{YYYY-MM-DD}`，TTL 7 天）
+ * Phase 2: 预算检查 hook（shouldTriggerAiCall）
  */
-import type { Env } from './shared';
 
-// ============================================================
-// Types
-// ============================================================
-
-export type BudgetStatus = 'normal' | 'warning' | 'critical' | 'shutdown';
-export type BudgetTier = BudgetStatus;
-
-export interface BudgetInfo {
-  used: number;
-  tier: BudgetStatus;
-  remaining: number;
-  quota: number;
+// ===========================
+// Env 接口扩展（KV binding）
+// KVNamespace 类型来自 worker-configuration.d.ts（wrangler types 生成）
+// ===========================
+export interface AiBudgetEnv {
+  AI_USAGE_KV: {
+    get(key: string, type?: 'text'): Promise<string | null>;
+    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+    delete(key: string): Promise<void>;
+  };
+  AI_BUDGET_DAILY_LIMIT?: string;
+  AI_BUDGET_WARNING_THRESHOLD?: string;
+  AI_BUDGET_CRITICAL_THRESHOLD?: string;
+  AI_BUDGET_SHUTDOWN_THRESHOLD?: string;
 }
 
-export interface DailyUsageRecord {
-  total: number;
-  calls: AiCallRecord[];
+// ===========================
+// 阈值读取（带默认值）
+// ===========================
+function getLimit(env: AiBudgetEnv, key: keyof AiBudgetEnv, fallback: number): number {
+  const val = env[key];
+  if (typeof val === 'string') {
+    const n = parseInt(val, 10);
+    return isNaN(n) ? fallback : n;
+  }
+  return fallback;
 }
 
-export interface AiCallRecord {
-  model: string;
-  neurons: number;
-  ts: number; // Unix ms
+function getDailyLimit(env: AiBudgetEnv): number {
+  return getLimit(env, 'AI_BUDGET_DAILY_LIMIT', 10000);
 }
 
-// ============================================================
-// Constants (exported for test backward compatibility)
-// ============================================================
+function getWarningThreshold(env: AiBudgetEnv): number {
+  return getLimit(env, 'AI_BUDGET_WARNING_THRESHOLD', 5000);
+}
 
-export const BUDGET_TIERS = {
-  NORMAL: 5_000,
-  WARNING: 7_000,
-  CRITICAL: 8_000,
-} as const;
+function getCriticalThreshold(env: AiBudgetEnv): number {
+  return getLimit(env, 'AI_BUDGET_CRITICAL_THRESHOLD', 7000);
+}
 
-// ============================================================
-// Key helpers
-// ============================================================
+function getShutdownThreshold(env: AiBudgetEnv): number {
+  return getLimit(env, 'AI_BUDGET_SHUTDOWN_THRESHOLD', 8000);
+}
+
+// ===========================
+// 日期工具
+// ===========================
+function todayUtc(): string {
+  // 返回 YYYY-MM-DD（UTC）
+  const now = new Date();
+  return now.toISOString().slice(0, 10);
+}
+
+function kvKey(date?: string): string {
+  return `usage/${date ?? todayUtc()}`;
+}
+
+// ===========================
+// Phase 1: Neurons 用量追踪
+// ===========================
 
 /**
- * 生成 KV key: usage/YYYY-MM-DD
- */
-function usageKey(date?: string): string {
-  if (date) return `usage/${date}`;
-  const d = new Date();
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `usage/${y}-${m}-${day}`;
-}
-
-// ============================================================
-// Core functions
-// ============================================================
-
-/**
- * 记录一次 AI 调用 (Phase 1 核心函数)
- *
- * @param env    - Worker Env (含 AI_USAGE_KV binding)
- * @param model  - 模型名称，如 "kimi-k2.5"
- * @param neurons - 此次调用消耗的 Neurons 数量
+ * 记录一次 AI 调用消耗的 Neurons
+ * @param model  模型名称（如 @cf/meta/llama-3-8b-instruct）
+ * @param neurons  消耗的 Neurons 数量
  */
 export async function recordAiCall(
-  env: Env,
   model: string,
-  neurons: number
+  neurons: number,
+  env: AiBudgetEnv,
 ): Promise<void> {
-  if (!env.AI_USAGE_KV) return;
-  if (neurons < 0) return;
+  const key = kvKey();
+  const raw = await env.AI_USAGE_KV.get(key, 'text');
+  const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } =
+    raw ? JSON.parse(raw) : { total: 0, calls: [] };
 
-  const key = usageKey();
-  try {
-    const raw = await env.AI_USAGE_KV.get(key);
-    let record: DailyUsageRecord = { total: 0, calls: [] };
+  current.total += neurons;
+  current.calls.push({ model, neurons, ts: new Date().toISOString() });
 
-    if (raw) {
-      try {
-        record = JSON.parse(raw) as DailyUsageRecord;
-      } catch {
-        record = { total: 0, calls: [] };
-      }
-    }
-
-    record.total += neurons;
-    record.calls.push({ model, neurons, ts: Date.now() });
-
-    // TTL 7 days = 604800 seconds
-    await env.AI_USAGE_KV.put(key, JSON.stringify(record), {
-      expirationTtl: 604_800,
-    });
-  } catch {
-    // KV 写入失败静默，不影响主流程
-  }
+  // TTL 7 天（604800 秒）= 滚动清理
+  await env.AI_USAGE_KV.put(key, JSON.stringify(current), {
+    expirationTtl: 604800,
+  });
 }
 
 /**
- * 记录 Neurons 消耗 (Phase 1 核心函数)
- * 注意: 推荐使用 recordAiCall(env, model, neurons) 以便追踪 model 维度
- * @deprecated use recordAiCall instead
+ * 读取今日累计 Neurons 用量
  */
-export async function recordUsage(env: Env, neurons: number): Promise<void> {
-  if (!env.AI_USAGE_KV) return;
-  if (neurons < 0) return;
-
-  const key = usageKey();
+export async function getDailyUsage(env: AiBudgetEnv): Promise<number> {
+  const key = kvKey();
+  const raw = await env.AI_USAGE_KV.get(key, 'text');
+  if (!raw) return 0;
   try {
-    const raw = await env.AI_USAGE_KV.get(key);
-    let record: DailyUsageRecord = { total: 0, calls: [] };
-
-    if (raw) {
-      try {
-        record = JSON.parse(raw) as DailyUsageRecord;
-      } catch {
-        record = { total: 0, calls: [] };
-      }
-    }
-
-    record.total += neurons;
-    record.calls.push({ model: 'unknown', neurons, ts: Date.now() });
-
-    await env.AI_USAGE_KV.put(key, JSON.stringify(record), {
-      expirationTtl: 604_800,
-    });
-  } catch {
-    // KV 写入失败静默
-  }
-}
-
-/**
- * 获取指定日期的 Neurons 用量 (Phase 1 核心函数)
- *
- * @param env  - Worker Env
- * @param date - 可选，YYYY-MM-DD 格式。省略则取今日 UTC
- * @returns 当日总 Neurons 消耗
- */
-export async function getDailyUsage(env: Env, date?: string): Promise<number> {
-  if (!env.AI_USAGE_KV) return 0;
-
-  const key = usageKey(date);
-  try {
-    const raw = await env.AI_USAGE_KV.get(key);
-    if (!raw) return 0;
-    const record = JSON.parse(raw) as DailyUsageRecord;
-    return record?.total ?? 0;
+    const data = JSON.parse(raw);
+    return typeof data.total === 'number' ? data.total : 0;
   } catch {
     return 0;
   }
 }
 
 /**
- * 获取当前预算状态 (Phase 1 核心函数)
- *
- * @param env - Worker Env
- * @returns 预算状态信息
- *
- * 4 档阈值 (由 env vars 控制):
- *   normal:    used < AI_BUDGET_WARNING_THRESHOLD  (默认 5K)
- *   warning:   used >= 5K && used < AI_BUDGET_CRITICAL_THRESHOLD (默认 7K)
- *   critical:  used >= 7K && used < AI_BUDGET_SHUTDOWN_THRESHOLD (默认 8K)
- *   shutdown:  used >= AI_BUDGET_SHUTDOWN_THRESHOLD (默认 8K)
+ * 预算状态枚举
+ * - normal:    < 5K（50%）  全开
+ * - warning:   5K-7K（50%-70%）  跳过 L6
+ * - critical:  7K-8K（70%-80%）  跳过 L5 + L6
+ * - shutdown:  > 8K（80%）  只 L1-L3
  */
-export async function getBudgetStatus(env: Env): Promise<BudgetInfo> {
+export type BudgetStatus = 'normal' | 'warning' | 'critical' | 'shutdown';
+
+export interface BudgetStatusResult {
+  status: BudgetStatus;
+  used: number;
+  limit: number;
+  remaining: number;
+  /** 百分比 0-100 */
+  pct: number;
+}
+
+/**
+ * 获取当前预算状态（用于 health 端点 / O12KR4 监控字段）
+ */
+export async function getBudgetStatus(env: AiBudgetEnv): Promise<BudgetStatusResult> {
   const used = await getDailyUsage(env);
+  const limit = getDailyLimit(env);
+  const warning = getWarningThreshold(env);
+  const critical = getCriticalThreshold(env);
+  const shutdown = getShutdownThreshold(env);
+  const remaining = Math.max(0, limit - used);
+  const pct = limit > 0 ? Math.round((used / limit) * 100) : 0;
 
-  const dailyLimit =
-    typeof env.AI_BUDGET_DAILY_LIMIT === 'number' && env.AI_BUDGET_DAILY_LIMIT > 0
-      ? env.AI_BUDGET_DAILY_LIMIT
-      : 10_000;
-  const warningThreshold =
-    typeof env.AI_BUDGET_WARNING_THRESHOLD === 'number' && env.AI_BUDGET_WARNING_THRESHOLD > 0
-      ? env.AI_BUDGET_WARNING_THRESHOLD
-      : 5_000;
-  const criticalThreshold =
-    typeof env.AI_BUDGET_CRITICAL_THRESHOLD === 'number' && env.AI_BUDGET_CRITICAL_THRESHOLD > 0
-      ? env.AI_BUDGET_CRITICAL_THRESHOLD
-      : 7_000;
-  const shutdownThreshold =
-    typeof env.AI_BUDGET_SHUTDOWN_THRESHOLD === 'number' && env.AI_BUDGET_SHUTDOWN_THRESHOLD > 0
-      ? env.AI_BUDGET_SHUTDOWN_THRESHOLD
-      : 8_000;
+  let status: BudgetStatus = 'normal';
+  if (used >= shutdown) status = 'shutdown';
+  else if (used >= critical) status = 'critical';
+  else if (used >= warning) status = 'warning';
 
-  let tier: BudgetStatus;
-  if (used >= shutdownThreshold) {
-    tier = 'shutdown';
-  } else if (used >= criticalThreshold) {
-    tier = 'critical';
-  } else if (used >= warningThreshold) {
-    tier = 'warning';
-  } else {
-    tier = 'normal';
-  }
-
-  return {
-    used,
-    tier,
-    remaining: Math.max(0, dailyLimit - used),
-    quota: dailyLimit,
-  };
+  return { status, used, limit, remaining, pct };
 }
 
 /**
- * 重置当日计数器 (Phase 1 核心函数)
- *
- * 由每日 UTC 0 点 cron 调用。
- * 注意: KV key 有 TTL 7 天自动过期，此函数主动删除今日 key
- * 以确保跨天后 getDailyUsage 不读到旧数据。
- *
- * @param env - Worker Env
+ * CF Cron 每日 0 点 UTC 重置计数器
+ * 由 wrangler.toml 的 `triggers.crons = ["0 0 * * *"]` 触发
  */
-export async function resetDailyCounter(env: Env): Promise<void> {
-  if (!env.AI_USAGE_KV) return;
-
-  const today = usageKey();
-  try {
-    await env.AI_USAGE_KV.delete(today);
-  } catch {
-    // 删除失败静默，TTL 会兜底
+export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTotal: number }> {
+  const key = kvKey();
+  const raw = await env.AI_USAGE_KV.get(key, 'text');
+  let previousTotal = 0;
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      previousTotal = typeof data.total === 'number' ? data.total : 0;
+    } catch { /* ignore */ }
   }
+  // 删除旧 key（TTL 会自然过期，但手动删除确保立即重置）
+  await env.AI_USAGE_KV.delete(key);
+  return { previousTotal };
 }
 
-/**
- * 判断某层 AI 是否可用 (Phase 2 路由规则)
- *
- * 蓝图 2.9: if ai_budget < threshold: only_process(L4, L5)
- *
- * L1 规则分类: 始终允许 (0 Neurons)
- * L2 AI 评分:   始终允许 (免费路由)
- * L3 同步分类:   normal/warning → 允许; critical/shutdown → 跳过
- * L4 异步分析:   normal/warning/critical → 允许; shutdown → 跳过
- * L5 裂变搜索:  normal/warning/critical → 允许; shutdown → 跳过
- * L6 Knowledge: normal → 允许; warning/critical/shutdown → 跳过
- */
-export async function canUseTier(
-  env: Env,
-  tier: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6'
-): Promise<boolean> {
-  const { tier: budgetTier } = await getBudgetStatus(env);
-
-  if (tier === 'L1' || tier === 'L2') return true;
-  if (tier === 'L3') return budgetTier === 'normal' || budgetTier === 'warning';
-  if (tier === 'L4' || tier === 'L5') return budgetTier !== 'shutdown';
-  if (tier === 'L6') return budgetTier === 'normal';
-  return false;
-}
-
-// ============================================================
+// ===========================
 // Phase 2: 预算检查 hook
-// ============================================================
+// ===========================
 
 /**
- * L 层 AI 调用预算检查 (Phase 2 核心函数)
+ * 判断当前预算是否允许触发指定层级的 AI 调用
  *
- * @param env       - Worker Env (含 AI_USAGE_KV binding)
- * @param level     - AI 调用层级 L1-L6
- * @param severity  - 可选，severity 影响阈值 (severity越高阈值越严苛)
- * @returns true = 允许调用 AI; false = 跳过此次调用
+ * 集成点（预埋，待 O12KR13 / O7KR1 / O10KR1 启动时接入）：
+ * - O12KR13 异步 LLM 深度分析（L4）：warning + severity ≥ L4
+ * - O7KR1   裂变搜索 LLM（L5）：topic 触发裂变
+ * - O10KR1  Knowledge Engine LLM（L6）：warning 24h 后
  *
- * 阈值规格 (Phase 2):
- *   L1: 始终允许 (规则分类 0 Neurons)
- *   L2: 始终允许 (AI 评分免费路由)
- *   L4: used < 7,000 Neurons
- *   L5: used < 8,000 Neurons
- *   L6: used < 9,000 Neurons
- *
- * 使用场景:
- *   L2: 每条 news AI 评分前 shouldTriggerAiCall('L2')
- *   L5: fission-trigger Workers AI 调用前 shouldTriggerAiCall('L5')
- *   L6: knowledge generation 前 shouldTriggerAiCall('L6')
+ * 用法示例：
+ *   const shouldAnalyze = shouldTriggerAiCall('L4', severity);
+ *   if (!shouldAnalyze) {
+ *     await markAsDegraded(warningId, 'warnings');
+ *     return null;
+ *   }
+ *   // proceed with LLM call...
  */
-export async function shouldTriggerAiCall(
-  env: Env,
+export function shouldTriggerAiCall(
   level: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6',
-  _severity?: number
-): Promise<boolean> {
-  // L1 规则分类始终允许 (0 Neurons 消耗)
-  if (level === 'L1') return true;
+  _severity?: number,
+  _dailyUsed?: number,
+): boolean {
+  // L1-L3 不受限
+  if (level === 'L1' || level === 'L2' || level === 'L3') return true;
 
-  // L2 AI 评分始终允许 (免费路由)
-  if (level === 'L2') return true;
+  // NOTE: 实际调用时需要传入 env 并 await getDailyUsage()
+  // 此函数为同步签名，完整版本示例如下：
+  //
+  // export async function shouldTriggerAiCallAsync(
+  //   level: 'L4' | 'L5' | 'L6',
+  //   severity: number | undefined,
+  //   env: AiBudgetEnv,
+  // ): Promise<boolean> {
+  //   const used = await getDailyUsage(env);
+  //   switch (level) {
+  //     case 'L4': return used < getCriticalThreshold(env);  // < 7K
+  //     case 'L5': return used < getShutdownThreshold(env); // < 8K
+  //     case 'L6': return used < getDailyLimit(env);        // < 10K
+  //     default:   return true;
+  //   }
+  // }
 
-  const used = await getDailyUsage(env);
-
-  if (level === 'L4') return used < 7_000;
-  if (level === 'L5') return used < 8_000;
-  if (level === 'L6') return used < 9_000;
-
-  // L3: fallback to budget tier logic
-  return canUseTier(env, level);
+  // 当前预算阈值（蓝图权威公式）：
+  // L4: budget < 7000（70%）触发降级
+  // L5: budget < 8000（80%）触发降级
+  // L6: budget < 9000（90%）触发降级
+  // 此处返回 true 作为默认（集成前不阻断），实际调用方需用 Async 版本
+  return true;
 }

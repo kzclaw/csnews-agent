@@ -1,174 +1,150 @@
 /**
- * CSNEWS Agent · AI 降级策略 (Phase 3)
- *
- * 当 AI 预算超阈值时，实现优雅降级:
- * - 写 R2 占位文档 (ai-degraded/{date}/{id}.md)
- * - 标记 Supabase degraded=true
- *
- * Phase 1: AI 预算追踪 (ai-budget.ts)
- * Phase 2: 预算检查 hook (shouldTriggerAiCall)
- * Phase 3: 降级策略 (本文件) ← 当前
+ * O12KR1 · AI Degradation Strategy (Phase 3)
+ * 预算超阈值时的降级处理：R2 占位写入 + Supabase 标记
  */
-import type { Env } from './shared';
-import { supabaseFetch } from './shared';
-import { getDailyUsage } from './ai-budget';
 
-// ============================================================
-// Types
-// ============================================================
-
-export type DegradationLevel = 'warning' | 'critical' | 'shutdown';
-
-export interface DegradedInsight {
-  triggered_at: string;  // ISO 8601
-  level: DegradationLevel;
-  neurons_used: number;
-  reason: string;
-  topic_title: string;
-  record_id: string;
-}
-
-// ============================================================
-// Phase 3 core functions
-// ============================================================
-
-/**
- * 返回降级提示文案 (Phase 3 核心函数)
- *
- * @param level - 预算超限档位 (warning | critical | shutdown)
- * @returns 用户可见的降级说明文案
- *
- * 各档位说明:
- *   warning:   Neurons 用量 > 5K，AI 响应可能延迟
- *   critical:   Neurons 用量 > 7K，AI 响应降级
- *   shutdown:   Neurons 用量 > 8K，AI 功能暂停
- */
-export function getDegradationMessage(level: string): string {
-  const messages: Record<string, string> = {
-    warning:
-      'AI 预算接近上限，当前 AI 响应可能延迟。建议稍后再试或简化查询。',
-    critical:
-      'AI 预算已达临界值，部分 AI 功能已降级响应。内容基础处理仍在进行。',
-    shutdown:
-      'AI 预算已耗尽，今日 AI 功能暂时不可用。基础数据处理正常运行，明日恢复。',
+// ===========================
+// Env 接口
+// R2Bucket 类型来自 worker-configuration.d.ts（wrangler types 生成）
+// ===========================
+export interface AiDegradationEnv {
+  csnews_raw: {
+    put(key: string, value: string | ArrayBuffer, options?: { httpMetadata?: { contentType?: string } }): Promise<void>;
+    get(key: string): Promise<{ text(): Promise<string> } | null>;
+    list(options?: { prefix?: string }): Promise<{ objects: { key: string }[] }>;
   };
-  return messages[level] ?? 'AI 预算超额，功能暂时降级。';
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_KEY: string;
 }
 
+type DegradationLevel = 'L4' | 'L5' | 'L6';
+
+// ===========================
+// 降级说明
+// ===========================
+
 /**
- * 写 R2 占位文档 (Phase 3 核心函数)
+ * 各层级的降级说明（供调用方展示 / 写入日志）
+ */
+export function getDegradationMessage(level: DegradationLevel): string {
+  switch (level) {
+    case 'L4':
+      return 'AI budget exceeded — async LLM analysis skipped, manual review needed';
+    case 'L5':
+      return 'AI budget exceeded — fission LLM report skipped, using keyword + bge-m3 similarity fallback';
+    case 'L6':
+      return 'AI budget exceeded — knowledge engine LLM skipped, retry next day';
+  }
+}
+
+// ===========================
+// Supabase 工具
+// ===========================
+function supabaseFetch(env: AiDegradationEnv, path: string, options?: RequestInit): Promise<Response> {
+  const host = `https://${env.SUPABASE_URL}.supabase.co`;
+  return fetch(`${host}${path}`, {
+    ...options,
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+}
+
+// ===========================
+// R2 占位写入
+// ===========================
+
+/**
+ * 写 AI 降级占位文件到 R2
  *
- * R2 路径: ai-degraded/{YYYY-MM-DD}/{record_id}.md
- *
- * @param env         - Worker Env (含 csnews_raw R2 binding + AI_USAGE_KV)
- * @param warning_id  - 记录 ID (作为文件名和内容标识)
- * @param level       - 降级档位 (warning | critical | shutdown)
- * @param topic_title - topic 标题
- * @returns void (写入失败静默，不阻断主流程)
- *
- * 占位文档内容包含:
- *   - 触发时间 (UTC)
- *   - 当前 Neurons 用量
- *   - 降级原因
- *   - topic 标题
+ * @param warningId  预警记录 ID（来自 Supabase warnings 表）
+ * @param level      降级层级
+ * @param neuronsUsed  写文件时的 Neurons 当量（可选）
+ * @param extraMeta  额外元数据（可选）
  */
 export async function writeDegradedInsight(
-  env: Env,
-  warning_id: string,
-  level: string,
-  topic_title: string
-): Promise<void> {
-  if (!env.csnews_raw) {
-    console.warn('[degradation] csnews_raw binding missing, skip R2 write');
-    return;
-  }
+  warningId: string,
+  level: DegradationLevel,
+  env: AiDegradationEnv,
+  neuronsUsed?: number,
+  extraMeta?: Record<string, unknown>,
+): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  const key = `ai-degraded/${date}/${warningId}.md`;
 
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(now.getUTCDate()).padStart(2, '0');
-  const dateStr = `${y}-${m}-${d}`;
+  const message = getDegradationMessage(level);
+  const ts = new Date().toISOString();
 
-  const neurons_used = await getDailyUsage(env);
-
-  const insight: DegradedInsight = {
-    triggered_at: now.toISOString(),
-    level: level as DegradationLevel,
-    neurons_used,
-    reason: getDegradationMessage(level),
-    topic_title,
-    record_id: warning_id,
-  };
-
-  const markdown = [
-    '# AI 降级占位文档',
-    '',
-    `> **⚠️ 此文档为 AI 降级占位，非完整洞察**`,
-    '',
-    `| 字段 | 值 |`,
-    `|---|---|`,
-    `| triggered_at | ${insight.triggered_at} |`,
-    `| level | ${insight.level} |`,
-    `| neurons_used | ${insight.neurons_used} |`,
-    `| reason | ${insight.reason} |`,
-    `| topic_title | ${topic_title} |`,
-    `| record_id | ${insight.record_id} |`,
-    '',
-    '---',
-    '',
-    '*此占位文档由 CSNEWS Agent AI 预算降级系统自动生成*',
+  const content = [
+    `# AI Degradation Report`,
+    ``,
+    `**Level**: ${level}`,
+    `**Warning ID**: ${warningId}`,
+    `**Triggered At**: ${ts}`,
+    `**Degradation Message**: ${message}`,
+    neuronsUsed !== undefined ? `**Neurons Used (at trigger)**: ${neuronsUsed}` : '',
+    ``,
+    `## Detail`,
+    ``,
+    message,
+    ``,
+    extraMeta ? `## Extra Metadata\n\`\`\`json\n${JSON.stringify(extraMeta, null, 2)}\n\`\`\`\n` : '',
+    `---`,
+    `> This file is auto-generated by O12KR1 AI Budget Tracking.`,
+    `> Generated by csnews-agent.`,
   ]
-    .filter(Boolean)
+    .filter(line => line !== '')
     .join('\n');
 
-  const r2Key = `ai-degraded/${dateStr}/${warning_id}.md`;
+  await env.csnews_raw.put(key, content, {
+    httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+  });
 
-  try {
-    await env.csnews_raw.put(r2Key, markdown, {
-      httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
-    });
-    console.log(`[degradation] wrote R2 placeholder: ${r2Key}`);
-  } catch (err) {
-    // R2 写入失败静默，不阻断主流程
-    console.error(`[degradation] R2 write failed for ${r2Key}:`, err);
-  }
+  return key;
 }
 
+// ===========================
+// Supabase 标记
+// ===========================
+
 /**
- * 标记 Supabase 记录为 degraded (Phase 3 核心函数)
+ * 在 Supabase 表中标记指定记录为 degraded
  *
- * @param env      - Worker Env (含 SUPABASE_URL + SUPABASE_SERVICE_KEY)
- * @param record_id - 目标记录 UUID
- * @param table    - 目标表名 (warnings | fission_searches | knowledge)
- * @returns void (更新失败静默，不阻断主流程)
+ * 支持的表：
+ * - `warnings`：预警记录（O12KR13 异步 AI 分析降级）
+ * - `fission_searches`：裂变搜索记录（O7KR1 裂变降级）
+ * - `knowledge`：知识库记录（O10KR1 Knowledge Engine 降级）
  *
- * 注意: 使用 service_role key 以绕过 RLS 限制。
+ * @param recordId  待标记的记录 ID
+ * @param table    目标表名（warnings | fission_searches | knowledge）
  */
 export async function markAsDegraded(
-  env: Env,
-  record_id: string,
-  table: 'warnings' | 'fission_searches' | 'knowledge'
-): Promise<void> {
-  const allowedTables = ['warnings', 'fission_searches', 'knowledge'];
-  if (!allowedTables.includes(table)) {
-    console.warn(`[degradation] markAsDegraded: unknown table "${table}"`);
-    return;
-  }
-
+  recordId: string,
+  table: 'warnings' | 'fission_searches' | 'knowledge',
+  env: AiDegradationEnv,
+): Promise<boolean> {
   try {
-    const res = await supabaseFetch(env, `/rest/v1/${table}?id=eq.${record_id}`, {
+    const res = await supabaseFetch(env, `/rest/v1/${table}?id=eq.${recordId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ degraded: true }),
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        degraded: true,
+        degraded_at: new Date().toISOString(),
+      }),
     });
 
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`[degradation] PATCH failed for ${table} id=${record_id}: ${errText}`);
-      return;
+      console.error(`[ai-degradation] PATCH ${table} failed: ${res.status} ${await res.text()}`);
+      return false;
     }
 
-    console.log(`[degradation] marked ${table} id=${record_id} as degraded`);
-  } catch (err) {
-    console.error(`[degradation] markAsDegraded failed:`, err);
+    return true;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[ai-degradation] markAsDegraded error: ${msg}`);
+    return false;
   }
 }

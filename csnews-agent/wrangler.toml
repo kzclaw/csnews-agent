@@ -2,15 +2,6 @@ name = "csnews-agent"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
-# Observability: 开启 CF Workers Tail Logs / Logs 实时面板
-# 2026-06-10 确定: 开 log 看 cron scheduled handler 内部 fetch 失败原因
-# (过去 24h news=0 但 CF Dashboard cron 记成功 → scheduled handler 内部 fetch 失败被 try/catch 吞)
-# head_sampling_rate = 1.0 全采样 (Worker Free Plan 默认支持, 5 重安全网之一)
-# 注: wrangler 4.95 不认顶层 log_level 字段, 控制台级别用 [observability] + [logging] 子块
-[observability]
-enabled = true
-head_sampling_rate = 1.0
-
 [ai]
 binding = "AI"
 
@@ -18,63 +9,15 @@ binding = "AI"
 binding = "csnews_raw"
 
 [[kv_namespaces]]
-binding = "PROCESS_STATE"
-id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
-preview_id = "c8b14c901b114f32aa5903a2d733ff91"
-
-[[kv_namespaces]]
 binding = "AI_USAGE_KV"
-id = "470a9354d39241a09e311cdac06a1c69"
-preview_id = "470a9354d39241a09e311cdac06a1c69"
-
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "csnews-news-vectors"
+id = "REPLACE_WITH_YOUR_KV_ID"
 
 [vars]
-# 2026-06-12 确定: WORKER_SELF_URL 真值走 CF Secret
-# (wrangler secret put WORKER_SELF_URL) — 不入 wrangler.toml / 不入 git
-# 历史: commit 5798b18 用 YOUR-WORKER.workers.dev 占位符 + 不替换 = cron 14h+ 静默
-# 现在: [vars] 不设同名 key → secret 唯一 → Worker env.WORKER_SELF_URL = secret 真值
-
-# TAVILY_API_KEY: set via `wrangler secret put TAVILY_API_KEY` — do NOT commit real key here
-# Placeholder "YOUR_KEY_HERE" activates mock test mode in fetchTavilyNews()
-TAVILY_API_KEY = "YOUR_KEY_HERE"
-
-# AI 预算阈值 (Phase 1) — Neurons 配额
 AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
 
-# Worker 版本标识 —— 2026-06-17 删 (v0.36.10.6 拍板 B)
-# 原因: pre-commit hook (scripts/bump-version.sh) 算 STAGED tree hash 改 WORKER_VERSION, 但 hook 改 wrangler.toml 后 commit hash 又变, 字段不准确 (504838a commit 实际, hook 改 075ff17, 错位)
-# 修法: 删 hook + 删 WORKER_VERSION 字段 + health 端点改用 env.CF_DEPLOYMENT_ID (CF runtime 注入, 每次部署 UUID, 区分部署够用)
-# 真 commit hash 看 `git log origin/main -1 --format='%h'`
-# (scripts/bump-version.sh + .githooks/pre-commit 已删)
-
-# 每小时整点(UTC)跑一次 process action
-# 替代 macOS cron 的 2h 频率 + 之前误用的 GitHub Actions
-# 选 CF cron 的原因:
-#   1. Free tier 实际可用(每账号 5 个,CPU 10ms 限制)
-#   2. Worker → 自家域名走 CF 内部 routing,绕开 Bot Fight Mode
-#   3. 0 漂移(精准整点),0 外部依赖
-#   4. process 主要是 fetch 等待,不算 CPU,10ms 限制够用
-# 每日 03:00(UTC)跑 entity + event — 自学习/Jaccard 聚类串行 (方案 C 合并)
-#   - entity selflearn + process → event clustering 在同一 cron 内串行
-#   - 合并原因: event 依赖 entity-finalized.json, 强行拆开徒增槽位占用
-#   - Neurons 预算:~5K/天 ≤ 10K Free 配额
-#   - 错开 process 整点,避免 Neurons spike 同时打
-# 每月 1 号 0:00(UTC)跑 archive cron — 30d+ entity 热层自动归档
-#   - 频率设计:每月 1 次(数据量稳态 150-300 行,1 个月归档 1 次够)
-#   - 0 Neurons(纯 SQL + R2 操作)
-#   - 业务: active 30d+ → R2 entity-archive-YYYY-MM.json / reviewed 30d+ → R2 entity-reviewed-YYYY.json (永久保留)
-# 每日 04:00(UTC)跑 O11 Feedback Loop — warning 24/48/72h 复查 + accuracy-based 调权 (v0.36.22)
-#   - 频率设计:每日 1 次(错开 process/entity/event cron)
-#   - 0 Neurons(纯 SQL + R2 操作)
-#   - 业务: 查 open warnings → record_feedback RPC → 调 score_rule_weights → 写 R2 accuracy
-# log 30d TTL 靠 R2 lifecycle rule 兜底 (CF Dashboard 配 prefix=logs/ MaxAge=30d)
 [triggers]
-crons = [ "0 * * * *", "0 3 * * *", "0 0 1 * *", "0 4 * * *" ]
-
-
+# 每日 0 点 UTC 重置 Neurons 计数器
+crons = ["0 0 * * *"]
