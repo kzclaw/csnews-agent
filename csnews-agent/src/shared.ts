@@ -92,3 +92,17 @@ export async function safeJson(res: Response): Promise<any> {
     return null;
   }
 }
+
+/**
+ * 统一 JSON 响应格式，消除重复的 Response 构造样板
+ */
+export function jsonResponse(
+  data: unknown,
+  cors: Record<string, string>,
+  init?: ResponseInit
+): Response {
+  return new Response(JSON.stringify(data), {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
+}

@@ -2,13 +2,13 @@
 // News Self Growth — process / health / logs / tavily endpoints
 // ============================================================
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { resetCacheMetrics } from './cache';
 import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
 import { scoreTitle, classifyTitle } from './process-ai';
 import { createTopicForTitle, updateTopicScoreById, insertNewsBatch, dualWriteVectors, recordTrendForNews } from './process-db';
 import { cleanupStaleTopics as cleanupStTopics } from './news-process';
-import type { CleanupStaleTopicsResult } from './types';
+import type { CleanupStaleTopicsResult, ZakerArticle } from './types';
 
 // Delegated handlers (extracted to focused sub-modules)
 import { handleHealthAction } from './health-main';
@@ -26,12 +26,10 @@ export async function handleProcessAction(
 ): Promise<Response> {
   try {
     resetCacheMetrics();
-    const cleaned = (await cleanupStalesTopics(env)) as CleanupStaleTopicsResult;
+    const cleaned = (await cleanupStTopics(env)) as CleanupStaleTopicsResult;
     const list = await fetchZakerHot();
     if (list.length === 0) {
-      return new Response(JSON.stringify({ error: 'no news' }), {
-        headers: { 'Content-Type': 'application/json', ...cors },
-      });
+      return jsonResponse({ error: 'no news' }, cors);
     }
 
     const FULL_COUNT = 6;
@@ -41,7 +39,6 @@ export async function handleProcessAction(
       const result = await processZakerItem(list[i], i, env, FULL_COUNT);
       if (result) {
         pendingNews.push(result);
-        if (result.fission) console.log(`[FISSION] ${result.title}`);
       }
     }
 
@@ -68,53 +65,39 @@ export async function handleProcessAction(
     for (let i = 0; i < pendingNews.length; i++) {
       const p = pendingNews[i];
       const newsId = batchIds[i];
+      let trend: null | object = null;
       if (newsId && p.topicId) {
-        const trendSnapshot = await recordTrendForNews(env, newsId, p.topicId, p.isNewTopic);
-        results.push({
-          title: p.title,
-          category: p.category,
-          score: p.rule.score,
-          topic_id: p.topicId,
-          similarity: p.matchedSimilarity,
-          level: p.newsLevel,
-          is_stored_r2: p.isStoredR2,
-          stored_reason: p.storedReason,
-          trend: trendSnapshot
-            ? {
-                snapshot_id: trendSnapshot.snapshot_id,
-                warning_id: trendSnapshot.warning_id,
-                velocity: trendSnapshot.out_velocity,
-                acceleration: trendSnapshot.out_acceleration,
-                stage: trendSnapshot.out_stage,
-                warning_created: trendSnapshot.out_warning_created,
-              }
-            : null,
-          fission: p.fission,
-        });
-      } else {
-        results.push({
-          title: p.title,
-          category: p.category,
-          score: p.rule.score,
-          topic_id: p.topicId,
-          similarity: p.matchedSimilarity,
-          level: p.newsLevel,
-          is_stored_r2: p.isStoredR2,
-          stored_reason: p.storedReason,
-          trend: null,
-          fission: p.fission,
-        });
+        const ts = await recordTrendForNews(env, newsId, p.topicId, p.isNewTopic);
+        if (ts) {
+          trend = {
+            snapshot_id: ts.snapshot_id,
+            warning_id: ts.warning_id,
+            velocity: ts.out_velocity,
+            acceleration: ts.out_acceleration,
+            stage: ts.out_stage,
+            warning_created: ts.out_warning_created,
+          };
+        }
       }
+      results.push({
+        title: p.title,
+        category: p.category,
+        score: p.rule.score,
+        topic_id: p.topicId,
+        similarity: p.matchedSimilarity,
+        level: p.newsLevel,
+        is_stored_r2: p.isStoredR2,
+        stored_reason: p.storedReason,
+        trend,
+        fission: p.fission,
+      });
     }
 
-    return new Response(
-      JSON.stringify({
-        processed: results.length,
-        cleaned: cleaned?.deleted_topic_count || 0,
-        items: results,
-      }),
-      { headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({
+      processed: results.length,
+      cleaned: cleaned?.deleted_topic_count || 0,
+      items: results,
+    }, cors);
   } finally {
     if (env.PROCESS_STATE) {
       const ts = new Date().toISOString();
@@ -139,10 +122,8 @@ export async function handleTavilyAction(
   return runTavilyPipeline(env, url, cors);
 }
 
-async function cleanupStalesTopics(env: Env) { return cleanupStTopics(env); }
-
 async function processZakerItem(
-  item: import('./types').ZakerArticle,
+  item: ZakerArticle,
   i: number,
   env: Env,
   fullCount: number
@@ -217,7 +198,7 @@ async function processZakerItem(
 }
 
 interface PendingItem {
-  item: import('./types').ZakerArticle;
+  item: ZakerArticle;
   topicId: string | undefined;
   isNewTopic: boolean;
   newsLevel: string;
