@@ -59,3 +59,4 @@ csnews-agent/coverage/
 .specify/
 AGENTS.md
 csnews-agent/AGENTS.md
+.husky/
