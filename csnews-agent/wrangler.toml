@@ -10,9 +10,8 @@ binding = "csnews_raw"
 
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"
-# 创建你自己的 KV namespace 后把 id 换成真实值
-# wrangler kv:namespace create AI_USAGE_KV
-id = "YOUR_NAMESPACE_ID"
+# KV namespace ID 是公开标识符，非密钥
+id = "470a9354d39241a09e311cdac06a1c69"
 
 [vars]
 AI_BUDGET_DAILY_LIMIT = "10000"
