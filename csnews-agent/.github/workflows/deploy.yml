@@ -24,6 +24,7 @@ jobs:
 
       - name: Fill KV namespace ID
         run: sed -i "s/YOUR_NAMESPACE_ID/${{ secrets.AI_USAGE_KV_ID }}/g" wrangler.toml
+        working-directory: csnews-agent
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
