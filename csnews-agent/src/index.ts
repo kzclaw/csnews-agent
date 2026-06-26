@@ -20,6 +20,12 @@ import type {
 } from './types-supabase';
 import { dispatchAction } from './dispatch';
 import { jsonResponse } from './shared';
+import {
+  scheduledProcess,
+  scheduledEntity,
+  scheduledArchiveOldEntities,
+  scheduledFeedback,
+} from './scheduled';
 interface Env {
   AI: Ai;
   csnews_raw: R2Bucket;
@@ -446,5 +452,31 @@ export default {
 
     // All other actions → dispatch layer (pull, health, ai-usage, ping, score, etc.)
     return await dispatchAction(env, ctx, action, request);
+  },
+
+  async scheduled(
+    _request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+    controller: ScheduledController
+  ): Promise<void> {
+    const cron = controller?.cron ?? 'unknown';
+
+    // Route to the appropriate handler based on cron expression
+    if (cron === '0 3,15 * * *') {
+      // Entity selflearn + process + event clustering — twice daily (03:00 & 15:00 UTC)
+      // bge-m3 ~5K Neurons/day, within Free Plan 10K/day quota
+      await scheduledEntity(env, ctx, controller);
+    } else if (cron === '0 0 * * *') {
+      // Process + tavily + knowledge — daily at 00:00 UTC
+      await scheduledProcess(env, ctx, controller);
+    } else if (cron === '0 1 1 * *') {
+      // Archive old entities — monthly 1st at 01:00 UTC
+      await scheduledArchiveOldEntities(env, ctx, controller);
+    } else if (cron === '0 4 * * *') {
+      // Feedback loop — daily at 04:00 UTC
+      await scheduledFeedback(env, ctx, controller);
+    }
+    // Unknown crons: no-op (ignore silently)
   },
 };
