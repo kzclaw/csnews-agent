@@ -97,6 +97,14 @@ curl -H "Authorization: Bearer $TOKEN" \
 | `?action=embed&text=...` | GET | bge-m3 1024 维向量输出 |
 | `?action=list` | GET | 列出 R2 中的新闻（`?order=desc&limit=50`）|
 | `?action=save` | POST | 手动存新闻到 R2 |
+| `?action=content&id=xxx&format=json` | GET | 读取 R2 中新闻全文（?action=knowledge 索引读取也走此端点）|
+| `?action=trend&type=topics\|velocity\|acceleration&since=24h` | GET | Trend Engine 话题趋势分析 |
+| `?action=knowledge` | GET | Knowledge Engine（R2 knowledge/ 索引读取）|
+| `?action=entity&type=selflearn\|process\|noise-filter` | GET | Entity Engine 实体管理 |
+| `?action=event&type=clusters\|cluster\|process\|review\|threshold` | GET | Event Graph 事件图谱 |
+| `?action=logs&date=YYYY-MM-DD&hour=HH&limit=N` | GET | 可观测性日志查询 |
+| `?action=classify&title=...&category=...` | GET | 分类规则单独调用 |
+| `?action=diag` | GET | 诊断端点（Supabase 读写测试）|
 
 ---
 
