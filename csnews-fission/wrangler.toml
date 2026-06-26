@@ -28,3 +28,5 @@ id = "470a9354d39241a09e311cdac06a1c69"
 # 方案 C: explosive+score=9 topics 稀少，6h 一次足够
 [triggers]
 crons = [ "0 */6 * * *" ]
+
+# updated: sync cron to CF via auto-deploy on main push
