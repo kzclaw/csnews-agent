@@ -23,6 +23,7 @@ Thumbs.db
 # Wrangler
 .wrangler/
 .dev.vars
+worker-configuration.d.ts
 
 # Local helper scripts (含 SUPABASE_SERVICE_KEY / BEARER_TOKEN 等敏感信息, 不入库)
 # 2026-06-10 确定: 任何 helper 脚本统一放 .tmp/ 子目录, 绝不入库
