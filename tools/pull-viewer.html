@@ -1318,7 +1318,7 @@ body::before {
 }
 @keyframes rfloat-fadeout { from { opacity: 1; } to { opacity: 0; } }
 .reader-float {
-  background: var(--bg-1);
+  background: oklch(11% 0 0);
   border: 1px solid var(--gold);
   border-radius: var(--radius-lg);
   width: 100%;
@@ -1417,6 +1417,11 @@ body::before {
         <span>Dashboard</span>
         <span class="count" id="dash-count">—</span>
       </button>
+      <button class="view-tab" data-view="reader">
+        <span class="dot"></span>
+        <span>Reader</span>
+        <span class="count" id="reader-count">—</span>
+      </button>
     </nav>
     <div class="header-actions">
       <div class="status" id="status">
@@ -1452,7 +1457,7 @@ body::before {
         </button>
         <button class="dash-tab" data-tab="data">
           <span>Data</span>
-          <span class="count">22</span>
+          <span class="count">38</span>
         </button>
         <button class="dash-tab" data-tab="logs">
           <span>Logs</span>
@@ -1470,6 +1475,77 @@ body::before {
         <div class="dash-pane-inner" id="pane-logs"></div>
         <div class="dash-pane-inner" id="pane-health"></div>
         <div class="dash-pane-inner" id="pane-entity-review"></div>
+      </div>
+    </section>
+
+    <!-- ============ READER VIEW ============ -->
+    <section class="view" id="view-reader">
+      <div class="reader-body">
+        <!-- sidebar -->
+        <aside class="sidebar" id="sidebar">
+          <button class="sidebar-toggle" id="sidebar-toggle" title="切换侧栏">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </button>
+          <div class="sidebar-section">
+            <div class="sidebar-title">热度等级</div>
+            <ul class="sidebar-list" id="level-list">
+              <li class="sidebar-item active" data-level="">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                <span>全部</span>
+                <span class="count" id="level-all-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="explosive">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <span>爆炸</span>
+                <span class="count" id="level-explosive-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="important">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>重要</span>
+                <span class="count" id="level-important-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="follow">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                <span>关注</span>
+                <span class="count" id="level-follow-count">—</span>
+              </li>
+            </ul>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-section">
+            <div class="sidebar-title">分类</div>
+            <ul class="sidebar-list" id="category-list"></ul>
+          </div>
+          <div class="sidebar-footer">
+            按 <kbd>1</kbd>/<kbd>2</kbd> 切换视图<br/>
+            <code>⌘R</code> 刷新 · <code>Esc</code> 收起卡片
+          </div>
+        </aside>
+
+        <!-- filter bar -->
+        <div class="filter-bar">
+          <select class="select" id="sort-select">
+            <option value="desc">最新优先</option>
+            <option value="hot">热度优先</option>
+            <option value="asc">最旧优先</option>
+          </select>
+          <select class="select" id="since-select">
+            <option value="24h">24 小时内</option>
+            <option value="7d" selected>7 天</option>
+            <option value="30d">30 天</option>
+            <option value="all">全部</option>
+          </select>
+          <div class="filter-spacer"></div>
+          <span class="filter-meta" id="result-meta">—</span>
+        </div>
+
+        <!-- feed -->
+        <div class="feed" id="feed">
+          <div class="state">
+            <div class="state-title">点击「Reader」刷新</div>
+            <div class="state-desc">或按 <code>⌘R</code> 加载新闻列表</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1639,6 +1715,8 @@ function updateStatus() {
   } else if (STATE.readerLastError && STATE.view === 'reader') {
     status.classList.add('offline');
     text.textContent = '错误';
+    const rc = document.getElementById('reader-count');
+    if (rc) rc.textContent = STATE.items.length;
   } else if (STATE.health && STATE.view === 'dashboard') {
     const s = STATE.health.status;
     if (s === 'ok' || s === 'healthy' || s === 'up') {
@@ -1654,6 +1732,9 @@ function updateStatus() {
   } else if (STATE.view === 'reader' && isConfigured()) {
     status.classList.add('online');
     text.textContent = `${STATE.items.length} 条`;
+    // update reader-count tab badge
+    const rc = document.getElementById('reader-count');
+    if (rc) rc.textContent = STATE.items.length;
   }
 }
 
@@ -1811,7 +1892,7 @@ const ENDPOINTS = [
   { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
     params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
   { name: 'Score', action: 'score', group: 'debug', method: 'GET', desc: '单条标题打分', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
-  { name: 'Classify', action: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Classify Single', action: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类 (快捷)', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
   { name: 'Batch Score', action: 'batch-score', group: 'debug', method: 'POST', desc: '批量打分 (POST)', params: [] },
   { name: 'Save', action: 'save', group: 'debug', method: 'POST', desc: '手动入库 (POST)', params: [] },
   { name: 'List', action: 'list', group: 'debug', method: 'GET', desc: 'R2 prefix 列表', params: [{ key: 'prefix', label: 'prefix', type: 'text' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
@@ -1819,10 +1900,45 @@ const ENDPOINTS = [
   { name: 'Zaker Hot', action: 'zaker-hot', group: 'debug', method: 'GET', desc: '拉 ZAKER 热点 (调试)', params: [] },
   { name: 'Process', action: 'process', group: 'debug', method: 'GET', desc: '手动触发 process (cron normally)', params: [] },
   { name: 'Knowledge', action: 'knowledge', group: 'debug', method: 'GET', desc: '知识累积 daily/topic', params: [{ key: 'type', label: 'type', type: 'select', options: ['daily', 'topic'], default: 'daily' }] },
+  // entity sub-actions
+  { name: 'Entity Candidates', action: 'entity', type: 'candidates', group: 'daily', method: 'GET', desc: '候选实体列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Entity Selflearn', action: 'entity', type: 'selflearn', group: 'daily', method: 'GET', desc: '自学习 entity 追加训练',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Entity Process', action: 'entity', type: 'process', group: 'daily', method: 'GET', desc: '手动触发 entity 流程',
+    params: [] },
+  { name: 'Entity Finalized', action: 'entity', type: 'finalized', group: 'daily', method: 'GET', desc: '已采纳实体列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Entity Noise Anchors', action: 'entity', type: 'noise-anchors', group: 'daily', method: 'GET', desc: '噪音词锚点列表',
+    params: [] },
+  { name: 'Entity Noise', action: 'entity', type: 'noise', group: 'daily', method: 'GET', desc: '噪音实体列表',
+    params: [] },
+  // event sub-actions
+  { name: 'Event Clusters', action: 'event', type: 'clusters', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster 列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Event Cluster', action: 'event', type: 'cluster', group: 'daily', method: 'GET', desc: '单条 cluster 明细',
+    params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
+  { name: 'Event Process', action: 'event', type: 'process', group: 'daily', method: 'GET', desc: '手动触发 event 流程',
+    params: [] },
+  { name: 'Event Review', action: 'event', type: 'review', group: 'daily', method: 'GET', desc: '待审核 event 列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Event Threshold', action: 'event', type: 'threshold', group: 'daily', method: 'GET', desc: 'Jaccard 阈值配置查询',
+    params: [] },
+  // classify sub-actions
+  { name: 'Classify', action: 'classify', type: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类',
+    params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Classify Seeds', action: 'classify', type: 'seeds', group: 'debug', method: 'GET', desc: '分类种子词列表',
+    params: [] },
+  { name: 'Classify Add Seed', action: 'classify', type: 'add-seed', group: 'debug', method: 'GET', desc: '追加分类种子词',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }, { key: 'category', label: 'category', type: 'text', required: true }] },
+  { name: 'Classify Remove Seed', action: 'classify', type: 'remove-seed', group: 'debug', method: 'GET', desc: '删除分类种子词',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }] },
+  { name: 'Classify Review', action: 'classify', type: 'review', group: 'debug', method: 'GET', desc: '分类评审状态',
+    params: [] },
 ];
 const GROUPS = {
-  daily: { name: '日常检查', desc: 'pull × 5 + logs + ping + health + content + trend + entity + event' },
-  debug: { name: '内部调试', desc: 'score / classify / batch-score / save / list / embed / zaker-hot / process / knowledge / model-test / ai-test' }
+  daily: { name: '日常检查', desc: 'pull × 4 + trend + entity 6-type + event 5-type + logs + ping + health + content' },
+  debug: { name: '内部调试', desc: 'score / classify 5-type + batch-score + save + list + embed + zaker-hot + process + knowledge + model-test + ai-test' }
 };
 
 function highlightJson(json) {
@@ -3279,7 +3395,9 @@ const HELP_GROUPS = [
     { keys: ['⌘', 'K'], desc: '打开 / 关闭快捷键帮助' },
     { keys: ['⌘', '?'], desc: '同上 (Windows 友好)' },
     { keys: ['⌘', ','], desc: '打开设置' },
-    { keys: ['Esc'], desc: '关闭弹窗 / 收起展开卡片' },
+    { keys: ['Esc'], desc: '关闭弹窗 / 收起展开卡片 / 关闭浮窗' },
+    { keys: ['1'], desc: '切换到 Dashboard' },
+    { keys: ['2'], desc: '切换到 Reader (新闻时间线)' },
   ]},
   { title: 'Dashboard', items: [
     { keys: ['Overview'], desc: '4 KPI 卡 + 趋势图 + 最近活动,一眼看出后端跑得好不好' },
@@ -3370,5 +3488,35 @@ if (isConfigured()) {
   setTimeout(openSettings, 400);
 }
 </script>
+
+<!-- ============ READER FLOAT MODAL ============ -->
+<div class="reader-float-backdrop" id="reader-float-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-label="新闻全文">
+  <div class="reader-float">
+    <div class="reader-float-header">
+      <div class="reader-float-title" id="rfloat-title">正文中…</div>
+      <button class="reader-float-close" id="rfloat-close" title="关闭 (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="reader-float-body">
+      <div class="reader-float-loading" id="rfloat-loading">
+        <div class="reader-float-loading-spinner"></div>
+        <span>加载全文中…</span>
+      </div>
+      <div class="reader-float-error" id="rfloat-error" style="display:none;"></div>
+      <div class="reader-float-content">
+        <iframe id="rfloat-iframe" style="display:none;" sandbox="allow-scripts allow-same-origin allow-forms" title="新闻全文"></iframe>
+      </div>
+    </div>
+    <div class="reader-float-source" id="rfloat-source" style="display:none;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span>来源:</span>
+      <a id="rfloat-source-link" href="#" target="_blank" rel="noopener noreferrer">—</a>
+    </div>
+    <div class="reader-float-footer">
+      <span>按</span><span class="kbd">Esc</span><span>或点击背景关闭</span>
+    </div>
+  </div>
+</div>
 </body>
 </html>
