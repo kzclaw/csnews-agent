@@ -4,7 +4,7 @@
 //用途：标题评分（热词/超热/数字/长度）+3 个路由阈值常量
 // + hashStr工具（用于 topic_key 生成）
 //
-// NOTE: scoreRule max=7.6, AI_ROUTE_R_THRESHOLD 必须 <=7.6 才能 reachable
+// NOTE: scoreRule max=9.1 (5.5 base + 2.0 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
 //
 // O11 Feedback Loop integration (v0.36.22):
 //   scoreRuleWithWeights() uses dynamic hot-word weights from score_rule_weights table.
@@ -14,8 +14,8 @@ import type { Env } from './shared';
 import { DEFAULT_HOT_WORD_WEIGHTS } from './score-rule-weights';
 
 // R threshold for Workers AI routing (Neurons saving)
-// NOTE: scoreRule max=8.6 (5 base + 2 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
-//       threshold must be <= 8.6 to be reachable
+// NOTE: scoreRule max=9.1 (5.5 base + 2.0 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
+//       threshold must be <= 9.1 to be reachable
 export const AI_ROUTE_R_THRESHOLD = 7.0;
 export const TOPIC_MATCH_THRESHOLD = 0.72;
 export const R2_DUP_THRESHOLD = 0.88;
@@ -42,7 +42,7 @@ const DEFAULT_HOT_WORDS = [
   '革命',
   '创历史',
 ];
-const SUPER_HOT_WORDS = ['紧急', '突发', '重磅'];
+const SUPER_HOT_WORDS = ['紧急', '突发', '重磅', '震惊', '史上最强', '首款'];
 
 /**
  * Core scoring helper — uses given weight map (or defaults).
@@ -58,7 +58,7 @@ export function applyScore(
   const hotBase = superHot ? 2.0 : matchedHotWords.length > 0 ? 1.2 : 0;
   const numBonus = /\d+/.test(title) ? 0.5 : 0;
   const lenBonus = title.length > 20 && title.length < 35 ? 0.3 : 0;
-  const exclaimBonus = title.includes('!') || title.includes('?') ? 0.3 : 0;
+  const exclaimBonus = /[!?！？?]/.test(title) ? 0.3 : 0;
   const multiHotBonus = matchedHotWords.length >= 3 ? 0.5 : matchedHotWords.length >= 2 ? 0.3 : 0;
 
   // Dynamic weight: apply per-hot-word multiplier from DB weights
@@ -69,7 +69,7 @@ export function applyScore(
     dynamicWeight = avgWeight;
   }
 
-  let score = 5.0 + hotBase * dynamicWeight + numBonus + lenBonus + exclaimBonus + multiHotBonus;
+  let score = 5.5 + hotBase * dynamicWeight + numBonus + lenBonus + exclaimBonus + multiHotBonus;
   score = Math.min(10, Math.round(score * 10) / 10);
   return { score, matchedHotWords, superHot };
 }
