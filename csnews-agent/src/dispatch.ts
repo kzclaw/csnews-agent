@@ -89,18 +89,6 @@ type Action = (typeof ALLOWED_ACTIONS)[number];
 const DEFAULT_ACTION: Action = 'ping';
 
 /**
- * CORS preflight (OPTIONS) 响应
- * v0.33 确定: 所有 endpoint 统一 OPTIONS 处理
- */
-function handleCorsPreflight(request: Request): Response | null {
-  if (request.method === 'OPTIONS') {
-    const origin = request.headers.get('Origin');
-    return new Response(null, { headers: corsHeaders(origin) });
-  }
-  return null;
-}
-
-/**
  * 调度 20 action 到对应 handler
  *
  * @returns handler 返回的 Response (unknown action 返 400)
