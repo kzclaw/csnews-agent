@@ -34,6 +34,7 @@ export async function handleHealthAction(
   const checks: Record<string, { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: any }> =
     {};
   const result: any = { status: 'ok', ts };
+  result.worker_version = env.WORKER_VERSION || 'unknown';
 
   // 1-2. last_process_at + cron_health
   const lastProcessResult = await checkLastProcessAt(env, ts);
