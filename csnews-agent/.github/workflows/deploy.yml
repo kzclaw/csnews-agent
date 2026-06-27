@@ -29,6 +29,6 @@ jobs:
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
         with:
-          wranglerVersion: '3'
+          wranglerVersion: '4'
           workingDirectory: csnews-agent
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
