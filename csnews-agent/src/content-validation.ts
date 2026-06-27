@@ -14,8 +14,8 @@
 // UUID v4 regex (RFC 4122 简化版, 接受 v1-5 因为 Supabase uuid-ossp / pgcrypto 都可能生成)
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Allowed content formats (白名单, 用于 validateFormat)
 const ALLOWED_FORMATS = ['text', 'html', 'json'] as const;
-type ContentFormat = (typeof ALLOWED_FORMATS)[number];
 
 export const RATE_LIMIT_PER_MIN = 60;
 export const RATE_KEY_PREFIX = 'content_rate:';
@@ -54,7 +54,7 @@ export function validateFormat(format: string): ValidationResult {
     return { ok: false, error: 'invalid_format', reason: 'format 不能为空, 默认为 json' };
   }
   const normalized = format.toLowerCase();
-  if (!ALLOWED_FORMATS.includes(normalized as ContentFormat)) {
+  if (!ALLOWED_FORMATS.includes(normalized as typeof ALLOWED_FORMATS[number])) {
     return {
       ok: false,
       error: 'invalid_format',
