@@ -1,0 +1,74 @@
+version: 1
+plan:
+  name: 'csnews-cron-recovery-verify'
+  max_concurrency: 1
+  max_consecutive_failures: 2
+  max_cycles: 3
+  auto_reject_retries: 1
+tasks:
+  - id: cron-recovery
+    title: '手动触发 entity selflearn + event process，验证 cron 修复后系统恢复'
+    prompt: |
+      ## OKR 摘要
+      CSNEWS Agent 项目，O14KR2（过度工程清理）+ O14KR3（console.log → logEvent）+ O14KR4（jsonResponse）已全部完成。v0.36.35 修复 cron 停摆（deploy.yml working-directory bug + wrangler deploy）已由 CEO root session 完成，现在需要验证系统恢复正常。
+
+      ## 项目路径
+      /Users/zitkwok/Library/Mobile Documents/iCloud~md~obsidian/Documents/Kz Ob/第二大脑/📂 项目/CSNEWS AGENT/GitHub
+
+      ## Bearer Token（环境变量）
+      $CSNEWS_BEARER_TOKEN
+
+      ## Worker URL
+      https://csnews.kwokzit.info
+
+      ## 任务：手动触发 entity + event 验证系统恢复
+
+      1. **触发 entity selflearn**（验证 entity_freshness 从 degraded 恢复）：
+         ```bash
+         curl -s -X POST "https://csnews.kwokzit.info/?action=entity" \
+           -H "Authorization: Bearer $CSNEWS_BEARER_TOKEN" \
+           -H "Content-Type: application/json" \
+           -d '{"type":"selflearn"}'
+         ```
+         期望：200，返回 candidates 列表
+
+      2. **触发 entity process**（把 candidates 写入 finalized）：
+         ```bash
+         curl -s -X POST "https://csnews.kwokzit.info/?action=entity" \
+           -H "Authorization: Bearer $CSNEWS_BEARER_TOKEN" \
+           -H "Content-Type: application/json" \
+           -d '{"type":"process"}'
+         ```
+
+      3. **触发 event clustering**（验证 event_freshness 从 down 恢复）：
+         ```bash
+         curl -s -X POST "https://csnews.kwokzit.info/?action=event" \
+           -H "Authorization: Bearer $CSNEWS_BEARER_TOKEN" \
+           -H "Content-Type: application/json" \
+           -d '{"type":"process"}'
+         ```
+
+      4. **检查 health 端点**（验证 cron_health 状态）：
+         ```bash
+         curl -s -H "Authorization: Bearer $CSNEWS_BEARER_TOKEN" \
+           "https://csnews.kwokzit.info/?action=health" | \
+           python3 -m json.tool | grep -E "status|cron_health|entity_freshness|event_freshness|last_process"
+         ```
+         期望：entity_freshness 和 event_freshness 状态改善
+
+      5. **写 OKR changelog**（在 tasks/csnews-agent-okr.md 末尾追加）：
+         - 在 v0.36.35 段（line 8808 开始）追加完成记录：
+           - ✅ wrangler deploy 成功（commit 4b8bbe0 deploy.yml fix）
+           - ✅ 4 个 cron trigger 重新注册（scheduled + entity + feedback + archive）
+           - ✅ entity selflearn 手动触发验证成功
+           - ✅ event clustering 手动触发验证成功
+           - ⚠️ cron 自然触发验证：等待 08:00 北京时间验证（首次整点 cron）
+         - 把 v0.36.35 段末尾的"待操作"清单全部标记完成（[x]）
+
+      ## 约束
+      - 只做 HTTP 触发 + OKR 写，不要改代码
+      - Bearer token 从环境变量 `$CSNEWS_BEARER_TOKEN` 读，不要硬编码
+      - 完成后汇报每个步骤的实际结果（HTTP 状态码 + 关键字段）
+    assigned_to: csnews
+    verify_skip_reason: 'HTTP 触发结果直接可见，health 端点自验证，无需独立 verifier'
+    max_retries: 1
