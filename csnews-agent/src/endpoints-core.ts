@@ -216,9 +216,7 @@ export async function handleBatchScoreAction(
     })
   );
 
-  return new Response(JSON.stringify({ count: results.length, results }, null, 2), {
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse({ count: results.length, results }, cors);
 }
 
 // ===================== fission =====================

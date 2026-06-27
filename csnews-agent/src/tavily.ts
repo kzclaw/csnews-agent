@@ -5,7 +5,7 @@
 // Cross-source dedup: each article is checked against Vectorize
 // before insertion (similarity > 0.88 → skip).
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { logEvent } from './log';
 import {
   embedTitle,
@@ -220,16 +220,16 @@ export async function runTavilyPipeline(
 
   // Nothing fetched
   if (allArticles.length === 0) {
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         source: 'tavily',
         fetched: 0,
         inserted: 0,
         skipped_duplicates: 0,
         errors: fetchErrors,
         elapsed_ms: Date.now() - start,
-      }),
-      { headers: { 'Content-Type': 'application/json', ...cors } }
+      },
+      cors
     );
   }
 
@@ -339,8 +339,8 @@ export async function runTavilyPipeline(
   const inserted = batchIds.filter(Boolean).length;
   const skipped = results.filter((r) => r.stored_reason === 'same_topic_duplicate').length;
 
-  return new Response(
-    JSON.stringify({
+  return jsonResponse(
+    {
       source: 'tavily',
       fetched: uniqueArticles.length,
       inserted,
@@ -348,7 +348,7 @@ export async function runTavilyPipeline(
       errors: fetchErrors,
       elapsed_ms: Date.now() - start,
       items: results,
-    }),
-    { headers: { 'Content-Type': 'application/json', ...cors } }
+    },
+    cors
   );
 }

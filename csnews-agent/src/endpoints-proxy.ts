@@ -15,7 +15,7 @@
 //   - 无效 URL: 400 Bad Request + { error, reason }
 // ============================================================
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { checkRateLimit, rateLimitResponse } from './utils';
 import { RATE_LIMIT_PER_MIN, rateKeyForIp } from './content-validation';
 import { parseHTML } from 'linkedom';
@@ -31,10 +31,7 @@ export async function handleProxyAction(
   // 1. 输入校验: url 参数必填
   const targetUrl = url.searchParams.get('url');
   if (!targetUrl) {
-    return new Response(
-      JSON.stringify({ error: 'missing_url', reason: 'url 参数必填' }),
-      { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({ error: 'missing_url', reason: 'url 参数必填' }, cors, { status: 400 });
   }
 
   // 2. URL 格式校验
@@ -45,10 +42,7 @@ export async function handleProxyAction(
       throw new Error('只支持 http/https');
     }
   } catch {
-    return new Response(
-      JSON.stringify({ error: 'invalid_url', reason: 'url 格式非法' }),
-      { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({ error: 'invalid_url', reason: 'url 格式非法' }, cors, { status: 400 });
   }
 
   // 3. 反爬限流 (单 IP 60 req/min, 复用 content 端点 KV key 格式)
@@ -73,23 +67,25 @@ export async function handleProxyAction(
     clearTimeout(timeoutId);
 
     if (!resp.ok) {
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           error: 'fetch_failed',
           reason: `目标站点返回 HTTP ${resp.status}`,
-        }),
-        { status: 502, headers: { 'Content-Type': 'application/json', ...cors } }
+        },
+        cors,
+        { status: 502 }
       );
     }
 
     const contentType = resp.headers.get('content-type') || '';
     if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) {
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           error: 'unsupported_content_type',
           reason: `目标不是 HTML 页面 (${contentType || '无 Content-Type'}), 无法提取正文`,
-        }),
-        { status: 415, headers: { 'Content-Type': 'application/json', ...cors } }
+        },
+        cors,
+        { status: 415 }
       );
     }
 
@@ -100,17 +96,11 @@ export async function handleProxyAction(
       e.name === 'AbortError' || e.message?.includes('aborted')
         ? '请求超时 (10s)'
         : `fetch 失败: ${e.message || String(e)}`;
-    return new Response(
-      JSON.stringify({ error: 'fetch_failed', reason }),
-      { status: 502, headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({ error: 'fetch_failed', reason }, cors, { status: 502 });
   }
 
   if (!fetchOk || !html) {
-    return new Response(
-      JSON.stringify({ error: 'fetch_failed', reason: '目标页面内容为空' }),
-      { status: 502, headers: { 'Content-Type': 'application/json', ...cors } }
-    );
+    return jsonResponse({ error: 'fetch_failed', reason: '目标页面内容为空' }, cors, { status: 502 });
   }
 
   // 5. Readability 提取正文
@@ -120,9 +110,10 @@ export async function handleProxyAction(
     const article = reader.parse();
 
     if (!article || !article.content) {
-      return new Response(
-        JSON.stringify({ error: 'extraction_failed', reason: '无法从页面提取正文内容' }),
-        { status: 502, headers: { 'Content-Type': 'application/json', ...cors } }
+      return jsonResponse(
+        { error: 'extraction_failed', reason: '无法从页面提取正文内容' },
+        cors,
+        { status: 502 }
       );
     }
 
@@ -133,12 +124,13 @@ export async function handleProxyAction(
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors },
     });
   } catch (e: any) {
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         error: 'extraction_failed',
         reason: `Readability 解析失败: ${e.message || String(e)}`,
-      }),
-      { status: 502, headers: { 'Content-Type': 'application/json', ...cors } }
+      },
+      cors,
+      { status: 502 }
     );
   }
 }

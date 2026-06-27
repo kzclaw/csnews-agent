@@ -3,7 +3,7 @@
 // ============================================================
 // 用途：入口看门（每请求先验证身份）+ 跨域头
 
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 
 /**
  * 鉴权中间件：验证 Bearer Token
@@ -18,10 +18,7 @@ export function authRequest(request: Request, env: Env): Response | null {
 
   // Length check first to prevent timing leak on length mismatch
   if (expected.length !== provided.length) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ error: 'Unauthorized' }, {}, { status: 401 });
   }
 
   // Constant-time comparison to prevent timing attacks
@@ -31,10 +28,7 @@ export function authRequest(request: Request, env: Env): Response | null {
     timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
   };
   if (!subtle.timingSafeEqual(expected, provided)) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ error: 'Unauthorized' }, {}, { status: 401 });
   }
   return null;
 }

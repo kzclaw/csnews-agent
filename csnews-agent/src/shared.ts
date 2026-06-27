@@ -98,7 +98,7 @@ export async function safeJson(res: Response): Promise<any> {
  */
 export function jsonResponse(
   data: unknown,
-  cors: Record<string, string>,
+  cors: Record<string, string> = {},
   init?: ResponseInit
 ): Response {
   return new Response(JSON.stringify(data), {

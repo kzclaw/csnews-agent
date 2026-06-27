@@ -82,9 +82,10 @@ export async function handleLogsAction(
       }
     }
   } catch (e: any) {
-    return new Response(
-      JSON.stringify({ error: 'r2 unavailable', detail: e?.message || String(e) }),
-      { status: 503, headers: { 'Content-Type': 'application/json', ...cors } }
+    return jsonResponse(
+      { error: 'r2 unavailable', detail: e?.message || String(e) },
+      cors,
+      { status: 503 }
     );
   }
 
@@ -92,8 +93,5 @@ export async function handleLogsAction(
   const items = entries.slice(0, limit);
   const truncated = entries.length > items.length;
 
-  return new Response(
-    JSON.stringify({ date, hour, count: items.length, total: entries.length, truncated, items }),
-    { headers: { 'Content-Type': 'application/json', ...cors } }
-  );
+  return jsonResponse({ date, hour, count: items.length, total: entries.length, truncated, items }, cors);
 }

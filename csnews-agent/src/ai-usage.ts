@@ -84,18 +84,15 @@ export async function handleAiUsageAction(env: Env, cors: Record<string, string>
     callsByLevel[l] = levelTotals[l]?.calls ?? 0;
   }
 
-  return new Response(
-    JSON.stringify(
-      {
-        days: 7,
-        entries,
-        total_entries: entries.length,
-        // L1-L6 category breakdown
-        ai_calls_breakdown: callsByLevel,
-      },
-      null,
-      2
-    ),
-    { status: 200, headers: { 'Content-Type': 'application/json', ...cors } }
+  return jsonResponse(
+    {
+      days: 7,
+      entries,
+      total_entries: entries.length,
+      // L1-L6 category breakdown
+      ai_calls_breakdown: callsByLevel,
+    },
+    cors,
+    { status: 200 }
   );
 }

@@ -631,18 +631,14 @@ export async function handleMCPAction(
 ): Promise<Response> {
   // Only accept POST (MCP tools write operations)
   if (request.method !== 'POST') {
-    return new Response(
-      JSON.stringify(
-        buildErrorResponse(
-          null,
-          MCP_ERROR_CODES.INVALID_REQUEST,
-          'MCP endpoint requires POST method'
-        )
+    return jsonResponse(
+      buildErrorResponse(
+        null,
+        MCP_ERROR_CODES.INVALID_REQUEST,
+        'MCP endpoint requires POST method'
       ),
-      {
-        status: 405,
-        headers: { 'Content-Type': 'application/json', Allow: 'POST', ...cors },
-      }
+      cors,
+      { status: 405, headers: { Allow: 'POST' } }
     );
   }
 
@@ -651,39 +647,27 @@ export async function handleMCPAction(
   try {
     bodyText = await request.text();
   } catch {
-    return new Response(
-      JSON.stringify(
-        buildErrorResponse(null, MCP_ERROR_CODES.PARSE_ERROR, 'Failed to read request body')
-      ),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return jsonResponse(
+      buildErrorResponse(null, MCP_ERROR_CODES.PARSE_ERROR, 'Failed to read request body'),
+      cors,
+      { status: 400 }
     );
   }
 
   if (!bodyText || !bodyText.trim()) {
-    return new Response(
-      JSON.stringify(
-        buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, 'Request body is empty')
-      ),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return jsonResponse(
+      buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, 'Request body is empty'),
+      cors,
+      { status: 400 }
     );
   }
 
   const parsed = parseJSONRPCRequest(bodyText);
   if (!parsed) {
-    return new Response(
-      JSON.stringify(
-        buildErrorResponse(null, MCP_ERROR_CODES.PARSE_ERROR, 'Invalid JSON-RPC 2.0 request')
-      ),
-      {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return jsonResponse(
+      buildErrorResponse(null, MCP_ERROR_CODES.PARSE_ERROR, 'Invalid JSON-RPC 2.0 request'),
+      cors,
+      { status: 400 }
     );
   }
 
@@ -696,30 +680,22 @@ export async function handleMCPAction(
   if (isBatch) {
     const batch = parsed as JSONRPCRequest[];
     if (batch.length === 0) {
-      return new Response(
-        JSON.stringify(
-          buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, 'Batch request cannot be empty')
-        ),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
+      return jsonResponse(
+        buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, 'Batch request cannot be empty'),
+        cors,
+        { status: 400 }
       );
     }
     // Limit batch size to prevent abuse
     if (batch.length > 50) {
-      return new Response(
-        JSON.stringify(
-          buildErrorResponse(
-            null,
-            MCP_ERROR_CODES.INVALID_REQUEST,
-            'Batch request exceeds maximum of 50 items'
-          )
+      return jsonResponse(
+        buildErrorResponse(
+          null,
+          MCP_ERROR_CODES.INVALID_REQUEST,
+          'Batch request exceeds maximum of 50 items'
         ),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
+        cors,
+        { status: 400 }
       );
     }
 
@@ -805,20 +781,15 @@ export async function handleMCPAction(
 // ============================================================
 
 export function handleMCPListAction(_request: Request, cors: Record<string, string>): Response {
-  return new Response(
-    JSON.stringify({
-      jsonrpc: '2.0',
-      id: null,
-      result: {
-        tools: MCP_TOOLS.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-        })),
-      },
-    }),
-    {
-      headers: { 'Content-Type': 'application/json', ...cors },
-    }
-  );
+  return jsonResponse({
+    jsonrpc: '2.0',
+    id: null,
+    result: {
+      tools: MCP_TOOLS.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+      })),
+    },
+  }, cors);
 }

@@ -84,12 +84,10 @@ export async function handleContentAction(
   );
   const newsData = (await safeJson(newsRes)) as NewsHotspotRow[];
   if (!newsData || newsData.length === 0) {
-    return new Response(
-      JSON.stringify({ error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` }),
-      {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...cors },
-      }
+    return jsonResponse(
+      { error: 'not_found', reason: `id=${id} 在 news_hotspots 表不存在` },
+      cors,
+      { status: 404 }
     );
   }
   const news = newsData[0];
@@ -381,9 +379,7 @@ export async function handleTrendAction(
   // 6. 监控计数
   ctx.waitUntil(incrementHitCounter(env, ctx, trendHitsKeyForToday, TREND_PAYLOAD_LIMIT_BYTES));
 
-  return new Response(responseStr, {
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse(JSON.parse(responseStr), cors);
 }
 
 // ===================== knowledge (早晨日报金句入口) =====================
@@ -440,15 +436,13 @@ export async function handleKnowledgeAction(
     description = 'knowledge daily 索引 (早晨日报入口, 跨 topic 累积)';
   } else if (type === 'topic') {
     if (!topicId) {
-      return new Response(
-        JSON.stringify({
+      return jsonResponse(
+        {
           error: 'internal_logic',
           reason: 'topic_id 缺失 (validateTopicId 应已拦截)',
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...cors },
-        }
+        },
+        cors,
+        { status: 500 }
       );
     }
     const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
@@ -482,9 +476,7 @@ export async function handleKnowledgeAction(
   // 5. 监控计数 (跟 trend 同模式, 独立 prefix)
   ctx.waitUntil(incrementHitCounter(env, ctx, knowledgeHitsKeyForToday, KNOWLEDGE_PAYLOAD_LIMIT_BYTES));
 
-  return new Response(responseStr, {
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse(JSON.parse(responseStr), cors);
 }
 
 // ===================== runKnowledgeAccumulation (cron inline 调用) =====================
