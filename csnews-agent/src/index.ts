@@ -306,7 +306,7 @@ export async function classify(title: string, env: Env): Promise<string> {
 // ============================================================
 // 评分规则
 // ============================================================
-// R threshold for Workers AI routing (KR4: Neurons saving)
+// R threshold for Workers AI routing
 // NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
 const AI_ROUTE_R_THRESHOLD = 7.0;
 const TOPIC_MATCH_THRESHOLD = 0.72;
@@ -336,39 +336,7 @@ export function scoreRule(title: string): { score: number; reason: string; isHig
   return { score, reason: `热词:${hasHot} 超热:${hasSuperHot} 数字:${hasNum} 长:${len} 多热:${hotCount}`, isHigh: score >= AI_ROUTE_R_THRESHOLD };
 }
 
-// ============================================================
-// Workers AI 响应解析
-// env.AI.run() 返回格式:{ response: string, usage: {...} }
-// ============================================================
-function extractText(resp: any): string {
-  if (typeof resp === 'string') return resp.trim();
-  if (resp && typeof resp === 'object') {
-    const text = (resp.response || '').trim();
-    if (text) return text;
-  }
-  return '';
-}
 
-// ============================================================
-// Workers AI 裂变报告生成
-// ============================================================
-// Workers AI 裂变报告生成
-// KR4: only call AI when R >= AI_ROUTE_R_THRESHOLD
-async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
-  if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
-  try {
-    const resp = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-      messages: [
-        { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` }
-      ],
-      max_tokens: 200,
-      temperature: 0.3,
-    }) as AiTextResponse;
-    return extractText(resp) || '(无AI输出)';
-  } catch (e: any) {
-    return `(AI错误: ${e.message})`;
-  }
-}
 
 // ============================================================
 // 主 Worker
