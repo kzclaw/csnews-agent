@@ -94,6 +94,7 @@ export async function handleProcessAction(
     }
 
     return jsonResponse({
+      worker_version: env.WORKER_VERSION || 'unknown',
       processed: results.length,
       cleaned: cleaned?.deleted_topic_count || 0,
       items: results,
