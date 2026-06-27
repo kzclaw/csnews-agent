@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![vitest](https://img.shields.io/badge/vitest-313%20contracts-4DB899?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
 [![CF Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://workers.cloudflare.com/)
-[![Cron](https://img.shields.io/badge/cron-hourly-2EA44F?style=flat-square&logo=clockify&logoColor=white)](#-定时任务)
+[![Cron](https://img.shields.io/badge/cron-4%20triggers-2EA44F?style=flat-square&logo=clockify&logoColor=white)](#-定时任务)
 
 </div>
 
@@ -113,12 +113,21 @@ curl -H "Authorization: Bearer $TOKEN" \
 ```toml
 # wrangler.toml
 [triggers]
-crons = [ "0 * * * *" ]  # 每小时整点（UTC）跑 process
+# 4/5 cron 槽位（CF Free Plan 上限 5，剩余 1 槽位供 fission worker）
+# 0 0 * * *         → scheduledProcess: ZAKER + Tavily + knowledge（每日 00:00 UTC）
+# 0 3,15 * * *      → scheduledEntity: entity selflearn + event clustering（每日 03:00 & 15:00 UTC）
+# 0 4 * * *         → scheduledFeedback: feedback loop（每日 04:00 UTC）
+# 0 1 1 * *         → scheduledArchiveOldEntities: 30d+ 归档（每月 1 号 01:00 UTC）
+crons = [
+  "0 0 * * *",      # 每日 00:00 UTC
+  "0 3,15 * * *",   # 每日 03:00 & 15:00 UTC
+  "0 4 * * *",      # 每日 04:00 UTC
+  "0 1 1 * *"       # 每月 1 号 01:00 UTC
+]
 ```
 
-- **频率**：每小时整点 UTC
 - **Handler**：`src/index.ts` 的 `async scheduled()`
-- **Free tier 限制**：每账号 5 个 cron，CPU 10ms/次
+- **Free tier 限制**：每账号 5 个 cron，CPU 10ms/次（主 Worker 占 4 个，Fission Worker 占 1 个）
 
 ### 本地测试 cron
 
@@ -164,15 +173,6 @@ open tools/pull-viewer.html
 5. 跑 Supabase migrations
 6. Push 任意 commit → 部署完成
 
-### 方式 2：本地 wrangler
-
-```bash
-cd csnews-agent
-npm install
-wrangler login
-wrangler deploy
-```
-
 ### Secrets 设置
 
 ```bash
@@ -192,13 +192,11 @@ wrangler r2 bucket create csnews-raw
 ### KV Namespace（AI Budget Tracking）
 
 ```bash
-wrangler kv:namespace create AI_USAGE_KV
+wrangler kv namespace create AI_USAGE_KV
 # 输出: { id: "xxxxxxxx" }
 ```
 
 `wrangler.toml` 里的 `id = "YOUR_NAMESPACE_ID"` 需要替换成真实 ID。
-
-**生产部署**：CF GitHub Integration 的 "Configuration file" 需设为 `wrangler.prod.toml`（已加入 `.gitignore`，本地持有）。
 
 ---
 
@@ -207,13 +205,31 @@ wrangler kv:namespace create AI_USAGE_KV
 ```
 csnews-agent/
 ├── src/
-│   ├── index.ts          # 主 Worker + scheduled handler
-│   ├── pull.ts           # 通用 pull 端点
-│   ├── shared.ts         # Supabase / 通用工具
-│   └── cf-types.d.ts     # CF Workers 类型声明
+│   ├── index.ts              # Worker 入口 + dispatch
+│   ├── dispatch.ts          # action 分发
+│   ├── shared.ts             # Supabase / R2 / 通用工具
+│   ├── cf-types.d.ts         # CF Workers 类型声明
+│   ├── types.ts              # 共享类型
+│   ├── types-supabase.ts     # DB 类型
+│   ├── endpoints.ts          # action handler 路由
+│   ├── endpoints-core.ts     # 12 个 action handler（core）
+│   ├── endpoints-process.ts  # process/health/ai-usage/logs
+│   ├── endpoints-trend.ts    # trend/knowledge/content
+│   ├── endpoints-entity.ts  # entity/event
+│   ├── score.ts              # 评分规则
+│   ├── classify.ts           # 分类规则
+│   ├── news-process.ts       # News Self Growth 核心
+│   ├── scheduled.ts          # 4 个 cron handler
+│   ├── feedback.ts           # Feedback Loop
+│   ├── entity-selflearn.ts   # Entity selflearn
+│   ├── entity-process.ts     # Entity process
+│   ├── event-process.ts     # Event clustering
+│   ├── log.ts                # structured logging
+│   ├── pull.ts               # 通用 pull 端点
+│   └── [health-*, ai-*, process-*, etc.]  # 细分模块
 ├── tools/
-│   └── pull-viewer.html  # 浏览器本地 Viewer (HTML, 零依赖)
-├── wrangler.toml         # CF 配置
+│   └── pull-viewer.html      # 浏览器本地 Viewer (HTML, 零依赖)
+├── wrangler.toml              # CF 配置
 ├── package.json
 └── README.md
 ```
@@ -246,5 +262,5 @@ MIT
 
 ---
 
-<sub>Last updated 2026-06-08</sub>
+<sub>Last updated 2026-06-28</sub>
 </div>

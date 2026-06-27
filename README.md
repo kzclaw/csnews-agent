@@ -27,7 +27,7 @@ Cloudflare Workers · Supabase · R2
 - 📊 **三级自生长** — 跟进 → 重要 → 爆炸，话题簇按热度自动升级
 - 🔍 **向量查重** — 相似度阈值聚类，避免重复入库
 - 💾 **零成本架构** — CF Workers / Supabase / R2 全免费层，月成本 **$0**
-- ⏰ **自动运行** — GitHub push → CF 自动 deploy + 每小时 Cron Trigger
+- ⏰ **自动运行** — GitHub push → CF 自动 deploy + 4 个 Cron Trigger（00:00 / 03:00 / 04:00 / 每月 1 日 UTC）
 - 🔌 **通用读 API** — 单个端点 + 13 个参数任意组合
 - 🖥️ **本地 Viewer** — 浏览器可视化拉数据，零部署、Token 存 localStorage
 
@@ -42,7 +42,7 @@ Cloudflare Workers · Supabase · R2
    外部新闻源 ───▶│  ?action=process      │──▶ Supabase (pgvector)
    (Cron 拉取)    │  评分→嵌入→查重→入库 │──▶ R2 (原始 JSON)
                   │  ?action=pull*        │──▶ 任何 HTTP 客户端
-                  │  ⏰ Cron Trigger       │   (Viewer / 下游服务)
+                   │  ⏰ 4 Cron Trigger     │   (Viewer / 下游服务)
                   └────────────┬───────────┘
                                │ Webhook / Realtime
                                ▼
@@ -58,7 +58,7 @@ Cloudflare Workers · Supabase · R2
 1. **Fork 仓库**到你自己的 GitHub
 2. **CF Workers → Connect to Git**（一次性，5 分钟）：
    - Cloudflare Dashboard → Workers & Pages → Create → Import from Git
-   - 选你的 fork → Build command 留空 → Deploy command: `cd csnews-agent && npx wrangler deploy`
+   - 选你的 fork → Build command 留空 → Deploy command: `npx wrangler deploy`
 3. **设置 Secrets**（CF 后台 → Workers → Settings → Variables and Secrets）：
    ```
    BEARER_TOKEN          = 任意 64 字符 hex (API 鉴权)
@@ -70,16 +70,6 @@ Cloudflare Workers · Supabase · R2
 6. **Push 任意 commit** → CF 自动 build + deploy
 
 > 后续所有 `git push origin main` 都会自动触发 deploy + cron 跑起来
-
-### 方式 2：本地 wrangler
-
-```bash
-git clone https://github.com/kzclaw/csnews-agent.git
-cd csnews-agent/csnews-agent
-npm install
-wrangler login
-wrangler deploy
-```
 
 ---
 
@@ -157,5 +147,5 @@ MIT
 
 ---
 
-<sub>Last updated 2026-06-08 · Auto-deployed via Cloudflare Workers Builds</sub>
+<sub>Last updated 2026-06-28 · Auto-deployed via Cloudflare Workers Builds</sub>
 </div>
