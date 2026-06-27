@@ -40,38 +40,6 @@ interface SeedEnvelope<T> {
 }
 
 /**
- * 构造 Seed Envelope (内部用)
- */
-function buildSeedEnvelope<T>(
-  data: T,
-  recordCount: number,
-  state: SeedEnvelope<T>['_seed']['state'],
-  maxContentAgeMin: number
-): SeedEnvelope<T> {
-  return {
-    _seed: {
-      fetchedAt: new Date().toISOString(),
-      recordCount,
-      state,
-      maxContentAgeMin,
-    },
-    data,
-  };
-}
-
-/**
- * 尝试从 Seed Envelope 提取 data (向后兼容旧数据)
- * - 有 _seed 字段 → 返回 data
- * - 无 _seed 字段 → 返回原数据 (兼容 v0.36.25 之前的裸数据)
- */
-function unwrapSeedEnvelope<T>(value: any): T {
-  if (value && typeof value === 'object' && '_seed' in value && 'data' in value) {
-    return value.data as T;
-  }
-  return value as T;
-}
-
-/**
  * 从 Seed Envelope 提取 _seed 元数据 (无 _seed 返回 null)
  */
 export function getSeedMeta(value: any): SeedEnvelope<unknown>['_seed'] | null {
@@ -184,7 +152,10 @@ export async function cacheGet(env: Env, key: string): Promise<any | null> {
     }
     metrics.hits++;
     const parsed = JSON.parse(raw);
-    return unwrapSeedEnvelope(parsed);
+    // 向后兼容: 有 _seed 字段则提取 data, 无则返回原数据
+    return (parsed && typeof parsed === 'object' && '_seed' in parsed && 'data' in parsed)
+      ? parsed.data
+      : parsed;
   } catch (e) {
     metrics.misses++;
     return null;
@@ -215,7 +186,15 @@ export async function cacheSet(
   try {
     const toStore =
       opts?.recordCount !== undefined
-        ? buildSeedEnvelope(value, opts.recordCount, 'ok', opts.maxContentAgeMin ?? -1)
+        ? {
+            _seed: {
+              fetchedAt: new Date().toISOString(),
+              recordCount: opts.recordCount,
+              state: 'ok' as const,
+              maxContentAgeMin: opts.maxContentAgeMin ?? -1,
+            },
+            data: value,
+          }
         : value;
     const serialized = JSON.stringify(toStore);
     const bytes = new TextEncoder().encode(serialized).length;
