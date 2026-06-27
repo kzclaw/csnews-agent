@@ -63,3 +63,4 @@ AGENTS.md
 csnews-agent/AGENTS.md
 .husky/
 csnews-agent/src/test-helpers.ts
+.mavis/
