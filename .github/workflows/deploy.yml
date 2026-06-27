@@ -1,0 +1,35 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: csnews-agent/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+        working-directory: csnews-agent
+
+      - name: Fill KV namespace ID
+        run: sed -i "s/YOUR_NAMESPACE_ID/${{ secrets.AI_USAGE_KV_ID }}/g" wrangler.toml
+        working-directory: csnews-agent
+
+      - name: Deploy with wrangler
+        working-directory: csnews-agent
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler deploy --env production
