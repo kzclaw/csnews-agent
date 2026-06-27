@@ -19,7 +19,7 @@ import { Env } from './shared';
  * Seed Envelope — 所有 KV 缓存数据的统一元数据包
  * 用于 health 端点判断数据新鲜度, 支持区分"news 表有数据但 trends 表空了"等局部故障
  */
-export interface SeedEnvelope<T> {
+interface SeedEnvelope<T> {
   _seed: {
     /** ISO 8601 时间戳, 本次写入时间 */
     fetchedAt: string;
