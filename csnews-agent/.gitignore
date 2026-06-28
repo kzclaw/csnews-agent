@@ -4,6 +4,9 @@ node_modules/
 # Test contracts — committed to repository for CI validation
 validate/
 
+# R2 runtime outputs (auto-generated, not source)
+entity-finalized.json
+
 # Local tools (viewers that need personal config to run)
 # tools/*.html
 # !tools/.gitkeep
