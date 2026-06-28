@@ -5,7 +5,7 @@
  * 5h 配额期外等 entity 表 schema migration 后启用 writeEventClustersToSupabase
  */
 import { Env } from './shared';
-import { runEventClustering, type EventCluster } from './event-cluster';
+import { runEventClustering } from './event-cluster';
 import { loadReviewedCandidates, type EntityFinalized } from './entity-process';
 import { logEvent } from './log';
 export { runEventClustering };

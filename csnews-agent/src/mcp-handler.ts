@@ -19,7 +19,7 @@
 
 import { Env, jsonResponse } from './shared';
 import { MCP_ERROR_CODES, type JSONRPCRequest, type JSONRPCResponse } from './mcp-types';
-import { MCP_TOOLS, MCP_TOOLS_COUNT } from './mcp-tools';
+import { MCP_TOOLS } from './mcp-tools';
 import {
   executeTool,
   buildSuccessResponse,
@@ -33,7 +33,7 @@ import { handleMCPProtocolMethod, parseJSONRPCRequest, validateRequest } from '.
 // ============================================================
 
 export { MCP_ERROR_CODES } from './mcp-types';
-export { MCP_TOOLS, MCP_TOOLS_COUNT } from './mcp-tools';
+export { MCP_TOOLS } from './mcp-tools';
 export type { MCPToolInputSchema, MCPTool } from './mcp-types';
 
 // ============================================================

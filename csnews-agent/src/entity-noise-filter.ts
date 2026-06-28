@@ -17,8 +17,7 @@ import { Env } from './shared';
 
 export const ENTITY_NOISE_ANCHORS_R2_KEY = 'entity-noise-anchors.json';
 export const NOISE_THRESHOLD_DEFAULT = 0.85;
-const NOISE_THRESHOLD_MIN = 0.5;
-const NOISE_THRESHOLD_MAX = 0.99;
+
 const NOISE_ANCHORS_DEFAULT: string[] = [
   // 18:09 确定 batch incorrect 20 noise anchors
   // 17 通用词

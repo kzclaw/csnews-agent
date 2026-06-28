@@ -81,12 +81,12 @@ const ALLOWED_ACTIONS = [
   'tavily',
   'proxy',
 ] as const;
-type Action = (typeof ALLOWED_ACTIONS)[number];
+
 
 /**
  * 默认 action (空 action 时的 fallback, v0.33 确定 'ping' = 健康检查)
  */
-const DEFAULT_ACTION: Action = 'ping';
+
 
 /**
  * 调度 20 action 到对应 handler

@@ -16,16 +16,13 @@ import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn
 import { logEvent } from './log';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
 import {
-  ENTITY_NOISE_ANCHORS_R2_KEY,
   loadNoiseAnchors,
-  NOISE_THRESHOLD_DEFAULT,
 } from './entity-noise-filter';
 import {
   runEventProcess,
   EVENT_CLUSTERS_R2_KEY,
-  EVENT_CLUSTERS_INDEX_R2_KEY,
 } from './event-process';
-import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event-threshold';
+import { recordReview, loadThresholdHistory } from './event-threshold';
 import { runEventClustering, type EventCluster } from './event-cluster';
 import {
   checkRateLimit,

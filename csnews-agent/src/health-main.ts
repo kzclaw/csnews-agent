@@ -7,7 +7,7 @@
 // ============================================================
 
 import { Env, jsonResponse } from './shared';
-import { MCP_TOOLS_COUNT } from './mcp-handler';
+import { MCP_TOOLS_COUNT } from './mcp-tools';
 import {
   checkLastProcessAt,
   checkSecretResolved,

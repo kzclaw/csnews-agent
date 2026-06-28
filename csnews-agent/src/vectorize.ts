@@ -5,7 +5,6 @@
 // Types are defined globally in cf-types.d.ts (ambient declarations)
 
 import { logEvent } from './log';
-import type { R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from './shared';
 
 /**

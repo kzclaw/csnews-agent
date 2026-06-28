@@ -18,7 +18,7 @@
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
-import { ENTITY_CANDIDATES_R2_KEY, type EntityCandidate } from './entity-selflearn';
+import { ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 
 export const ENTITY_FINALIZED_R2_KEY = 'entity-finalized.json';
 

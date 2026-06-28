@@ -23,7 +23,7 @@ import {
   setNegativeSentinel,
   clearNegativeSentinel,
 } from './cache';
-import type { NewsHotspotRow, PullTopicRow } from './types';
+import type { PullTopicRow } from './types';
 
 // ====== Type 白名单配置(v0.31) ======
 

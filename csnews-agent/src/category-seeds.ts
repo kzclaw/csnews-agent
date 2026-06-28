@@ -11,7 +11,6 @@
  *   - 0 Neurons 消耗 (bge-m3 走 CF Workers AI 独立池)
  */
 import { Env } from './shared';
-import { cosineSimilarity as noiseCosineSimilarity } from './entity-noise-filter';
 
 export const CATEGORY_SEEDS_R2_KEY = 'category-seeds.json';
 

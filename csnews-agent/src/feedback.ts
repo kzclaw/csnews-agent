@@ -17,7 +17,7 @@
 //   - scoreRule hot-word weights loaded from score_rule_weights table
 // ============================================================
 
-import { Env, getSupabaseHost, supabaseFetch } from './shared';
+import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
 import { loadWeights, adjustWeights } from './score-rule-weights';

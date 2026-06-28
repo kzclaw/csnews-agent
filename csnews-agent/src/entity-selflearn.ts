@@ -19,9 +19,7 @@ import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
 import {
   loadNoiseAnchors,
-  bgeM3BatchEmbedding,
   filterNoiseCandidates,
-  type FilterResult,
 } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 import { logEvent } from './log';

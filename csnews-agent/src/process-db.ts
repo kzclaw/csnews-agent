@@ -14,7 +14,6 @@ import { hashStr } from './score';
 import type {
   UpdateTopicScoreResult,
   RecordTrendWithMemberResult,
-  InsertedNewsHotspotRow,
   CreatedTopicRow,
 } from './types';
 import { logEvent } from './log';
