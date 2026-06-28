@@ -1,50 +1,26 @@
 /**
- * CSNEWS Agent · KV 缓存 utility (v0.36.25 · 派活 17)
+ * CSNEWS Agent · KV 缓存 utility
  *
- * 目标: 减少 pull 端点 Supabase 重复查询, 提速 42% (冷查询 1589ms → 暖查询 923ms)
- *
- * 关键决策 (csnews-audit 2026-06-19):
- * - TTL = 1h (3600s): 跟 cron 整点对齐, 数据 stale 1h 可接受
- * - Max value size = 25MB: 防御性 cap (KV hard limit), 拒绝 oversized 防写入失败
- * - KV native expirationTtl only: 简化, 不存额外 expiresAt (避免双时钟漂移)
- * - cache: prefix 隔离: 跟 PROCESS_STATE 现有 prefix 区分 (ai-budget, rate-limit, cron_health)
- * - Silent failure: cache miss / KV 错不阻塞主流程 (缓存是优化, 不是依赖)
- * - Per-isolate metrics: hits / misses / stores / store_failures / hit_rate
- * - Seed Envelope (v0.36.x): 所有 KV 缓存数据统一包装 _seed 元数据包, 用于 health 判断新鲜度
+ * - TTL = 1h (3600s): 跟 cron 整点对齐
+ * - Max value size = 25MB: 防御性 cap (KV hard limit)
+ * - Silent failure: cache miss / KV 错不阻塞主流程
+ * - Seed Envelope: 所有 KV 缓存数据统一包装 _seed 元数据包, 用于 health 判断新鲜度
  */
 
 import { Env } from './shared';
 
-/**
- * Seed Envelope — 所有 KV 缓存数据的统一元数据包
- * 用于 health 端点判断数据新鲜度, 支持区分"news 表有数据但 trends 表空了"等局部故障
- */
-interface SeedEnvelope<T> {
-  _seed: {
-    /** ISO 8601 时间戳, 本次写入时间 */
-    fetchedAt: string;
-    /** 本次写入的记录数 */
-    recordCount: number;
-    /** 数据状态 */
-    state: 'ok' | 'error' | 'empty';
-    /**
-     * 内容最大年龄(分钟), 用于 health 判断新鲜度
-     * - pull 缓存: fetchedAt 到 items 中最新内容的年龄
-     * - last_process_at: fetchedAt 的年龄
-     * - 原子计数器(rate-limit/ai-budget): -1 (不参与 freshness 检查)
-     */
-    maxContentAgeMin: number;
-  };
-  /** 原有数据 */
-  data: T;
-}
+/** Seed Envelope 元数据包 (用于 health 端点判断数据新鲜度) */
+export type SeedMeta = {
+  fetchedAt: string;
+  recordCount: number;
+  state: 'ok' | 'error' | 'empty';
+  maxContentAgeMin: number;
+};
 
-/**
- * 从 Seed Envelope 提取 _seed 元数据 (无 _seed 返回 null)
- */
-export function getSeedMeta(value: any): SeedEnvelope<unknown>['_seed'] | null {
-  if (value && typeof value === 'object' && '_seed' in value && 'data' in value) {
-    return value._seed as SeedEnvelope<unknown>['_seed'];
+/** 提取 _seed 元数据 (无 _seed 返回 null) */
+export function getSeedMeta(value: any): SeedMeta | null {
+  if (value?._seed?.fetchedAt !== undefined && value?.data !== undefined) {
+    return value._seed as SeedMeta;
   }
   return null;
 }
@@ -134,10 +110,8 @@ export function resetCacheMetrics(): void {
 }
 
 /**
- * 读缓存
- * - 命中: parse + unwrap SeedEnvelope + recordHit + return
- * - 未命中 / 解析错: recordMiss + return null (静默, 不阻塞主流程)
- * - 向后兼容: 无 _seed 字段返回原数据 (v0.36.25 之前裸数据)
+ * 读缓存 — 命中 unwrap SeedEnvelope, 未命中/错返回 null (静默)
+ * 向后兼容: 无 _seed 字段返回原数据 (v0.36.25 之前裸数据)
  */
 export async function cacheGet(env: Env, key: string): Promise<any | null> {
   if (!env.PROCESS_STATE) {
@@ -152,32 +126,20 @@ export async function cacheGet(env: Env, key: string): Promise<any | null> {
     }
     metrics.hits++;
     const parsed = JSON.parse(raw);
-    // 向后兼容: 有 _seed 字段则提取 data, 无则返回原数据
-    return parsed && typeof parsed === 'object' && '_seed' in parsed && 'data' in parsed
-      ? parsed.data
-      : parsed;
-  } catch (e) {
+    return parsed?._seed?.fetchedAt !== undefined ? parsed.data : parsed;
+  } catch {
     metrics.misses++;
     return null;
   }
 }
 
-/**
- * 写缓存 (静默失败)
- * - 有 recordCount 时自动包装 SeedEnvelope
- * - 无 recordCount 时写裸数据 (rate-limit 等原子计数器场景)
- */
+/** 写缓存 — 有 recordCount 时自动包装 SeedEnvelope, 无 recordCount 时写裸数据 */
 export async function cacheSet(
   env: Env,
   key: string,
   value: any,
   ttlSeconds: number = DEFAULT_TTL_SECONDS,
-  opts?: {
-    /** 本次写入的记录数 (pull 缓存场景) */
-    recordCount?: number;
-    /** 内容最大年龄(分钟), 用于 health freshness 判断 */
-    maxContentAgeMin?: number;
-  }
+  opts?: { recordCount?: number; maxContentAgeMin?: number }
 ): Promise<void> {
   if (!env.PROCESS_STATE) {
     metrics.store_failures++;
@@ -197,94 +159,62 @@ export async function cacheSet(
           }
         : value;
     const serialized = JSON.stringify(toStore);
-    const bytes = new TextEncoder().encode(serialized).length;
-    if (bytes > MAX_VALUE_SIZE_BYTES) {
+    if (new TextEncoder().encode(serialized).length > MAX_VALUE_SIZE_BYTES) {
       metrics.store_failures++;
       return;
     }
     await env.PROCESS_STATE.put(key, serialized, { expirationTtl: ttlSeconds });
     metrics.stores++;
-  } catch (e) {
+  } catch {
     metrics.store_failures++;
   }
 }
 
-/**
- * 删缓存 (静默, 用于 invalidate)
- */
+/** 删缓存 (静默) */
 export async function cacheDelete(env: Env, key: string): Promise<void> {
   if (!env.PROCESS_STATE) return;
   try {
     await env.PROCESS_STATE.delete(key);
-  } catch (e) {
-    // 静默
-  }
+  } catch {}
 }
 
 // ============================================================
 // Negative Sentinel
 // ============================================================
 
-/**
- * Negative Sentinel key 构造
- * 格式: __CSNEWS_NEG__<original_key>
- */
-function negSentinelKey(key: string): string {
-  return `${NEG_SENTINEL_PREFIX}${key}`;
-}
-
-/**
- * 检查是否有 Negative Sentinel (上游故障标记)
- * - 有 sentinel → 返回 true (跳过重试)
- * - 无 sentinel / 错 → 返回 false (正常 fetch)
- */
+/** 检查是否有 Negative Sentinel (上游故障标记) */
 export async function isNegativeSentinel(env: Env, key: string): Promise<boolean> {
   if (!env.PROCESS_STATE) return false;
   try {
-    const value = await env.PROCESS_STATE.get(negSentinelKey(key));
-    return value !== null;
+    return (await env.PROCESS_STATE.get(`${NEG_SENTINEL_PREFIX}${key}`)) !== null;
   } catch {
     return false;
   }
 }
 
-/**
- * 写入 Negative Sentinel (上游故障时调用)
- * 30s 内相同 key 的 fetch 会被跳过, 保护 AI budget
- */
+/** 写入 Negative Sentinel (30s 跳过重试, 保护 AI budget) */
 export async function setNegativeSentinel(env: Env, key: string): Promise<void> {
   if (!env.PROCESS_STATE) return;
   try {
-    await env.PROCESS_STATE.put(negSentinelKey(key), '1', {
+    await env.PROCESS_STATE.put(`${NEG_SENTINEL_PREFIX}${key}`, '1', {
       expirationTtl: NEG_SENTINEL_TTL,
     });
-  } catch {
-    // 静默
-  }
+  } catch {}
 }
 
-/**
- * 清除 Negative Sentinel (fetch 成功时调用)
- * 成功获取数据后清理标记, 允许下次正常 fetch
- */
+/** 清除 Negative Sentinel (fetch 成功时调用) */
 export async function clearNegativeSentinel(env: Env, key: string): Promise<void> {
   if (!env.PROCESS_STATE) return;
   try {
-    await env.PROCESS_STATE.delete(negSentinelKey(key));
-  } catch {
-    // 静默
-  }
+    await env.PROCESS_STATE.delete(`${NEG_SENTINEL_PREFIX}${key}`);
+  } catch {}
 }
 
-/**
- * 统计当前生效的 Negative Sentinel 数量
- * 用于 health 端点 neg_sentinel_count 指标
- */
+/** 统计当前生效的 Negative Sentinel 数量 */
 export async function countNegativeSentinels(env: Env): Promise<number> {
   if (!env.PROCESS_STATE) return 0;
   try {
-    const list = await env.PROCESS_STATE.list({ prefix: NEG_SENTINEL_PREFIX });
-    return list.keys?.length ?? 0;
+    return (await env.PROCESS_STATE.list({ prefix: NEG_SENTINEL_PREFIX })).keys?.length ?? 0;
   } catch {
     return 0;
   }
