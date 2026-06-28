@@ -3399,15 +3399,22 @@ function openSettings() {
 }
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 function saveSettings() {
-  const baseUrl = document.getElementById('cfg-url').value.trim().replace(/\/+$/, '');
-  const token = document.getElementById('cfg-token').value.trim();
-  if (!baseUrl || !token) { toast('URL 和 Token 必填', 'error'); return; }
-  STATE.config = { baseUrl, token };
-  STORAGE.set('config', STATE.config);
-  closeSettings();
-  toast('已保存', 'success');
-  if (STATE.view === 'dashboard') refreshDashboard();
-  else if (STATE.view === 'reader') { refreshReader(); scheduleHourlySync(); }
+  try {
+    const baseUrl = document.getElementById('cfg-url').value.trim().replace(/\/+$/, '');
+    const token = document.getElementById('cfg-token').value.trim();
+    if (!baseUrl) { toast('Worker URL 必填', 'error'); return; }
+    if (!token) { toast('Bearer Token 必填', 'error'); return; }
+    STATE.config = { baseUrl, token };
+    STORAGE.set('config', STATE.config);
+    closeSettings();
+    toast('已保存', 'success');
+    if (STATE.view === 'dashboard') refreshDashboard();
+    else if (STATE.view === 'reader') { refreshReader(); scheduleHourlySync(); }
+  } catch(e) {
+    console.error('saveSettings error:', e);
+    toast('保存失败：' + e.message, 'error');
+    closeSettings();
+  }
 }
 
 /* ============================================================
@@ -3529,7 +3536,7 @@ if (isConfigured()) {
     <div class="modal-body">
       <div class="field">
         <div class="field-label">Worker URL</div>
-        <input class="field-input" id="cfg-url" type="url" placeholder="https://csnews.kwokzit.info/api/v1" autocomplete="off" spellcheck="false">
+        <input class="field-input" id="cfg-url" type="url" placeholder="https://your-worker.workers.dev/api/v1" autocomplete="off" spellcheck="false">
       </div>
       <div class="field">
         <div class="field-label">Bearer Token</div>
