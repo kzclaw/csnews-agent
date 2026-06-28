@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Test contracts (含内部名称/描述，不入公开仓库)
+# Test contracts — committed to repository for CI validation
 validate/
 
 # Local tools (viewers that need personal config to run)
