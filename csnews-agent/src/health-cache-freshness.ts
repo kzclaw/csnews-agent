@@ -1,10 +1,11 @@
 // ============================================================
-// Pull cache freshness health checks
+// Pull cache freshness health checks (simplified)
 // ============================================================
 
 import { Env } from './shared';
 import { CACHE_PREFIX, getSeedMeta } from './cache';
 
+// Exported for health-checks.ts re-export layer (used by external type consumers)
 export interface CacheKeyHealth {
   key: string;
   recordCount: number;
@@ -20,40 +21,49 @@ export interface HealthGroup {
   cascadedFrom?: string;
 }
 
-function calcKeyStatus(maxContentAgeMin: number): 'ok' | 'stale' | 'down' {
+const GROUP_TYPE_MAP: Record<string, string> = {
+  news: 'news',
+  topics: 'news',
+  warnings: 'news',
+  'fission-pending': 'news',
+  entity: 'entity',
+  event: 'event',
+  trend: 'trend',
+  knowledge: 'knowledge',
+};
+
+function keyStatusOf(maxContentAgeMin: number): 'ok' | 'stale' | 'down' {
   if (maxContentAgeMin < 0) return 'ok';
   if (maxContentAgeMin > 360) return 'down';
   if (maxContentAgeMin > 180) return 'stale';
   return 'ok';
 }
 
-function calcGroupStatus(keys: CacheKeyHealth[]): 'ok' | 'degraded' | 'down' | 'unknown' {
+function groupStatusOf(keys: CacheKeyHealth[]): 'ok' | 'degraded' | 'down' | 'unknown' {
   if (keys.length === 0) return 'unknown';
   let hasDown = false;
   let hasStale = false;
   for (const k of keys) {
     if (k.keyStatus === 'down') hasDown = true;
-    if (k.keyStatus === 'stale') hasStale = true;
+    else if (k.keyStatus === 'stale') hasStale = true;
   }
   if (hasDown) return 'down';
   if (hasStale) return 'degraded';
   return 'ok';
 }
 
-function mapTypeToGroup(type: string): string {
-  if (type === 'news' || type === 'topics' || type === 'warnings' || type === 'fission-pending') {
-    return 'news';
-  }
-  if (type === 'entity') return 'entity';
-  if (type === 'event') return 'event';
-  if (type === 'trend') return 'trend';
-  if (type === 'knowledge') return 'knowledge';
-  return 'unknown';
-}
+const EMPTY_GROUPS = (): Record<string, HealthGroup> => ({
+  news: { status: 'unknown', keys: [] },
+  entity: { status: 'unknown', keys: [] },
+  event: { status: 'unknown', keys: [] },
+  trend: { status: 'unknown', keys: [] },
+  knowledge: { status: 'unknown', keys: [] },
+  unknown: { status: 'unknown', keys: [] },
+});
 
 export async function checkPullCacheFreshness(
   env: Env,
-  ts: number
+  _ts: number
 ): Promise<{
   pull_cache_freshness: {
     groups: Record<string, HealthGroup>;
@@ -63,7 +73,14 @@ export async function checkPullCacheFreshness(
     pull_cache_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
   };
 }> {
-  const groupKeys: Record<string, CacheKeyHealth[]> = {
+  if (!env.PROCESS_STATE) {
+    return {
+      pull_cache_freshness: { groups: EMPTY_GROUPS(), overallStatus: 'down' },
+      checks: { pull_cache_freshness: { status: 'down', detail: 'PROCESS_STATE KV missing' } },
+    };
+  }
+
+  const groupMap: Record<string, CacheKeyHealth[]> = {
     news: [],
     entity: [],
     event: [],
@@ -72,30 +89,16 @@ export async function checkPullCacheFreshness(
     unknown: [],
   };
 
-  const checks: any = {};
-
   try {
-    if (!env.PROCESS_STATE) {
-      const emptyGroups = Object.fromEntries(
-        Object.keys(groupKeys).map((k) => [k, { status: 'down' as const, keys: [] }])
-      );
-      return {
-        pull_cache_freshness: { groups: emptyGroups, overallStatus: 'down' },
-        checks: { pull_cache_freshness: { status: 'down', detail: 'PROCESS_STATE KV missing' } },
-      };
-    }
-
     const list = await env.PROCESS_STATE.list({ prefix: CACHE_PREFIX + 'pull:' });
-    const kvKeys = list.keys || [];
-
-    for (const kvKey of kvKeys) {
+    for (const kvKey of list.keys || []) {
       try {
         const raw = await env.PROCESS_STATE.get(kvKey.name);
         if (!raw) continue;
         const parsed = JSON.parse(raw);
         const seed = getSeedMeta(parsed);
         if (!seed || seed.state === 'error') {
-          groupKeys.unknown.push({
+          groupMap.unknown.push({
             key: kvKey.name,
             recordCount: 0,
             maxContentAgeMin: -1,
@@ -106,20 +109,18 @@ export async function checkPullCacheFreshness(
           continue;
         }
         const data = parsed.data as { type?: string } | undefined;
-        const type = data?.type ?? 'unknown';
-        const groupName = mapTypeToGroup(type);
+        const groupName = GROUP_TYPE_MAP[data?.type ?? ''] ?? 'unknown';
         const maxContentAgeMin = seed.maxContentAgeMin >= 0 ? seed.maxContentAgeMin : -1;
-
-        groupKeys[groupName].push({
+        groupMap[groupName].push({
           key: kvKey.name,
           recordCount: seed.recordCount,
           maxContentAgeMin,
           fetchedAt: seed.fetchedAt,
           state: seed.state,
-          keyStatus: calcKeyStatus(maxContentAgeMin),
+          keyStatus: keyStatusOf(maxContentAgeMin),
         });
       } catch {
-        groupKeys.unknown.push({
+        groupMap.unknown.push({
           key: kvKey.name,
           recordCount: 0,
           maxContentAgeMin: -1,
@@ -131,38 +132,34 @@ export async function checkPullCacheFreshness(
     }
 
     const groups: Record<string, HealthGroup> = {};
-    for (const [name, keys] of Object.entries(groupKeys)) {
-      groups[name] = {
-        status: calcGroupStatus(keys),
-        keys,
-      };
+    for (const [name, keys] of Object.entries(groupMap)) {
+      groups[name] = { status: groupStatusOf(keys), keys };
     }
 
+    const newsKeys = groups.news?.keys ?? [];
+    const newsMaxAge = newsKeys.reduce((max, k) => Math.max(max, k.maxContentAgeMin), -1);
     const overallStatus = groups.news?.status ?? 'unknown';
-
-    const newsCount = groups.news?.keys.length ?? 0;
-    const newsMaxAge =
-      groups.news?.keys.reduce((max, k) => Math.max(max, k.maxContentAgeMin), -1) ?? -1;
-    checks.pull_cache_freshness = {
-      status: overallStatus,
-      detail:
-        newsCount > 0 && newsMaxAge >= 0
-          ? `news=${newsCount} entries, oldest content ${newsMaxAge}min old`
-          : `${newsCount} entries, maxContentAgeMin unavailable (legacy)`,
-    };
 
     return {
       pull_cache_freshness: { groups, overallStatus },
-      checks: { pull_cache_freshness: checks.pull_cache_freshness },
-    };
-  } catch (e: any) {
-    const emptyGroups = Object.fromEntries(
-      Object.keys(groupKeys).map((k) => [k, { status: 'unknown' as const, keys: [] }])
-    );
-    return {
-      pull_cache_freshness: { groups: emptyGroups, overallStatus: 'unknown' },
       checks: {
-        pull_cache_freshness: { status: 'unknown', detail: `list failed: ${e?.message}` },
+        pull_cache_freshness: {
+          status: overallStatus,
+          detail:
+            newsKeys.length > 0 && newsMaxAge >= 0
+              ? `news=${newsKeys.length} entries, oldest content ${newsMaxAge}min old`
+              : `${newsKeys.length} entries, maxContentAgeMin unavailable (legacy)`,
+        },
+      },
+    };
+  } catch (e: unknown) {
+    return {
+      pull_cache_freshness: { groups: EMPTY_GROUPS(), overallStatus: 'unknown' },
+      checks: {
+        pull_cache_freshness: {
+          status: 'unknown',
+          detail: `list failed: ${e instanceof Error ? e.message : String(e)}`,
+        },
       },
     };
   }

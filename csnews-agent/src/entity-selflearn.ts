@@ -17,10 +17,7 @@
  */
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
-import {
-  loadNoiseAnchors,
-  filterNoiseCandidates,
-} from './entity-noise-filter';
+import { loadNoiseAnchors, filterNoiseCandidates } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 import { logEvent } from './log';
 

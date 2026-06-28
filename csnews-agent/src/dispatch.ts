@@ -82,11 +82,9 @@ const ALLOWED_ACTIONS = [
   'proxy',
 ] as const;
 
-
 /**
  * 默认 action (空 action 时的 fallback, v0.33 确定 'ping' = 健康检查)
  */
-
 
 /**
  * 调度 20 action 到对应 handler

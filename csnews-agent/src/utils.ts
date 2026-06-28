@@ -197,70 +197,56 @@ export async function writeCandidatesJson(
 }
 
 // ============================================================
-// v0.36.21 entity / event cron freshness helper
+// v0.36.22 entity / event cron freshness helper (simplified)
 // ============================================================
-// viewer dashboard 加 entity_freshness / event_freshness 2 字段
-// 立刻看到 entity cron + event cron 是不是 stale (vs 之前 viewer 不知道 entity/event 何时跑)
-// entity / event cron 每日 1 次 (03:00 / 03:30 UTC), 阈值 = 25h (起床 ~26h 时看到 degraded) / 50h (cron 真 stale)
-
-// entity/event cron freshness thresholds: 25h (degraded) / 50h (down)
-// entity/event cron 间隔 24h, 起床 ~26h 时看到 degraded 是健康警告, 50h+ 是 cron stale
-const OK_HOURS = 25;
-const DOWN_HOURS = 50;
+// entity/event cron 每日 1 次 (03:00 / 03:30 UTC)
+// thresholds: 25h (degraded, 起床 ~26h 时健康警告) / 50h (down, cron stale)
+// caller 只用 status + detail，不暴露内部 age_ms / last_write / count
+type FreshnessStatus = 'ok' | 'degraded' | 'down' | 'unknown';
 
 /**
- * 实体 / 事件 cron freshness (viewer dashboard 立即可见 2 字段)
+ * 实体 / 事件 cron freshness (viewer dashboard entity_freshness + event_freshness)
  * 业务契约:
  *   - R2 obj 不存在 / parse 失败 → status='unknown'
  *   - generated_at 不可解析 → status='unknown'
  *   - 正常 → 'ok' (起床 ~26h 时看到 degraded 健康警告, 50h+ 是 cron stale)
- *   - 失败 → 抛错由 caller 处理 (不会 catch, 让 handleHealthAction 5 字段都有, 1 个失败不影响其他)
+ *   - 失败 → 抛错由 caller 处理 (handleHealthAction 5 字段独立, 1 个失败不影响其他)
  */
 export async function checkEntityCronHealth(env: Env): Promise<{
-  entity_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
-  event_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+  entity_freshness: { status: FreshnessStatus; detail: string };
+  event_freshness: { status: FreshnessStatus; detail: string };
 }> {
   const now = Date.now();
 
-  async function classify(
+  async function freshness(
     env: Env,
     key: string
-  ): Promise<{
-    status: 'ok' | 'degraded' | 'down' | 'unknown';
-    detail: string;
-  }> {
-    let body: { generated_at?: string; entities?: any[]; clusters?: any[] } | null = null;
+  ): Promise<{ status: FreshnessStatus; detail: string }> {
+    let generatedAt: string | undefined;
     try {
       const obj = await env.csnews_raw.get(key);
-      if (obj) body = await obj.json();
+      if (obj) {
+        const body = await obj.json<{ generated_at?: string }>();
+        generatedAt = body?.generated_at;
+      }
     } catch {
       return { status: 'unknown', detail: 'R2 read failed' };
     }
-    if (!body?.generated_at) {
-      return { status: 'unknown', detail: 'R2 未找到 (cron 尚未跑过)' };
-    }
-    const lastMs = Date.parse(body.generated_at);
-    if (!Number.isFinite(lastMs)) {
-      return { status: 'unknown', detail: `generated_at 不可解析: ${body.generated_at}` };
-    }
-    const count = Array.isArray(body.entities)
-      ? body.entities.length
-      : Array.isArray(body.clusters)
-        ? body.clusters.length
-        : 0;
+    if (!generatedAt) return { status: 'unknown', detail: 'R2 未找到 (cron 尚未跑过)' };
+    const lastMs = Date.parse(generatedAt);
+    if (!Number.isFinite(lastMs))
+      return { status: 'unknown', detail: `generated_at 不可解析: ${generatedAt}` };
     const ageHours = (now - lastMs) / 3600_000;
     const ageH = Math.round(ageHours);
-    if (ageHours < OK_HOURS) {
-      return { status: 'ok', detail: `${ageH} 小时前 (${count} 条)` };
-    } else if (ageHours < DOWN_HOURS) {
-      return { status: 'degraded', detail: `${ageH} 小时前 (> ${OK_HOURS}h, 需要 cron 跑)` };
-    } else {
-      return { status: 'down', detail: `${ageH} 小时前 (> ${DOWN_HOURS}h, cron stale)` };
-    }
+    if (ageHours < 25) return { status: 'ok', detail: `${ageH} 小时前` };
+    if (ageHours < 50)
+      return { status: 'degraded', detail: `${ageH} 小时前 (> 25h, 需要 cron 跑)` };
+    return { status: 'down', detail: `${ageH} 小时前 (> 50h, cron stale)` };
   }
 
-  return {
-    entity_freshness: await classify(env, ENTITY_FINALIZED_R2_KEY),
-    event_freshness: await classify(env, EVENT_CLUSTERS_R2_KEY),
-  };
+  const [entity, event] = await Promise.all([
+    freshness(env, ENTITY_FINALIZED_R2_KEY),
+    freshness(env, EVENT_CLUSTERS_R2_KEY),
+  ]);
+  return { entity_freshness: entity, event_freshness: event };
 }

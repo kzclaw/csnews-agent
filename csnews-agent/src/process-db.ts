@@ -11,11 +11,7 @@ import {
   recordTrendWithMember,
 } from './news-process';
 import { hashStr } from './score';
-import type {
-  UpdateTopicScoreResult,
-  RecordTrendWithMemberResult,
-  CreatedTopicRow,
-} from './types';
+import type { UpdateTopicScoreResult, RecordTrendWithMemberResult, CreatedTopicRow } from './types';
 import { logEvent } from './log';
 
 export interface NewsBatchItem {
