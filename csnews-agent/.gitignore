@@ -47,3 +47,6 @@ yarn-error.log*
 .privacy-patterns.txt
 # wrangler prod config (real IDs)
 wrangler.prod.toml
+
+# Screenshots (auto-generated per commit, large binary files)
+screenshots/
