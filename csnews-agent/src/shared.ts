@@ -26,7 +26,7 @@ export interface Env {
   /**
    * KV namespace 存 process 最后状态 (last_process_at + last_process_result)。
    * 部署后跑 `npx wrangler kv namespace create PROCESS_STATE` + 把 id 填到 wrangler.toml。
-   * 本次实施不绑 (handler 中 env.PROCESS_STATE 判空跳过, 后续 KR 启用)。
+   * 本次实施不绑 (handler 中 env.PROCESS_STATE 判空跳过, 后续功能启用)。
    */
   PROCESS_STATE?: KVNamespace;
   /**
@@ -95,15 +95,17 @@ export async function safeJson(res: Response): Promise<any> {
 
 /**
  * 统一 JSON 响应格式，消除重复的 Response 构造样板
+ * @param extraHeaders 额外 headers（如 Retry-After），优先级高于 cors
  */
 export function jsonResponse(
   data: unknown,
   cors: Record<string, string> = {},
-  init?: ResponseInit
+  init?: ResponseInit,
+  extraHeaders?: Record<string, string>
 ): Response {
   return new Response(JSON.stringify(data), {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...cors },
+    headers: { 'Content-Type': 'application/json', ...cors, ...extraHeaders },
   });
 }
 
@@ -115,9 +117,10 @@ export function validationError(
   result: { ok: boolean; error?: string; reason?: string | null },
   cors: Record<string, string>
 ): Response {
-  return new Response(
-    JSON.stringify({ error: result.error ?? 'validation_failed', reason: result.reason ?? null }),
-    { status: 400, headers: { 'Content-Type': 'application/json', ...cors } }
+  return jsonResponse(
+    { error: result.error ?? 'validation_failed', reason: result.reason ?? null },
+    cors,
+    { status: 400 }
   );
 }
 
@@ -141,8 +144,5 @@ export function payloadTooLargeResponse(
   limitBytes: number,
   cors: Record<string, string>
 ): Response {
-  return new Response(JSON.stringify({ error: 'payload_too_large', reason }), {
-    status: 413,
-    headers: { 'Content-Type': 'application/json', ...cors },
-  });
+  return jsonResponse({ error: 'payload_too_large', reason }, cors, { status: 413 });
 }

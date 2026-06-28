@@ -3,7 +3,7 @@
 // ============================================================
 //用途：抽离 index.ts 的 Workers AI 响应解析 + 裂变报告生成函数
 // 让 endpoints.ts 不依赖 index.ts（避免循环依赖）
-import { Env } from './shared';
+import { Env, jsonResponse } from './shared';
 import { shouldTriggerAiCall } from './ai-budget';
 
 // ============================================================
@@ -128,15 +128,11 @@ export async function readR2JsonOrNull<T>(env: Env, key: string): Promise<T | nu
 
 // Rate limit 429 响应 (跟 5 处原 code 完全一致, 含 Retry-After 头)
 export function rateLimitResponse(cors: Record<string, string>, limit: number): Response {
-  return new Response(
-    JSON.stringify({
-      error: 'rate_limited',
-      reason: `单 IP ${limit} req/min 上限, 请稍后重试`,
-    }),
-    {
-      status: 429,
-      headers: { 'Content-Type': 'application/json', ...cors, 'Retry-After': '60' },
-    }
+  return jsonResponse(
+    { error: 'rate_limited', reason: `单 IP ${limit} req/min 上限, 请稍后重试` },
+    cors,
+    { status: 429 },
+    { 'Retry-After': '60' }
   );
 }
 
