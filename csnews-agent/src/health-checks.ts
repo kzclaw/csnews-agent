@@ -12,7 +12,11 @@ export type { CacheKeyHealth, HealthGroup };
 
 // Re-export all checks from focused sub-modules
 export { checkSupabaseCounts } from './health-db';
-export { checkR2LatestSupabaseWrite, checkEntityAndEventFreshness, checkZscoreSignals } from './health-db';
+export {
+  checkR2LatestSupabaseWrite,
+  checkEntityAndEventFreshness,
+  checkZscoreSignals,
+} from './health-db';
 export { checkAiBudget, checkAiCallsBreakdown } from './health-ai';
 export { checkR2LatestWrite, checkR2PrefixCounts } from './health-r2';
 export { checkLastProcessAt, checkCacheMetrics, checkNegativeSentinel } from './health-kv';

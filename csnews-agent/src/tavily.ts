@@ -7,10 +7,7 @@
 
 import { Env, jsonResponse } from './shared';
 import { logEvent } from './log';
-import {
-  embedTitle,
-  findSimilarForEmbedding,
-} from './process-vector';
+import { embedTitle, findSimilarForEmbedding } from './process-vector';
 import {
   createTopicForTitle,
   updateTopicScoreById,
@@ -113,13 +110,25 @@ export async function fetchTavilyNews(
 ): Promise<NormalizedArticle[]> {
   // Guard: no key configured
   if (!apiKey) {
-    await logEvent(env, 'warn', '[Tavily] TAVILY_API_KEY not configured — skipping fetch', undefined, 'tavily');
+    await logEvent(
+      env,
+      'warn',
+      '[Tavily] TAVILY_API_KEY not configured — skipping fetch',
+      undefined,
+      'tavily'
+    );
     return [];
   }
 
   // Test/mock mode: placeholder key
   if (apiKey === 'YOUR_KEY_HERE') {
-    await logEvent(env, 'info', '[Tavily] mock mode: returning 3 test articles', undefined, 'tavily');
+    await logEvent(
+      env,
+      'info',
+      '[Tavily] mock mode: returning 3 test articles',
+      undefined,
+      'tavily'
+    );
     return MOCK_ARTICLES;
   }
 
@@ -137,21 +146,32 @@ export async function fetchTavilyNews(
 
     if (!res.ok) {
       const errText = await res.text();
-      await logEvent(env, 'error', `[Tavily] HTTP ${res.status}: ${errText.slice(0, 300)}`, undefined, 'tavily');
+      await logEvent(
+        env,
+        'error',
+        `[Tavily] HTTP ${res.status}: ${errText.slice(0, 300)}`,
+        undefined,
+        'tavily'
+      );
       return [];
     }
 
     const json = (await res.json()) as TavilySearchResponse;
     const results = json.results || [];
 
-    await logEvent(env, 'info', `[Tavily] fetched ${results.length} results for query "${query}"`, undefined, 'tavily');
+    await logEvent(
+      env,
+      'info',
+      `[Tavily] fetched ${results.length} results for query "${query}"`,
+      undefined,
+      'tavily'
+    );
     return results.map(normalizeTavilyResult);
   } catch (err) {
     await logEvent(env, 'error', '[Tavily] fetch failed', { err: err as any }, 'tavily');
     return [];
   }
 }
-
 
 // ============================================================
 // Tavily cron pipeline — runs every 2 hours
@@ -160,7 +180,6 @@ export async function fetchTavilyNews(
 // assigns topics via Vectorize similarity, batch-inserts, and
 // dual-writes to Vectorize.
 // ============================================================
-
 
 // ---- cron query list ----
 const TAVILY_QUERIES = [
@@ -202,10 +221,7 @@ export async function runTavilyPipeline(
 ): Promise<Response> {
   const start = Date.now();
   const apiKey = env.TAVILY_API_KEY;
-  const maxPerQuery = Math.max(
-    1,
-    Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
-  );
+  const maxPerQuery = Math.max(1, Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10));
 
   const allArticles: NormalizedArticle[] = [];
   const fetchErrors: string[] = [];

@@ -61,6 +61,9 @@ csnews-agent/coverage/
 .specify/
 AGENTS.md
 csnews-agent/AGENTS.md
+!csnews-agent/.husky/pre-commit
+!csnews-agent/package.json
+!csnews-agent/package-lock.json
 .husky/
 csnews-agent/src/test-helpers.ts
 .mavis/

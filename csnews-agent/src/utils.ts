@@ -203,7 +203,6 @@ export async function writeCandidatesJson(
 // 立刻看到 entity cron + event cron 是不是 stale (vs 之前 viewer 不知道 entity/event 何时跑)
 // entity / event cron 每日 1 次 (03:00 / 03:30 UTC), 阈值 = 25h (起床 ~26h 时看到 degraded) / 50h (cron 真 stale)
 
-
 // entity/event cron freshness thresholds: 25h (degraded) / 50h (down)
 // entity/event cron 间隔 24h, 起床 ~26h 时看到 degraded 是健康警告, 50h+ 是 cron stale
 const OK_HOURS = 25;
@@ -223,7 +222,10 @@ export async function checkEntityCronHealth(env: Env): Promise<{
 }> {
   const now = Date.now();
 
-  async function classify(env: Env, key: string): Promise<{
+  async function classify(
+    env: Env,
+    key: string
+  ): Promise<{
     status: 'ok' | 'degraded' | 'down' | 'unknown';
     detail: string;
   }> {

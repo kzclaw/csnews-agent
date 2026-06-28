@@ -12,7 +12,15 @@
 //   - runKnowledgeAccumulation: cron inline 调用
 // ============================================================
 
-import { Env, supabaseFetch, safeJson, validationError, parseCountHeader, payloadTooLargeResponse, jsonResponse } from './shared';
+import {
+  Env,
+  supabaseFetch,
+  safeJson,
+  validationError,
+  parseCountHeader,
+  payloadTooLargeResponse,
+  jsonResponse,
+} from './shared';
 import { logEvent } from './log';
 import {
   validateId,
@@ -448,7 +456,10 @@ export async function handleKnowledgeAction(
     const allIndex = await readR2Json<any[]>(env, KNOWLEDGE_INDEX_KEY, []);
     const sinceMs = new Date(sinceIso).getTime();
     items = allIndex
-      .filter((k) => k?.topic_id === topicId && k?.created_at && new Date(k.created_at).getTime() >= sinceMs)
+      .filter(
+        (k) =>
+          k?.topic_id === topicId && k?.created_at && new Date(k.created_at).getTime() >= sinceMs
+      )
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, limit);
     description = `knowledge topic 详情 (topic_id=${topicId}, 累积的所有 knowledge 记录)`;
@@ -474,7 +485,9 @@ export async function handleKnowledgeAction(
   }
 
   // 5. 监控计数 (跟 trend 同模式, 独立 prefix)
-  ctx.waitUntil(incrementHitCounter(env, ctx, knowledgeHitsKeyForToday, KNOWLEDGE_PAYLOAD_LIMIT_BYTES));
+  ctx.waitUntil(
+    incrementHitCounter(env, ctx, knowledgeHitsKeyForToday, KNOWLEDGE_PAYLOAD_LIMIT_BYTES)
+  );
 
   return jsonResponse(JSON.parse(responseStr), cors);
 }
@@ -578,7 +591,13 @@ export async function runKnowledgeAccumulation(
         written++;
       } catch (e: any) {
         errors++;
-        await logEvent(env, 'error', `[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`, undefined, 'trend');
+        await logEvent(
+          env,
+          'error',
+          `[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`,
+          undefined,
+          'trend'
+        );
       }
     }
 
@@ -596,7 +615,13 @@ export async function runKnowledgeAccumulation(
 
     return { written, errors };
   } catch (e: any) {
-    await logEvent(env, 'error', `[knowledge] accumulation job failed: ${e?.message || e}`, undefined, 'trend');
+    await logEvent(
+      env,
+      'error',
+      `[knowledge] accumulation job failed: ${e?.message || e}`,
+      undefined,
+      'trend'
+    );
     return { written, errors: errors + 1 };
   }
 }
@@ -616,7 +641,13 @@ export async function runKnowledgeGeneration(
 ): Promise<{ written: number; skipped: number; errors: number }> {
   // Phase 2: 预算检查 L6（Knowledge generation）
   if (!(await shouldTriggerAiCall(env, 'L6'))) {
-    await logEvent(env, 'warn', '[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold', undefined, 'trend');
+    await logEvent(
+      env,
+      'warn',
+      '[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold',
+      undefined,
+      'trend'
+    );
     return { written: 0, skipped: 0, errors: 0 };
   }
 
@@ -671,11 +702,22 @@ export async function runKnowledgeGeneration(
           env,
           `/rest/v1/topics?id=eq.${w.topic_id}&select=id,topic_key,level,score,last_active_at&limit=1`
         );
-        const topics: Array<{ id: string; topic_key: string; level: string; score: number; last_active_at: string | null }> =
-          await safeJson(topicRes);
+        const topics: Array<{
+          id: string;
+          topic_key: string;
+          level: string;
+          score: number;
+          last_active_at: string | null;
+        }> = await safeJson(topicRes);
         const topic = topics[0];
         if (!topic) {
-          await logEvent(env, 'warn', `[knowledge-gen] topic ${w.topic_id} not found for warning ${w.id}`, undefined, 'trend');
+          await logEvent(
+            env,
+            'warn',
+            `[knowledge-gen] topic ${w.topic_id} not found for warning ${w.id}`,
+            undefined,
+            'trend'
+          );
           skipped++;
           continue;
         }
@@ -686,8 +728,12 @@ export async function runKnowledgeGeneration(
           env,
           `/rest/v1/news_hotspots?topic_id=eq.${w.topic_id}&published_at=gte.${encodeURIComponent(sinceIso)}&select=id,title,source,hot_score&order=hot_score.desc&limit=5`
         );
-        const news: Array<{ id: string; title: string | null; source: string | null; hot_score: number | null }> =
-          await safeJson(newsRes);
+        const news: Array<{
+          id: string;
+          title: string | null;
+          source: string | null;
+          hot_score: number | null;
+        }> = await safeJson(newsRes);
 
         // 4.3 查 trend_snapshots (最近 24h)
         const snapshotsRes = await supabaseFetch(
@@ -736,7 +782,10 @@ export async function runKnowledgeGeneration(
         const newsList =
           news.length > 0
             ? news
-                .map((n, i) => `${i + 1}. **${n.title || '(无标题)'}** — ${n.source || '未知来源'} (hot_score=${n.hot_score ?? '?'})`)
+                .map(
+                  (n, i) =>
+                    `${i + 1}. **${n.title || '(无标题)'}** — ${n.source || '未知来源'} (hot_score=${n.hot_score ?? '?'})`
+                )
                 .join('\n')
             : '_24h 无相关新闻_';
 
@@ -779,7 +828,7 @@ export async function runKnowledgeGeneration(
         // 4.8 写 Supabase knowledge 表 (幂等)
         const insertRes = await supabaseFetch(env, '/rest/v1/knowledge', {
           method: 'POST',
-          headers: { 'Prefer': 'return=representation' },
+          headers: { Prefer: 'return=representation' },
           body: JSON.stringify([
             {
               topic_id: topic.id,
@@ -795,24 +844,50 @@ export async function runKnowledgeGeneration(
           const errText = await insertRes.text();
           // 23505 = unique violation (并发幂等), 忽略不报错
           if (!errText.includes('23505')) {
-            throw new Error(`knowledge insert failed HTTP ${insertRes.status}: ${errText.slice(0, 200)}`);
+            throw new Error(
+              `knowledge insert failed HTTP ${insertRes.status}: ${errText.slice(0, 200)}`
+            );
           }
-          await logEvent(env, 'info', `[knowledge-gen] warning ${w.id} already inserted (idempotent skip)`, undefined, 'trend');
+          await logEvent(
+            env,
+            'info',
+            `[knowledge-gen] warning ${w.id} already inserted (idempotent skip)`,
+            undefined,
+            'trend'
+          );
           skipped++;
           continue;
         }
         const inserted: Array<{ id: string }> = await safeJson(insertRes);
-        await logEvent(env, 'info', `[knowledge-gen] wrote knowledge id=${inserted[0]?.id} r2=${r2Key} warning=${w.id}`, undefined, 'trend');
+        await logEvent(
+          env,
+          'info',
+          `[knowledge-gen] wrote knowledge id=${inserted[0]?.id} r2=${r2Key} warning=${w.id}`,
+          undefined,
+          'trend'
+        );
         written++;
       } catch (e: any) {
         errors++;
-        await logEvent(env, 'error', `[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`, undefined, 'trend');
+        await logEvent(
+          env,
+          'error',
+          `[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`,
+          undefined,
+          'trend'
+        );
       }
     }
 
     return { written, skipped, errors };
   } catch (e: any) {
-    await logEvent(env, 'error', `[knowledge-gen] job failed: ${e?.message || e}`, undefined, 'trend');
+    await logEvent(
+      env,
+      'error',
+      `[knowledge-gen] job failed: ${e?.message || e}`,
+      undefined,
+      'trend'
+    );
     return { written, skipped: 0, errors: errors + 1 };
   }
 }

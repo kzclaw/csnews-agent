@@ -53,7 +53,13 @@ export async function runEntityProcess(
   try {
     reviewed = await loadReviewedCandidates(env);
   } catch (e: any) {
-    await logEvent(env, 'error', `[entity-process] loadReviewedCandidates failed: ${e?.message || e}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'error',
+      `[entity-process] loadReviewedCandidates failed: ${e?.message || e}`,
+      undefined,
+      'entity'
+    );
     return { written: 0, errors: 1, finalized: 0 };
   }
 
@@ -76,7 +82,13 @@ export async function runEntityProcess(
       )
     );
   } catch (e: any) {
-    await logEvent(env, 'error', `[entity-process] R2 put failed: ${e?.message || e}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'error',
+      `[entity-process] R2 put failed: ${e?.message || e}`,
+      undefined,
+      'entity'
+    );
     return { written: 0, errors: 1, finalized: 0 };
   }
 
@@ -137,10 +149,22 @@ export async function writeEntitiesHotLayer(
       const errText = await res.text();
       throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
     }
-    await logEvent(env, 'info', `[entity-process] writeEntitiesHotLayer wrote=${entities.length}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'info',
+      `[entity-process] writeEntitiesHotLayer wrote=${entities.length}`,
+      undefined,
+      'entity'
+    );
     return { written: entities.length, errors: 0 };
   } catch (e: any) {
-    await logEvent(env, 'error', `[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'error',
+      `[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`,
+      undefined,
+      'entity'
+    );
     return { written: 0, errors: entities.length };
   }
 }

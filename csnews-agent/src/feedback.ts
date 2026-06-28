@@ -170,7 +170,13 @@ async function writeAccuracyToR2(
   try {
     await env.csnews_raw.put(key, JSON.stringify(entry, null, 2));
   } catch (e: any) {
-    await logEvent(env, 'error', `[feedback] R2 write failed key=${key} err=${e?.message || e}`, undefined, 'feedback');
+    await logEvent(
+      env,
+      'error',
+      `[feedback] R2 write failed key=${key} err=${e?.message || e}`,
+      undefined,
+      'feedback'
+    );
   }
 }
 
@@ -228,7 +234,13 @@ export async function runFeedbackCheck(env: Env): Promise<FeedbackResult> {
       if (checkHour === 72 && accuracy !== null && accuracy < 0.6) {
         const weights = await loadWeights(env, category);
         await adjustWeights(env, category, accuracy, weights);
-        await logEvent(env, 'info', `[feedback] weight adjusted category=${category} accuracy=${accuracy} (<0.6 threshold)`, undefined, 'feedback');
+        await logEvent(
+          env,
+          'info',
+          `[feedback] weight adjusted category=${category} accuracy=${accuracy} (<0.6 threshold)`,
+          undefined,
+          'feedback'
+        );
       }
 
       // Write per-checkpoint accuracy to R2
@@ -239,13 +251,25 @@ export async function runFeedbackCheck(env: Env): Promise<FeedbackResult> {
       // Update categoryAccuracy for response
       result.categoryAccuracy[category] = { accuracy: accuracy ?? 0, correct, total };
     } catch (e: any) {
-      await logEvent(env, 'error', `[feedback] processing warning ${warning.id} failed: ${e?.message || e}`, undefined, 'feedback');
+      await logEvent(
+        env,
+        'error',
+        `[feedback] processing warning ${warning.id} failed: ${e?.message || e}`,
+        undefined,
+        'feedback'
+      );
       result.errors++;
     }
   }
 
   const elapsed = Date.now() - start;
-  await logEvent(env, 'info', `[feedback] runFeedbackCheck done processed=${result.processed} validated=${result.validated} dismissed=${result.dismissed} pending=${result.pending} errors=${result.errors} elapsed=${elapsed}ms`, undefined, 'feedback');
+  await logEvent(
+    env,
+    'info',
+    `[feedback] runFeedbackCheck done processed=${result.processed} validated=${result.validated} dismissed=${result.dismissed} pending=${result.pending} errors=${result.errors} elapsed=${elapsed}ms`,
+    undefined,
+    'feedback'
+  );
 
   return result;
 }
@@ -301,6 +325,12 @@ export async function scheduledFeedback(
     await runFeedbackCheck(env);
   } catch (e: any) {
     // Intentionally swallowed — cron trigger must not re-throw
-    await logEvent(env, 'error', '[feedback] scheduledFeedback caught error:', { err: e?.message || e }, 'feedback');
+    await logEvent(
+      env,
+      'error',
+      '[feedback] scheduledFeedback caught error:',
+      { err: e?.message || e },
+      'feedback'
+    );
   }
 }

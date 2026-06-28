@@ -141,8 +141,8 @@ export function payloadTooLargeResponse(
   limitBytes: number,
   cors: Record<string, string>
 ): Response {
-  return new Response(
-    JSON.stringify({ error: 'payload_too_large', reason }),
-    { status: 413, headers: { 'Content-Type': 'application/json', ...cors } }
-  );
+  return new Response(JSON.stringify({ error: 'payload_too_large', reason }), {
+    status: 413,
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
 }

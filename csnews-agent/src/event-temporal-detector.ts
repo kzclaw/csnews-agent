@@ -32,18 +32,34 @@ export async function detectTemporalRelations(env: Env): Promise<{
   errors: number;
 }> {
   // Step 1: fetch events
-  const res = await supabaseFetch(env, '/rest/v1/events?select=id,published_at&published_at=not.is.null&order=published_at.desc', {
-    headers: { 'Prefer': 'count=exact' },
-  });
+  const res = await supabaseFetch(
+    env,
+    '/rest/v1/events?select=id,published_at&published_at=not.is.null&order=published_at.desc',
+    {
+      headers: { Prefer: 'count=exact' },
+    }
+  );
 
   if (!res.ok) {
-    await logEvent(env, 'error', `[event-temporal-detector] fetch failed: ${res.status}`, undefined, 'event');
+    await logEvent(
+      env,
+      'error',
+      `[event-temporal-detector] fetch failed: ${res.status}`,
+      undefined,
+      'event'
+    );
     return { detected: 0, errors: 1 };
   }
 
   const events: Event[] = await res.json();
   if (events.length < 2) {
-    await logEvent(env, 'info', '[event-temporal-detector] < 2 events, skipping', undefined, 'event');
+    await logEvent(
+      env,
+      'info',
+      '[event-temporal-detector] < 2 events, skipping',
+      undefined,
+      'event'
+    );
     return { detected: 0, errors: 0 };
   }
 
@@ -68,7 +84,13 @@ export async function detectTemporalRelations(env: Env): Promise<{
   }
 
   if (pairs.length === 0) {
-    await logEvent(env, 'info', '[event-temporal-detector] no temporal pairs found', undefined, 'event');
+    await logEvent(
+      env,
+      'info',
+      '[event-temporal-detector] no temporal pairs found',
+      undefined,
+      'event'
+    );
     return { detected: 0, errors: 0 };
   }
 
@@ -76,11 +98,12 @@ export async function detectTemporalRelations(env: Env): Promise<{
   const existingRes = await supabaseFetch(
     env,
     `/rest/v1/event_relation?relation_type=eq.temporal&select=from_event_id,to_event_id`,
-    { headers: { 'Prefer': 'count=exact' } }
+    { headers: { Prefer: 'count=exact' } }
   );
   const existing = new Set<string>();
   if (existingRes.ok) {
-    const existingData: Array<{ from_event_id: string; to_event_id: string }> = await existingRes.json();
+    const existingData: Array<{ from_event_id: string; to_event_id: string }> =
+      await existingRes.json();
     for (const r of existingData) {
       existing.add(`${r.from_event_id}:${r.to_event_id}`);
     }
@@ -96,7 +119,7 @@ export async function detectTemporalRelations(env: Env): Promise<{
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         from_event_id: pair.from_event_id,
@@ -112,11 +135,23 @@ export async function detectTemporalRelations(env: Env): Promise<{
     if (insertRes.ok || insertRes.status === 409) {
       inserted++;
     } else {
-      await logEvent(env, 'error', `[event-temporal-detector] insert failed: ${insertRes.status}`, undefined, 'event');
+      await logEvent(
+        env,
+        'error',
+        `[event-temporal-detector] insert failed: ${insertRes.status}`,
+        undefined,
+        'event'
+      );
     }
   }
 
-  await logEvent(env, 'info', `[event-temporal-detector] detected ${inserted} new temporal relations`, undefined, 'event');
+  await logEvent(
+    env,
+    'info',
+    `[event-temporal-detector] detected ${inserted} new temporal relations`,
+    undefined,
+    'event'
+  );
   return { detected: inserted, errors: 0 };
 }
 
@@ -124,9 +159,13 @@ export async function detectTemporalRelations(env: Env): Promise<{
  * 获取 temporal pairs (预览模式,不写入)
  */
 export async function getTemporalPairs(env: Env): Promise<TemporalRelation[]> {
-  const res = await supabaseFetch(env, '/rest/v1/events?select=id,published_at&published_at=not.is.null&order=published_at.desc', {
-    headers: { 'Prefer': 'count=exact' },
-  });
+  const res = await supabaseFetch(
+    env,
+    '/rest/v1/events?select=id,published_at&published_at=not.is.null&order=published_at.desc',
+    {
+      headers: { Prefer: 'count=exact' },
+    }
+  );
 
   if (!res.ok) return [];
   const events: Event[] = await res.json();
@@ -136,7 +175,8 @@ export async function getTemporalPairs(env: Env): Promise<TemporalRelation[]> {
     for (let j = i + 1; j < events.length; j++) {
       const e1 = events[i];
       const e2 = events[j];
-      const diffHours = (new Date(e2.published_at).getTime() - new Date(e1.published_at).getTime()) / (1000 * 3600);
+      const diffHours =
+        (new Date(e2.published_at).getTime() - new Date(e1.published_at).getTime()) / (1000 * 3600);
 
       if (diffHours >= 0 && diffHours < 24) {
         pairs.push({

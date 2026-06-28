@@ -517,7 +517,13 @@ async function queryEntity(
       raw = JSON.parse(text) as EntityR2Payload;
     }
   } catch (e: any) {
-    await logEvent(env, 'error', `[pull:entity] R2 read failed: ${e?.message || e}`, undefined, 'pull');
+    await logEvent(
+      env,
+      'error',
+      `[pull:entity] R2 read failed: ${e?.message || e}`,
+      undefined,
+      'pull'
+    );
   }
 
   let items = (raw?.entities || []) as EntityR2Item[];

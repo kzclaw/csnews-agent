@@ -76,13 +76,14 @@ function kvKey(date?: string): string {
 export async function recordAiCall(
   model: string,
   neurons: number,
-  env: AiBudgetEnv,
+  env: AiBudgetEnv
 ): Promise<void> {
   if (!env.AI_USAGE_KV) return;
   const key = kvKey();
   const raw = await env.AI_USAGE_KV.get(key, 'text');
-  const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } =
-    raw ? JSON.parse(raw) : { total: 0, calls: [] };
+  const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } = raw
+    ? JSON.parse(raw)
+    : { total: 0, calls: [] };
 
   current.total += neurons;
   current.calls.push({ model, neurons, ts: new Date().toISOString() });
@@ -160,7 +161,9 @@ export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTot
     try {
       const data = JSON.parse(raw);
       previousTotal = typeof data.total === 'number' ? data.total : 0;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   // 删除旧 key（TTL 会自然过期，但手动删除确保立即重置）
   await env.AI_USAGE_KV.delete(key);
@@ -191,7 +194,7 @@ export function shouldTriggerAiCall(
   _env: AiBudgetEnv,
   level: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6',
   _severity?: number,
-  _dailyUsed?: number,
+  _dailyUsed?: number
 ): boolean {
   // L1-L3 不受限
   if (level === 'L1' || level === 'L2' || level === 'L3') return true;

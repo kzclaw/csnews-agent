@@ -27,7 +27,13 @@ export async function runRelationDetection(
   env: Env,
   semanticThreshold = 0.7
 ): Promise<RelationDetectionResult> {
-  await logEvent(env, 'info', '[event-relation-detector] starting relation detection...', undefined, 'event');
+  await logEvent(
+    env,
+    'info',
+    '[event-relation-detector] starting relation detection...',
+    undefined,
+    'event'
+  );
 
   // 1. Temporal detection
   const temporal = await detectTemporalRelations(env);
@@ -46,7 +52,13 @@ export async function runRelationDetection(
     errors: temporal.errors + semantic.errors + causal.errors,
   };
 
-  await logEvent(env, 'info', `[event-relation-detector] done: temporal=${temporal.detected}, semantic=${semantic.detected}, causal=${causal.detected}, errors=${result.errors}`, undefined, 'event');
+  await logEvent(
+    env,
+    'info',
+    `[event-relation-detector] done: temporal=${temporal.detected}, semantic=${semantic.detected}, causal=${causal.detected}, errors=${result.errors}`,
+    undefined,
+    'event'
+  );
 
   return result;
 }

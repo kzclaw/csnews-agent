@@ -43,7 +43,8 @@ export async function checkAiBudget(env: Env): Promise<{
       daily_limit: budget.limit,
     };
     checks.ai_budget_today = {
-      status: budget.status === 'shutdown' ? 'down' : budget.status === 'critical' ? 'degraded' : 'ok',
+      status:
+        budget.status === 'shutdown' ? 'down' : budget.status === 'critical' ? 'degraded' : 'ok',
       detail: `daily used: ${budget.used} / ${budget.limit} (${budget.status})`,
     };
   } catch (e: any) {
@@ -94,7 +95,10 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
 
     if (raw) {
       try {
-        const record = JSON.parse(raw) as { total: number; calls: Array<{ model: string; neurons: number }> };
+        const record = JSON.parse(raw) as {
+          total: number;
+          calls: Array<{ model: string; neurons: number }>;
+        };
         totalNeurons = record.total ?? 0;
         for (const call of record.calls ?? []) {
           const model = call.model || 'unknown';

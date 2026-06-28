@@ -51,7 +51,10 @@ export async function handlePullAction(
     return jsonResponse(result, cors, { headers: { 'Cache-Control': cacheControl } });
   } catch (e: any) {
     const status = e.status || 500;
-    return jsonResponse({ error: e.message || 'pull failed' }, cors, { status, headers: { 'Cache-Control': 'no-store' } });
+    return jsonResponse({ error: e.message || 'pull failed' }, cors, {
+      status,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }
 
@@ -78,7 +81,10 @@ export async function handleModelTestAction(
     messages: [{ role: 'user', content: '说一段话介绍自己' }],
     max_tokens: 100,
   })) as LlamaAIResponse;
-  return jsonResponse({ ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) }, cors);
+  return jsonResponse(
+    { ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) },
+    cors
+  );
 }
 
 // ===================== ai-test =====================
@@ -114,7 +120,10 @@ export async function handleScoreAction(
     aiReport = await maybeFissionReport(title, env, rule.score);
   }
 
-  return jsonResponse({ title, score: rule.score, category, reason: rule.reason, ai_report: aiReport }, cors);
+  return jsonResponse(
+    { title, score: rule.score, category, reason: rule.reason, ai_report: aiReport },
+    cors
+  );
 }
 
 // ===================== classify =====================
@@ -139,12 +148,34 @@ export async function handleClassifyAction(
     }
     const result = await classifyBySemantic(title, env);
     const kwCat = classifyRule(title);
-    return jsonResponse({ title, type: 'classify', description: 'bge-m3 semantic 自分类', category: result.category, confidence: result.confidence, top_scores: result.top_scores, legacy_keyword_category: kwCat }, cors);
+    return jsonResponse(
+      {
+        title,
+        type: 'classify',
+        description: 'bge-m3 semantic 自分类',
+        category: result.category,
+        confidence: result.confidence,
+        top_scores: result.top_scores,
+        legacy_keyword_category: kwCat,
+      },
+      cors
+    );
   }
 
   if (type === 'seeds') {
     const data = await loadCategorySeeds(env);
-    return jsonResponse({ type: 'seeds', description: 'category seeds 增删入口 (R2 category-seeds.json · 0 硬编码 const)', categories: data.categories, updated_at: data.updated_at, updated_count: data.updated_count, total_categories: Object.keys(data.categories).length, total_seeds: Object.values(data.categories).reduce((sum, seeds) => sum + seeds.length, 0) }, cors);
+    return jsonResponse(
+      {
+        type: 'seeds',
+        description: 'category seeds 增删入口 (R2 category-seeds.json · 0 硬编码 const)',
+        categories: data.categories,
+        updated_at: data.updated_at,
+        updated_count: data.updated_count,
+        total_categories: Object.keys(data.categories).length,
+        total_seeds: Object.values(data.categories).reduce((sum, seeds) => sum + seeds.length, 0),
+      },
+      cors
+    );
   }
 
   if (type === 'add-seed') {
@@ -154,7 +185,17 @@ export async function handleClassifyAction(
       return jsonResponse({ error: 'missing category or seed param' }, cors, { status: 400 });
     }
     const data = await addSeedToCategory(env, category, seed);
-    return jsonResponse({ type: 'add-seed', description: 'R2 持久化加 seed', category, seed, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
+    return jsonResponse(
+      {
+        type: 'add-seed',
+        description: 'R2 持久化加 seed',
+        category,
+        seed,
+        updated_count: data.updated_count,
+        updated_at: data.updated_at,
+      },
+      cors
+    );
   }
 
   if (type === 'remove-seed') {
@@ -164,20 +205,49 @@ export async function handleClassifyAction(
       return jsonResponse({ error: 'missing category or seed param' }, cors, { status: 400 });
     }
     const data = await removeSeedFromCategory(env, category, seed);
-    return jsonResponse({ type: 'remove-seed', description: 'R2 持久化删 seed', category, seed, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
+    return jsonResponse(
+      {
+        type: 'remove-seed',
+        description: 'R2 持久化删 seed',
+        category,
+        seed,
+        updated_count: data.updated_count,
+        updated_at: data.updated_at,
+      },
+      cors
+    );
   }
 
   if (type === 'review') {
     const title = url.searchParams.get('title');
     const correctCategory = url.searchParams.get('correct_category');
     if (!title || !correctCategory) {
-      return jsonResponse({ error: 'missing title or correct_category param' }, cors, { status: 400 });
+      return jsonResponse({ error: 'missing title or correct_category param' }, cors, {
+        status: 400,
+      });
     }
     const data = await addSeedToCategory(env, correctCategory, title);
-    return jsonResponse({ type: 'review', description: '自进化闭环: 分类错 review → seeds 自动更新', title, correct_category: correctCategory, updated_count: data.updated_count, updated_at: data.updated_at }, cors);
+    return jsonResponse(
+      {
+        type: 'review',
+        description: '自进化闭环: 分类错 review → seeds 自动更新',
+        title,
+        correct_category: correctCategory,
+        updated_count: data.updated_count,
+        updated_at: data.updated_at,
+      },
+      cors
+    );
   }
 
-  return jsonResponse({ error: 'invalid_type', reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}` }, cors, { status: 400 });
+  return jsonResponse(
+    {
+      error: 'invalid_type',
+      reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}`,
+    },
+    cors,
+    { status: 400 }
+  );
 }
 
 // ===================== batch-score =====================
@@ -232,7 +302,16 @@ export async function handleFissionAction(
   }
   const r = scoreRule(seed);
   if (r.score < AI_ROUTE_R_THRESHOLD) {
-    return jsonResponse({ seed, queries: [], count: 0, skipped: true, reason: `R=${r.score} < ${AI_ROUTE_R_THRESHOLD}, AI跳过` }, cors);
+    return jsonResponse(
+      {
+        seed,
+        queries: [],
+        count: 0,
+        skipped: true,
+        reason: `R=${r.score} < ${AI_ROUTE_R_THRESHOLD}, AI跳过`,
+      },
+      cors
+    );
   }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
@@ -313,7 +392,16 @@ export async function handleListAction(
       }
     })
   );
-  return jsonResponse({ count: items.length, total: list.objects.length, truncated: list.objects.length > limit, order, items }, cors);
+  return jsonResponse(
+    {
+      count: items.length,
+      total: list.objects.length,
+      truncated: list.objects.length > limit,
+      order,
+      items,
+    },
+    cors
+  );
 }
 
 // ===================== embed =====================
@@ -344,7 +432,11 @@ export async function handleEmbedAction(
     }
 
     if (!embedding || embedding.length === 0) {
-      return jsonResponse({ error: 'embedding empty', shape: raw?.shape, keys: raw ? Object.keys(raw) : [] }, cors, { status: 500 });
+      return jsonResponse(
+        { error: 'embedding empty', shape: raw?.shape, keys: raw ? Object.keys(raw) : [] },
+        cors,
+        { status: 500 }
+      );
     }
 
     // 存 R2
@@ -357,7 +449,10 @@ export async function handleEmbedAction(
       }
     );
 
-    return jsonResponse({ text, dim: embedding.length, model: '@cf/baai/bge-m3', sample: embedding.slice(0, 5), key }, cors);
+    return jsonResponse(
+      { text, dim: embedding.length, model: '@cf/baai/bge-m3', sample: embedding.slice(0, 5), key },
+      cors
+    );
   } catch (e: any) {
     return jsonResponse({ error: e.message }, cors, { status: 500 });
   }
@@ -443,11 +538,16 @@ export async function handleRescoreAction(
     );
     if (!newsRes.ok) {
       const errText = await newsRes.text();
-      return jsonResponse({ error: 'supabase_read_failed', reason: errText.slice(0, 200) }, cors, { status: 500 });
+      return jsonResponse({ error: 'supabase_read_failed', reason: errText.slice(0, 200) }, cors, {
+        status: 500,
+      });
     }
     const newsList = (await newsRes.json()) as NewsHotspotRow[];
     if (newsList.length === 0) {
-      return jsonResponse({ type: 'rescore', total: 0, dry_run: dryRun, message: 'no news to rescore' }, cors);
+      return jsonResponse(
+        { type: 'rescore', total: 0, dry_run: dryRun, message: 'no news to rescore' },
+        cors
+      );
     }
 
     // 2. 准备 input texts (title + summary 混合, 跟新分类逻辑一致)
@@ -545,14 +645,23 @@ export async function handleRescoreAction(
       errorSamples.push('ctx.waitUntil not available; cannot run async update');
     }
 
-    return jsonResponse({
-      type: 'rescore', mode, dry_run: dryRun,
-      total: newsList.length, changed, unchanged, errors,
-      updated: dryRun ? 0 : updated,
-      update_errors: dryRun ? 0 : updateErrors,
-      error_samples: errorSamples.length > 0 ? errorSamples : undefined,
-      sample: diffs.slice(0, 5), timestamp: new Date().toISOString(),
-    }, cors);
+    return jsonResponse(
+      {
+        type: 'rescore',
+        mode,
+        dry_run: dryRun,
+        total: newsList.length,
+        changed,
+        unchanged,
+        errors,
+        updated: dryRun ? 0 : updated,
+        update_errors: dryRun ? 0 : updateErrors,
+        error_samples: errorSamples.length > 0 ? errorSamples : undefined,
+        sample: diffs.slice(0, 5),
+        timestamp: new Date().toISOString(),
+      },
+      cors
+    );
   } catch (e: any) {
     return jsonResponse({ error: e.message }, cors, { status: 500 });
   }

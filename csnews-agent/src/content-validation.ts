@@ -54,7 +54,7 @@ export function validateFormat(format: string): ValidationResult {
     return { ok: false, error: 'invalid_format', reason: 'format 不能为空, 默认为 json' };
   }
   const normalized = format.toLowerCase();
-  if (!ALLOWED_FORMATS.includes(normalized as typeof ALLOWED_FORMATS[number])) {
+  if (!ALLOWED_FORMATS.includes(normalized as (typeof ALLOWED_FORMATS)[number])) {
     return {
       ok: false,
       error: 'invalid_format',

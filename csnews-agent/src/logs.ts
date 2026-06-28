@@ -82,16 +82,17 @@ export async function handleLogsAction(
       }
     }
   } catch (e: any) {
-    return jsonResponse(
-      { error: 'r2 unavailable', detail: e?.message || String(e) },
-      cors,
-      { status: 503 }
-    );
+    return jsonResponse({ error: 'r2 unavailable', detail: e?.message || String(e) }, cors, {
+      status: 503,
+    });
   }
 
   entries.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
   const items = entries.slice(0, limit);
   const truncated = entries.length > items.length;
 
-  return jsonResponse({ date, hour, count: items.length, total: entries.length, truncated, items }, cors);
+  return jsonResponse(
+    { date, hour, count: items.length, total: entries.length, truncated, items },
+    cors
+  );
 }

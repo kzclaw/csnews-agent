@@ -32,7 +32,13 @@ export async function runEventProcess(env: Env): Promise<{
   try {
     entities = await loadReviewedCandidates(env);
   } catch (e: any) {
-    await logEvent(env, 'error', `[event-process] loadReviewedCandidates failed: ${e?.message || e}`, undefined, 'event');
+    await logEvent(
+      env,
+      'error',
+      `[event-process] loadReviewedCandidates failed: ${e?.message || e}`,
+      undefined,
+      'event'
+    );
     return { clusters: 0, threshold: 0, written: 0, errors: 1 };
   }
 
@@ -74,7 +80,13 @@ export async function runEventProcess(env: Env): Promise<{
       errors: 0,
     };
   } catch (e: any) {
-    await logEvent(env, 'error', `[event-process] R2 put failed: ${e?.message || e}`, undefined, 'event');
+    await logEvent(
+      env,
+      'error',
+      `[event-process] R2 put failed: ${e?.message || e}`,
+      undefined,
+      'event'
+    );
     return { clusters: result.clusters.length, threshold: result.threshold, written: 0, errors: 1 };
   }
 }

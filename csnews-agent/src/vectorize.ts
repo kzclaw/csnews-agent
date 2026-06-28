@@ -46,12 +46,24 @@ export class VectorizeClient {
     metadata?: Record<string, string | number | boolean>
   ): Promise<void> {
     if (!this.index) {
-      await logEvent((this.env as any), 'warn', '[Vectorize] binding not available, skipping upsert', undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'warn',
+        '[Vectorize] binding not available, skipping upsert',
+        undefined,
+        'vectorize'
+      );
       return;
     }
 
     if (!embedding || embedding.length === 0) {
-      await logEvent((this.env as any), 'warn', '[Vectorize] empty embedding, skipping upsert', undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'warn',
+        '[Vectorize] empty embedding, skipping upsert',
+        undefined,
+        'vectorize'
+      );
       return;
     }
 
@@ -63,9 +75,21 @@ export class VectorizeClient {
 
     try {
       const result = await this.index.upsert([vector]);
-      await logEvent((this.env as any), 'info', `[Vectorize] upserted id=${id} count=${result.count ?? 'unknown'}`, undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'info',
+        `[Vectorize] upserted id=${id} count=${result.count ?? 'unknown'}`,
+        undefined,
+        'vectorize'
+      );
     } catch (err) {
-      await logEvent((this.env as any), 'error', `[Vectorize] upsert failed for id=${id}`, { err: err as any }, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'error',
+        `[Vectorize] upsert failed for id=${id}`,
+        { err: err as any },
+        'vectorize'
+      );
       // Don't throw — Vectorize failure should not block Supabase write
     }
   }
@@ -79,12 +103,24 @@ export class VectorizeClient {
    */
   async query(embedding: number[], topK = 5): Promise<Array<{ id: string; score: number }>> {
     if (!this.index) {
-      await logEvent((this.env as any), 'warn', '[Vectorize] binding not available, returning empty results', undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'warn',
+        '[Vectorize] binding not available, returning empty results',
+        undefined,
+        'vectorize'
+      );
       return [];
     }
 
     if (!embedding || embedding.length === 0) {
-      await logEvent((this.env as any), 'warn', '[Vectorize] empty query embedding, returning empty results', undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'warn',
+        '[Vectorize] empty query embedding, returning empty results',
+        undefined,
+        'vectorize'
+      );
       return [];
     }
 
@@ -100,7 +136,13 @@ export class VectorizeClient {
         score: match.score,
       }));
     } catch (err) {
-      await logEvent((this.env as any), 'error', '[Vectorize] query failed', { err: err as any }, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'error',
+        '[Vectorize] query failed',
+        { err: err as any },
+        'vectorize'
+      );
       // Return empty on error — caller should fallback to Supabase
       return [];
     }
@@ -113,7 +155,13 @@ export class VectorizeClient {
    */
   async deleteByIds(ids: string[]): Promise<void> {
     if (!this.index) {
-      await logEvent((this.env as any), 'warn', '[Vectorize] binding not available, skipping delete', undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'warn',
+        '[Vectorize] binding not available, skipping delete',
+        undefined,
+        'vectorize'
+      );
       return;
     }
 
@@ -123,9 +171,21 @@ export class VectorizeClient {
 
     try {
       await this.index.deleteByIds(ids);
-      await logEvent((this.env as any), 'info', `[Vectorize] deleted ${ids.length} vectors`, undefined, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'info',
+        `[Vectorize] deleted ${ids.length} vectors`,
+        undefined,
+        'vectorize'
+      );
     } catch (err) {
-      await logEvent((this.env as any), 'error', '[Vectorize] deleteByIds failed', { err: err as any }, 'vectorize');
+      await logEvent(
+        this.env as any,
+        'error',
+        '[Vectorize] deleteByIds failed',
+        { err: err as any },
+        'vectorize'
+      );
     }
   }
 }

@@ -20,7 +20,12 @@
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
-import { handleProcessAction, runKnowledgeAccumulation, runKnowledgeGeneration, handleTavilyAction } from './endpoints';
+import {
+  handleProcessAction,
+  runKnowledgeAccumulation,
+  runKnowledgeGeneration,
+  handleTavilyAction,
+} from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
 import { runEventProcess } from './event-process';
@@ -68,7 +73,11 @@ export async function scheduledProcess(
     const body = await res.text();
     const elapsed = Date.now() - start;
     const ok = res.status === 200;
-    await logEvent(env, 'info', `[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] process done status=${res.status} elapsed=${elapsed}ms body=${body.slice(0, 500)}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -89,7 +98,11 @@ export async function scheduledProcess(
       const tavilyRes = await handleTavilyAction(tavilyDummyRequest, env, tavilyDummyUrl, {});
       const tavilyBody = await tavilyRes.text();
       const tavilyElapsed = Date.now() - tavilyStart;
-      await logEvent(env, 'info', `[cron] tavily done status=${tavilyRes.status} elapsed=${tavilyElapsed}ms body=${tavilyBody.slice(0, 300)}`);
+      await logEvent(
+        env,
+        'info',
+        `[cron] tavily done status=${tavilyRes.status} elapsed=${tavilyElapsed}ms body=${tavilyBody.slice(0, 300)}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -105,7 +118,11 @@ export async function scheduledProcess(
       );
     } catch (e: any) {
       const tavilyElapsed = Date.now() - tavilyStart;
-      await logEvent(env, 'error', `[cron] tavily failed elapsed=${tavilyElapsed}ms err=${e?.message || e}`);
+      await logEvent(
+        env,
+        'error',
+        `[cron] tavily failed elapsed=${tavilyElapsed}ms err=${e?.message || e}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -124,7 +141,11 @@ export async function scheduledProcess(
     try {
       const knowledgeRes = await runKnowledgeAccumulation(env, ctx);
       const knowledgeElapsed = Date.now() - knowledgeStart;
-      await logEvent(env, 'info', `[cron] knowledge accumulation done written=${knowledgeRes.written} errors=${knowledgeRes.errors} elapsed=${knowledgeElapsed}ms`);
+      await logEvent(
+        env,
+        'info',
+        `[cron] knowledge accumulation done written=${knowledgeRes.written} errors=${knowledgeRes.errors} elapsed=${knowledgeElapsed}ms`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -140,7 +161,11 @@ export async function scheduledProcess(
       );
     } catch (e: any) {
       const knowledgeElapsed = Date.now() - knowledgeStart;
-      await logEvent(env, 'error', `[cron] knowledge accumulation failed elapsed=${knowledgeElapsed}ms err=${e?.message || e}`);
+      await logEvent(
+        env,
+        'error',
+        `[cron] knowledge accumulation failed elapsed=${knowledgeElapsed}ms err=${e?.message || e}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -158,7 +183,11 @@ export async function scheduledProcess(
     try {
       const insightRes = await runKnowledgeGeneration(env);
       const insightElapsed = Date.now() - insightStart;
-      await logEvent(env, 'info', `[cron] knowledge generation done written=${insightRes.written} skipped=${insightRes.skipped} errors=${insightRes.errors} elapsed=${insightElapsed}ms`);
+      await logEvent(
+        env,
+        'info',
+        `[cron] knowledge generation done written=${insightRes.written} skipped=${insightRes.skipped} errors=${insightRes.errors} elapsed=${insightElapsed}ms`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -175,7 +204,11 @@ export async function scheduledProcess(
       );
     } catch (e: any) {
       const insightElapsed = Date.now() - insightStart;
-      await logEvent(env, 'error', `[cron] knowledge generation failed elapsed=${insightElapsed}ms err=${e?.message || e}`);
+      await logEvent(
+        env,
+        'error',
+        `[cron] knowledge generation failed elapsed=${insightElapsed}ms err=${e?.message || e}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -188,7 +221,11 @@ export async function scheduledProcess(
     }
   } catch (e: any) {
     const elapsed = Date.now() - start;
-    await logEvent(env, 'error', `[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -247,7 +284,11 @@ export async function scheduledEntity(
   try {
     selfLearnResult = await runEntitySelfLearn(env);
     const selfLearnElapsed = Date.now() - selfLearnStart;
-    await logEvent(env, 'info', `[cron] entity selflearn done total=${selfLearnResult.total} candidates=${selfLearnResult.candidates.length} noise_filtered=${selfLearnResult.noise_filtered} elapsed=${selfLearnElapsed}ms`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] entity selflearn done total=${selfLearnResult.total} candidates=${selfLearnResult.candidates.length} noise_filtered=${selfLearnResult.noise_filtered} elapsed=${selfLearnElapsed}ms`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -265,7 +306,11 @@ export async function scheduledEntity(
     );
   } catch (e: any) {
     const selfLearnElapsed = Date.now() - selfLearnStart;
-    await logEvent(env, 'error', `[cron] entity selflearn failed elapsed=${selfLearnElapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] entity selflearn failed elapsed=${selfLearnElapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -283,7 +328,11 @@ export async function scheduledEntity(
   try {
     const processResult = await runEntityProcess(env);
     const processElapsed = Date.now() - processStart;
-    await logEvent(env, 'info', `[cron] entity process done finalized=${processResult.finalized} written=${processResult.written} errors=${processResult.errors} elapsed=${processElapsed}ms`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] entity process done finalized=${processResult.finalized} written=${processResult.written} errors=${processResult.errors} elapsed=${processElapsed}ms`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -300,7 +349,11 @@ export async function scheduledEntity(
     );
   } catch (e: any) {
     const processElapsed = Date.now() - processStart;
-    await logEvent(env, 'error', `[cron] entity process failed elapsed=${processElapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] entity process failed elapsed=${processElapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -322,7 +375,11 @@ export async function scheduledEntity(
     try {
       const eventResult = await runEventProcess(env);
       const eventElapsed = Date.now() - eventStart;
-      await logEvent(env, 'info', `[cron] event done clusters=${eventResult.clusters} threshold=${eventResult.threshold} written=${eventResult.written} errors=${eventResult.errors} elapsed=${eventElapsed}ms`);
+      await logEvent(
+        env,
+        'info',
+        `[cron] event done clusters=${eventResult.clusters} threshold=${eventResult.threshold} written=${eventResult.written} errors=${eventResult.errors} elapsed=${eventElapsed}ms`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -340,7 +397,11 @@ export async function scheduledEntity(
       );
     } catch (e: any) {
       const eventElapsed = Date.now() - eventStart;
-      await logEvent(env, 'error', `[cron] event failed elapsed=${eventElapsed}ms err=${e?.message || e}`);
+      await logEvent(
+        env,
+        'error',
+        `[cron] event failed elapsed=${eventElapsed}ms err=${e?.message || e}`
+      );
       ctx.waitUntil(
         logEvent(
           env,
@@ -394,7 +455,11 @@ export async function scheduledEvent(
     // Jaccard 聚类 + 写 R2 event-clusters.json + event-clusters-index.json
     const result = await runEventProcess(env);
     const elapsed = Date.now() - start;
-    await logEvent(env, 'info', `[cron] event process done clusters=${result.clusters} threshold=${result.threshold} written=${result.written} errors=${result.errors} elapsed=${elapsed}ms`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] event process done clusters=${result.clusters} threshold=${result.threshold} written=${result.written} errors=${result.errors} elapsed=${elapsed}ms`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -412,7 +477,11 @@ export async function scheduledEvent(
     );
   } catch (e: any) {
     const elapsed = Date.now() - start;
-    await logEvent(env, 'error', `[cron] event process failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] event process failed elapsed=${elapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -556,7 +625,11 @@ export async function scheduledArchiveOldEntities(
       reviewedData.entities = [...(reviewedData.entities || []), ...reviewed];
       reviewedData.generated_at = ts;
       await env.csnews_raw.put(reviewedKey, JSON.stringify(reviewedData, null, 2));
-      await logEvent(env, 'info', `[cron] archive wrote ${reviewed.length} reviewed to ${reviewedKey}`);
+      await logEvent(
+        env,
+        'info',
+        `[cron] archive wrote ${reviewed.length} reviewed to ${reviewedKey}`
+      );
     }
 
     // Step 5: Supabase DELETE (分批删除, 每次最多 500 条, 已经在 R2 兜底)
@@ -581,7 +654,11 @@ export async function scheduledArchiveOldEntities(
     }
 
     const elapsed = Date.now() - start;
-    await logEvent(env, 'info', `[cron] archive done active=${active.length} reviewed=${reviewed.length} deleted=${totalDeleted} elapsed=${elapsed}ms`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] archive done active=${active.length} reviewed=${reviewed.length} deleted=${totalDeleted} elapsed=${elapsed}ms`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -598,7 +675,11 @@ export async function scheduledArchiveOldEntities(
     );
   } catch (e: any) {
     const elapsed = Date.now() - start;
-    await logEvent(env, 'error', `[cron] archive failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] archive failed elapsed=${elapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -644,7 +725,11 @@ export async function scheduledFeedback(
   try {
     const result = await runFeedbackCheck(env);
     const elapsed = Date.now() - start;
-    await logEvent(env, 'info', `[cron] feedback done processed=${result.processed} validated=${result.validated} dismissed=${result.dismissed} pending=${result.pending} errors=${result.errors} elapsed=${elapsed}ms`);
+    await logEvent(
+      env,
+      'info',
+      `[cron] feedback done processed=${result.processed} validated=${result.validated} dismissed=${result.dismissed} pending=${result.pending} errors=${result.errors} elapsed=${elapsed}ms`
+    );
     ctx.waitUntil(
       logEvent(
         env,
@@ -663,7 +748,11 @@ export async function scheduledFeedback(
     );
   } catch (e: any) {
     const elapsed = Date.now() - start;
-    await logEvent(env, 'error', `[cron] feedback failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    await logEvent(
+      env,
+      'error',
+      `[cron] feedback failed elapsed=${elapsed}ms err=${e?.message || e}`
+    );
     ctx.waitUntil(
       logEvent(
         env,

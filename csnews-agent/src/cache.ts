@@ -153,7 +153,7 @@ export async function cacheGet(env: Env, key: string): Promise<any | null> {
     metrics.hits++;
     const parsed = JSON.parse(raw);
     // 向后兼容: 有 _seed 字段则提取 data, 无则返回原数据
-    return (parsed && typeof parsed === 'object' && '_seed' in parsed && 'data' in parsed)
+    return parsed && typeof parsed === 'object' && '_seed' in parsed && 'data' in parsed
       ? parsed.data
       : parsed;
   } catch (e) {

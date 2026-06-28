@@ -27,7 +27,13 @@ import {
 } from './event-process';
 import { recordReview, loadThresholdHistory, getCurrentThreshold } from './event-threshold';
 import { runEventClustering, type EventCluster } from './event-cluster';
-import { checkRateLimit, rateLimitResponse, readR2JsonOrNull, readCandidatesJson, writeCandidatesJson } from './utils';
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  readR2JsonOrNull,
+  readCandidatesJson,
+  writeCandidatesJson,
+} from './utils';
 
 // 反爬限流配置 (跟 content/trend/knowledge handler 命名一致 · 60 req/min per IP · 独立 KV prefix)
 // 写死 60 不走 validation 常量: 实体处理器无需独立 validation 文件, 抽常量到本文件顶部即可
@@ -51,7 +57,13 @@ const triggerEventRecluster = async (env: Env): Promise<void> => {
   try {
     await runEventProcess(env);
   } catch (e: any) {
-    await logEvent(env, 'error', `[handleEntityAction] event re-clustering failed: ${e?.message || e}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'error',
+      `[handleEntityAction] event re-clustering failed: ${e?.message || e}`,
+      undefined,
+      'entity'
+    );
   }
 };
 
@@ -74,47 +86,131 @@ async function applyEntityReviewMutation(
   const inCandidates = json.candidates?.findIndex((e: any) => e.name === entityName) ?? -1;
 
   const found =
-    opts.findMode === 'either' ? (inNoise >= 0 || inCandidates >= 0)
-    : opts.findMode === 'noise' ? inNoise >= 0
-    : inCandidates >= 0;
+    opts.findMode === 'either'
+      ? inNoise >= 0 || inCandidates >= 0
+      : opts.findMode === 'noise'
+        ? inNoise >= 0
+        : inCandidates >= 0;
 
   if (!found) {
-    return jsonResponse({ error: 'not_found', reason: opts.errorIfNotFound }, cors, { status: 404 });
+    return jsonResponse({ error: 'not_found', reason: opts.errorIfNotFound }, cors, {
+      status: 404,
+    });
   }
 
   const { candidates: newCandidates, noise: newNoise } = opts.mutate(json);
   await writeCandidatesJson(env, { ...json, candidates: newCandidates, noise: newNoise });
   triggerEventRecluster(env);
 
-  return jsonResponse({
-    type: opts.successType,
-    description: opts.successDescription,
-    entity: entityName,
-    reclustering: 'triggered',
-  }, cors);
+  return jsonResponse(
+    {
+      type: opts.successType,
+      description: opts.successDescription,
+      entity: entityName,
+      reclustering: 'triggered',
+    },
+    cors
+  );
 }
 
 // ---- entity read-only handlers (shared R2 read pattern) ----
-async function entityReadHandler(env: Env, type: string, cors: Record<string, string>): Promise<Response> {
+async function entityReadHandler(
+  env: Env,
+  type: string,
+  cors: Record<string, string>
+): Promise<Response> {
   try {
     if (type === 'candidates') {
-      const json = await readR2JsonOrNull<{ candidates: any[]; generated_at: string; total_news: number }>(env, ENTITY_CANDIDATES_R2_KEY);
-      if (!json) return jsonResponse({ type, description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn, 或自学习 0 候选)', candidates: [], total: 0 }, cors);
-      return jsonResponse({ type, description: 'R2 entity-candidates.json 入口', generated_at: json.generated_at, total_news: json.total_news, total: json.candidates?.length || 0, candidates: json.candidates || [] }, cors);
+      const json = await readR2JsonOrNull<{
+        candidates: any[];
+        generated_at: string;
+        total_news: number;
+      }>(env, ENTITY_CANDIDATES_R2_KEY);
+      if (!json)
+        return jsonResponse(
+          {
+            type,
+            description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn, 或自学习 0 候选)',
+            candidates: [],
+            total: 0,
+          },
+          cors
+        );
+      return jsonResponse(
+        {
+          type,
+          description: 'R2 entity-candidates.json 入口',
+          generated_at: json.generated_at,
+          total_news: json.total_news,
+          total: json.candidates?.length || 0,
+          candidates: json.candidates || [],
+        },
+        cors
+      );
     }
     if (type === 'finalized') {
-      const json = await readR2JsonOrNull<{ entities: any[]; generated_at: string }>(env, ENTITY_FINALIZED_R2_KEY);
-      if (!json) return jsonResponse({ type, description: 'R2 entity-finalized.json 不存在 (尚未运行 process)', entities: [], total: 0 }, cors);
-      return jsonResponse({ type, description: 'review 后入库的实体 (R2 entity-finalized.json)', generated_at: json.generated_at, total: json.entities?.length || 0, entities: json.entities || [] }, cors);
+      const json = await readR2JsonOrNull<{ entities: any[]; generated_at: string }>(
+        env,
+        ENTITY_FINALIZED_R2_KEY
+      );
+      if (!json)
+        return jsonResponse(
+          {
+            type,
+            description: 'R2 entity-finalized.json 不存在 (尚未运行 process)',
+            entities: [],
+            total: 0,
+          },
+          cors
+        );
+      return jsonResponse(
+        {
+          type,
+          description: 'review 后入库的实体 (R2 entity-finalized.json)',
+          generated_at: json.generated_at,
+          total: json.entities?.length || 0,
+          entities: json.entities || [],
+        },
+        cors
+      );
     }
     if (type === 'noise') {
-      const json = await readR2JsonOrNull<{ noise: any[]; noise_threshold: number; noise_anchors_count: number; noise_scores: any[]; generated_at: string }>(env, ENTITY_CANDIDATES_R2_KEY);
-      if (!json) return jsonResponse({ type, description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn)', noise: [], total: 0 }, cors);
-      return jsonResponse({ type, description: 'noise 分组 (review 入口)', generated_at: json.generated_at, noise_threshold: json.noise_threshold, noise_anchors_count: json.noise_anchors_count, total: json.noise?.length || 0, noise: json.noise || [], noise_scores: json.noise_scores || [] }, cors);
+      const json = await readR2JsonOrNull<{
+        noise: any[];
+        noise_threshold: number;
+        noise_anchors_count: number;
+        noise_scores: any[];
+        generated_at: string;
+      }>(env, ENTITY_CANDIDATES_R2_KEY);
+      if (!json)
+        return jsonResponse(
+          {
+            type,
+            description: 'R2 entity-candidates.json 不存在 (尚未运行 selflearn)',
+            noise: [],
+            total: 0,
+          },
+          cors
+        );
+      return jsonResponse(
+        {
+          type,
+          description: 'noise 分组 (review 入口)',
+          generated_at: json.generated_at,
+          noise_threshold: json.noise_threshold,
+          noise_anchors_count: json.noise_anchors_count,
+          total: json.noise?.length || 0,
+          noise: json.noise || [],
+          noise_scores: json.noise_scores || [],
+        },
+        cors
+      );
     }
     return jsonResponse({ error: 'internal_error' }, cors, { status: 500 });
   } catch (e: any) {
-    return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, { status: 500 });
+    return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+      status: 500,
+    });
   }
 }
 
@@ -127,16 +223,36 @@ export async function handleEntityAction(
 ): Promise<Response> {
   const type = url.searchParams.get('type') || 'candidates';
   const validTypes = [
-    'candidates', 'selflearn', 'process', 'finalized',
-    'noise-anchors', 'noise', 'approve', 'reject', 'noise-add', 'noise-remove',
+    'candidates',
+    'selflearn',
+    'process',
+    'finalized',
+    'noise-anchors',
+    'noise',
+    'approve',
+    'reject',
+    'noise-add',
+    'noise-remove',
   ];
   if (!validTypes.includes(type)) {
-    return jsonResponse({ error: 'invalid_type', reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise 六选一, 当前 ${type}` }, cors, { status: 400 });
+    return jsonResponse(
+      {
+        error: 'invalid_type',
+        reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise 六选一, 当前 ${type}`,
+      },
+      cors,
+      { status: 400 }
+    );
   }
 
   // 反爬限流 (单 IP 60 req/min, 独立 KV prefix)
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { exceeded } = await checkRateLimit(env, ctx, `entity_rate:${ip}`, ENTITY_RATE_LIMIT_PER_MIN);
+  const { exceeded } = await checkRateLimit(
+    env,
+    ctx,
+    `entity_rate:${ip}`,
+    ENTITY_RATE_LIMIT_PER_MIN
+  );
   if (exceeded) return rateLimitResponse(cors, ENTITY_RATE_LIMIT_PER_MIN);
 
   // Read-only handlers (R2 read via readR2JsonOrNull)
@@ -147,37 +263,63 @@ export async function handleEntityAction(
   // Process triggers
   if (type === 'selflearn') {
     const result = await runEntitySelfLearn(env);
-    return jsonResponse({
-      type: 'selflearn',
-      description: '跑 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type + semantic noise filter)',
-      total_news: result.total, embedded: result.embedded, candidates: result.candidates.length,
-      noise_filtered: result.noise_filtered, noise_anchors_count: result.noise_anchors_count,
-      top_candidates: result.candidates.slice(0, 10),
-    }, cors);
+    return jsonResponse(
+      {
+        type: 'selflearn',
+        description:
+          '跑 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type + semantic noise filter)',
+        total_news: result.total,
+        embedded: result.embedded,
+        candidates: result.candidates.length,
+        noise_filtered: result.noise_filtered,
+        noise_anchors_count: result.noise_anchors_count,
+        top_candidates: result.candidates.slice(0, 10),
+      },
+      cors
+    );
   }
 
   if (type === 'process') {
     const result = await runEntityProcess(env);
-    return jsonResponse({
-      type: 'process',
-      description: '暂存 R2 entity-finalized.json, 等 quota-period-out 决策 schema migration',
-      finalized: result.finalized, written: result.written, errors: result.errors,
-    }, cors);
+    return jsonResponse(
+      {
+        type: 'process',
+        description: '暂存 R2 entity-finalized.json, 等 quota-period-out 决策 schema migration',
+        finalized: result.finalized,
+        written: result.written,
+        errors: result.errors,
+      },
+      cors
+    );
   }
 
   if (type === 'noise-anchors') {
     try {
       const data = await loadNoiseAnchors(env);
-      return jsonResponse({ type: 'noise-anchors', description: 'anchors 增删入口 (R2 entity-noise-anchors.json · 0 硬编码 const)', anchors: data.anchors, threshold: data.threshold, total: data.anchors.length, updated_at: data.updated_at }, cors);
+      return jsonResponse(
+        {
+          type: 'noise-anchors',
+          description: 'anchors 增删入口 (R2 entity-noise-anchors.json · 0 硬编码 const)',
+          anchors: data.anchors,
+          threshold: data.threshold,
+          total: data.anchors.length,
+          updated_at: data.updated_at,
+        },
+        cors
+      );
     } catch (e: any) {
-      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, { status: 500 });
+      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+        status: 500,
+      });
     }
   }
 
   // Review mutations (all share readCandidatesJson + writeCandidatesJson + triggerEventRecluster)
   const entityName = url.searchParams.get('name');
   if (!entityName) {
-    return jsonResponse({ error: 'missing_param', reason: 'name 是必填参数' }, cors, { status: 400 });
+    return jsonResponse({ error: 'missing_param', reason: 'name 是必填参数' }, cors, {
+      status: 400,
+    });
   }
 
   if (type === 'approve') {
@@ -197,10 +339,14 @@ export async function handleEntityAction(
           mention_count: src.mention_count || 1,
         };
         return {
-          candidates: inNoise >= 0
-            ? [...json.candidates, approvedEntity]
-            : json.candidates.map((e: any) => e.name === entityName ? { ...e, source: 'review' as const, confidence: 0.9 } : e),
-          noise: inNoise >= 0 ? json.noise.filter((_: any, i: number) => i !== inNoise) : json.noise,
+          candidates:
+            inNoise >= 0
+              ? [...json.candidates, approvedEntity]
+              : json.candidates.map((e: any) =>
+                  e.name === entityName ? { ...e, source: 'review' as const, confidence: 0.9 } : e
+                ),
+          noise:
+            inNoise >= 0 ? json.noise.filter((_: any, i: number) => i !== inNoise) : json.noise,
         };
       },
       errorIfNotFound: `实体 "${entityName}" 不存在`,
@@ -213,8 +359,12 @@ export async function handleEntityAction(
     return applyEntityReviewMutation(env, entityName, cors, {
       findMode: 'either',
       mutate: (json) => ({
-        candidates: json.candidates.filter((_: any, i: number) => i !== json.candidates.findIndex((e: any) => e.name === entityName)),
-        noise: json.noise.filter((_: any, i: number) => i !== json.noise.findIndex((e: any) => e.name === entityName)),
+        candidates: json.candidates.filter(
+          (_: any, i: number) => i !== json.candidates.findIndex((e: any) => e.name === entityName)
+        ),
+        noise: json.noise.filter(
+          (_: any, i: number) => i !== json.noise.findIndex((e: any) => e.name === entityName)
+        ),
       }),
       errorIfNotFound: `实体 "${entityName}" 不存在`,
       successType: 'reject',
@@ -226,22 +376,46 @@ export async function handleEntityAction(
     const json = await readCandidatesJson(env);
     const inCandidates = json.candidates.findIndex((e: any) => e.name === entityName);
     const inNoise = json.noise.findIndex((e: any) => e.name === entityName);
-    if (inCandidates === -1) return jsonResponse({ error: 'not_found', reason: `候选实体 "${entityName}" 不存在` }, cors, { status: 404 });
-    if (inNoise >= 0) return jsonResponse({ error: 'already_noise', reason: `实体 "${entityName}" 已在 noise 列表` }, cors, { status: 409 });
-    const noiseEntity = { ...json.candidates[inCandidates], first_seen: json.candidates[inCandidates].first_seen || new Date().toISOString() };
+    if (inCandidates === -1)
+      return jsonResponse({ error: 'not_found', reason: `候选实体 "${entityName}" 不存在` }, cors, {
+        status: 404,
+      });
+    if (inNoise >= 0)
+      return jsonResponse(
+        { error: 'already_noise', reason: `实体 "${entityName}" 已在 noise 列表` },
+        cors,
+        { status: 409 }
+      );
+    const noiseEntity = {
+      ...json.candidates[inCandidates],
+      first_seen: json.candidates[inCandidates].first_seen || new Date().toISOString(),
+    };
     await writeCandidatesJson(env, {
       ...json,
       candidates: json.candidates.filter((_: any, i: number) => i !== inCandidates),
       noise: [...(json.noise || []), noiseEntity],
     });
     triggerEventRecluster(env);
-    return jsonResponse({ type: 'noise-add', description: 'review 标记 entity 为 noise → 触发 event re-clustering', entity: entityName, reclustering: 'triggered' }, cors);
+    return jsonResponse(
+      {
+        type: 'noise-add',
+        description: 'review 标记 entity 为 noise → 触发 event re-clustering',
+        entity: entityName,
+        reclustering: 'triggered',
+      },
+      cors
+    );
   }
 
   if (type === 'noise-remove') {
     const json = await readCandidatesJson(env);
     const inNoise = json.noise.findIndex((e: any) => e.name === entityName);
-    if (inNoise === -1) return jsonResponse({ error: 'not_found', reason: `noise 列表中没有 "${entityName}"` }, cors, { status: 404 });
+    if (inNoise === -1)
+      return jsonResponse(
+        { error: 'not_found', reason: `noise 列表中没有 "${entityName}"` },
+        cors,
+        { status: 404 }
+      );
     const restoredEntity = { ...json.noise[inNoise], source: 'selflearn', confidence: 0.5 };
     await writeCandidatesJson(env, {
       ...json,
@@ -249,7 +423,15 @@ export async function handleEntityAction(
       candidates: [...(json.candidates || []), restoredEntity],
     });
     triggerEventRecluster(env);
-    return jsonResponse({ type: 'noise-remove', description: 'review 取消 noise 标记 → 触发 event re-clustering', entity: entityName, reclustering: 'triggered' }, cors);
+    return jsonResponse(
+      {
+        type: 'noise-remove',
+        description: 'review 取消 noise 标记 → 触发 event re-clustering',
+        entity: entityName,
+        reclustering: 'triggered',
+      },
+      cors
+    );
   }
 
   return jsonResponse({ error: 'internal_error' }, cors, { status: 500 });
@@ -272,7 +454,14 @@ export async function handleEventAction(
   const type = url.searchParams.get('type') || 'clusters';
   const validTypes = ['clusters', 'cluster', 'process', 'review', 'threshold'];
   if (!validTypes.includes(type)) {
-    return jsonResponse({ error: 'invalid_type', reason: `type 必须是 clusters|cluster|process|review|threshold 五选一, 当前 ${type}` }, cors, { status: 400 });
+    return jsonResponse(
+      {
+        error: 'invalid_type',
+        reason: `type 必须是 clusters|cluster|process|review|threshold 五选一, 当前 ${type}`,
+      },
+      cors,
+      { status: 400 }
+    );
   }
 
   // 反爬限流 (单 IP 60 req/min)
@@ -282,23 +471,68 @@ export async function handleEventAction(
 
   if (type === 'clusters') {
     try {
-      const json = await readR2JsonOrNull<{ clusters: EventCluster[]; threshold: number; generated_at: string }>(env, EVENT_CLUSTERS_R2_KEY);
-      if (!json) return jsonResponse({ type: 'clusters', description: 'R2 event-clusters.json 不存在 (尚未运行 cluster 或 process)', clusters: [], total: 0 }, cors);
-      return jsonResponse({ type: 'clusters', description: 'R2 event-clusters.json 入口', generated_at: json.generated_at, threshold: json.threshold, total: json.clusters?.length || 0, clusters: json.clusters || [] }, cors);
+      const json = await readR2JsonOrNull<{
+        clusters: EventCluster[];
+        threshold: number;
+        generated_at: string;
+      }>(env, EVENT_CLUSTERS_R2_KEY);
+      if (!json)
+        return jsonResponse(
+          {
+            type: 'clusters',
+            description: 'R2 event-clusters.json 不存在 (尚未运行 cluster 或 process)',
+            clusters: [],
+            total: 0,
+          },
+          cors
+        );
+      return jsonResponse(
+        {
+          type: 'clusters',
+          description: 'R2 event-clusters.json 入口',
+          generated_at: json.generated_at,
+          threshold: json.threshold,
+          total: json.clusters?.length || 0,
+          clusters: json.clusters || [],
+        },
+        cors
+      );
     } catch (e: any) {
-      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, { status: 500 });
+      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+        status: 500,
+      });
     }
   }
 
   if (type === 'cluster') {
     const entities = await (await import('./entity-process')).loadReviewedCandidates(env);
     const result = await runEventClustering(env, entities);
-    return jsonResponse({ type: 'cluster', description: '跑 runEventClustering (Jaccard entity_overlap + threshold 自适应)', threshold: result.threshold, jaccard_pairs: result.jaccard_pairs, total: result.clusters.length, clusters: result.clusters }, cors);
+    return jsonResponse(
+      {
+        type: 'cluster',
+        description: '跑 runEventClustering (Jaccard entity_overlap + threshold 自适应)',
+        threshold: result.threshold,
+        jaccard_pairs: result.jaccard_pairs,
+        total: result.clusters.length,
+        clusters: result.clusters,
+      },
+      cors
+    );
   }
 
   if (type === 'process') {
     const result = await runEventProcess(env);
-    return jsonResponse({ type: 'process', description: '暂存 R2 event-clusters.json, 等 quota-period-out 决策 schema migration', clusters: result.clusters, threshold: result.threshold, written: result.written, errors: result.errors }, cors);
+    return jsonResponse(
+      {
+        type: 'process',
+        description: '暂存 R2 event-clusters.json, 等 quota-period-out 决策 schema migration',
+        clusters: result.clusters,
+        threshold: result.threshold,
+        written: result.written,
+        errors: result.errors,
+      },
+      cors
+    );
   }
 
   if (type === 'review') {
@@ -306,15 +540,42 @@ export async function handleEventAction(
     const clusterId = url.searchParams.get('cluster_id') || undefined;
     const reason = url.searchParams.get('reason') || undefined;
     if (review !== 'correct' && review !== 'incorrect') {
-      return jsonResponse({ error: 'invalid_review', reason: `review 必须是 correct|incorrect 二选一, 当前 ${review}` }, cors, { status: 400 });
+      return jsonResponse(
+        {
+          error: 'invalid_review',
+          reason: `review 必须是 correct|incorrect 二选一, 当前 ${review}`,
+        },
+        cors,
+        { status: 400 }
+      );
     }
     const updated = await recordReview(env, review, clusterId, reason);
-    return jsonResponse({ type: 'review', description: 'review 反馈 → threshold 自动微调 (闭环)', review, old_threshold: updated.history[updated.history.length - 1]?.old_value, new_threshold: updated.current, history_length: updated.history.length }, cors);
+    return jsonResponse(
+      {
+        type: 'review',
+        description: 'review 反馈 → threshold 自动微调 (闭环)',
+        review,
+        old_threshold: updated.history[updated.history.length - 1]?.old_value,
+        new_threshold: updated.current,
+        history_length: updated.history.length,
+      },
+      cors
+    );
   }
 
   if (type === 'threshold') {
     const history = await loadThresholdHistory(env);
-    return jsonResponse({ type: 'threshold', description: 'review 反馈驱动的 threshold 调优历史', current: history.current, history_length: history.history.length, history: history.history, updated_at: history.updated_at }, cors);
+    return jsonResponse(
+      {
+        type: 'threshold',
+        description: 'review 反馈驱动的 threshold 调优历史',
+        current: history.current,
+        history_length: history.history.length,
+        history: history.history,
+        updated_at: history.updated_at,
+      },
+      cors
+    );
   }
 
   return jsonResponse({ error: 'internal_error' }, cors, { status: 500 });

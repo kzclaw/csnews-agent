@@ -27,11 +27,7 @@ export async function scoreTitleWithWeights(
  * Classify a news title using semantic embedding similarity.
  * Optionally pass item summary for better classification accuracy.
  */
-export async function classifyTitle(
-  title: string,
-  env: Env,
-  summary?: string
-): Promise<string> {
+export async function classifyTitle(title: string, env: Env, summary?: string): Promise<string> {
   return classify(title, env, summary);
 }
 

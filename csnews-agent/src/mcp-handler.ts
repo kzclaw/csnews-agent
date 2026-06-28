@@ -18,13 +18,14 @@
  */
 
 import { Env, jsonResponse } from './shared';
-import {
-  MCP_ERROR_CODES,
-  type JSONRPCRequest,
-  type JSONRPCResponse,
-} from './mcp-types';
+import { MCP_ERROR_CODES, type JSONRPCRequest, type JSONRPCResponse } from './mcp-types';
 import { MCP_TOOLS, MCP_TOOLS_COUNT } from './mcp-tools';
-import { executeTool, buildSuccessResponse, buildErrorResponse, handleToolsCall } from './mcp-execute';
+import {
+  executeTool,
+  buildSuccessResponse,
+  buildErrorResponse,
+  handleToolsCall,
+} from './mcp-execute';
 import { handleMCPProtocolMethod, parseJSONRPCRequest, validateRequest } from './mcp-validate';
 
 // ============================================================
@@ -168,7 +169,11 @@ export async function handleMCPAction(
     const validationError = validateRequest(req);
     if (validationError) {
       return jsonResponse(
-        buildErrorResponse(null, MCP_ERROR_CODES.INVALID_REQUEST, `Invalid request: ${validationError}`),
+        buildErrorResponse(
+          null,
+          MCP_ERROR_CODES.INVALID_REQUEST,
+          `Invalid request: ${validationError}`
+        ),
         cors,
         { status: 400 }
       );

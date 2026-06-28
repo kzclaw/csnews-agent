@@ -56,13 +56,31 @@ export async function findSimilarNews(
               topic_id: n.topic_id!,
               similarity: scoreMap.get(n.id) || 0,
             }));
-          await logEvent(env, 'info', `[findSimilarNews] Vectorize hit: ${results.length} results`, undefined, 'process');
+          await logEvent(
+            env,
+            'info',
+            `[findSimilarNews] Vectorize hit: ${results.length} results`,
+            undefined,
+            'process'
+          );
           return results;
         }
-        await logEvent(env, 'warn', '[findSimilarNews] Failed to fetch topic_ids from Supabase', undefined, 'process');
+        await logEvent(
+          env,
+          'warn',
+          '[findSimilarNews] Failed to fetch topic_ids from Supabase',
+          undefined,
+          'process'
+        );
       }
     } catch (err) {
-      await logEvent(env, 'warn', '[findSimilarNews] Vectorize query failed, falling back to Supabase', { err: err as any }, 'process');
+      await logEvent(
+        env,
+        'warn',
+        '[findSimilarNews] Vectorize query failed, falling back to Supabase',
+        { err: err as any },
+        'process'
+      );
     }
   }
 
@@ -97,13 +115,25 @@ export async function recordTrendSnapshot(env: Env, topicId: string) {
     });
     if (!res.ok) {
       const errText = await res.text();
-      await logEvent(env, 'error', `[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0, 200)}`, undefined, 'process');
+      await logEvent(
+        env,
+        'error',
+        `[TIE] record_trend_snapshot HTTP ${res.status} for ${topicId}: ${errText.slice(0, 200)}`,
+        undefined,
+        'process'
+      );
       return null;
     }
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
-    await logEvent(env, 'error', `[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`, undefined, 'process');
+    await logEvent(
+      env,
+      'error',
+      `[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`,
+      undefined,
+      'process'
+    );
     return null;
   }
 }
@@ -305,7 +335,13 @@ export async function dualWriteEmbeddingsToVectorize(
 ): Promise<void> {
   const vectorClient = new VectorizeClient(env.VECTORIZE, env);
   if (!vectorClient.isAvailable()) {
-    await logEvent(env, 'warn', '[Vectorize] binding not available, skipping dual-write', undefined, 'process');
+    await logEvent(
+      env,
+      'warn',
+      '[Vectorize] binding not available, skipping dual-write',
+      undefined,
+      'process'
+    );
     return;
   }
 
@@ -336,9 +372,21 @@ export async function dualWriteEmbeddingsToVectorize(
 
   try {
     await env.VECTORIZE!.upsert(vectors);
-    await logEvent(env, 'info', `[Vectorize] dual-write batch upserted ${vectors.length} vectors`, undefined, 'process');
+    await logEvent(
+      env,
+      'info',
+      `[Vectorize] dual-write batch upserted ${vectors.length} vectors`,
+      undefined,
+      'process'
+    );
   } catch (err) {
-    await logEvent(env, 'error', '[Vectorize] dual-write batch failed', { err: err as any }, 'process');
+    await logEvent(
+      env,
+      'error',
+      '[Vectorize] dual-write batch failed',
+      { err: err as any },
+      'process'
+    );
     // Don't throw — Vectorize failure should not block process flow
   }
 }
@@ -358,14 +406,26 @@ export async function recordTrendWithMember(
     });
     if (!res.ok) {
       const errText = await res.text();
-      await logEvent(env, 'error', `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`, undefined, 'process');
+      await logEvent(
+        env,
+        'error',
+        `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
+        undefined,
+        'process'
+      );
       return null;
     }
     // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
   } catch (e: any) {
-    await logEvent(env, 'error', `record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`, undefined, 'process');
+    await logEvent(
+      env,
+      'error',
+      `record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`,
+      undefined,
+      'process'
+    );
     return null;
   }
 }

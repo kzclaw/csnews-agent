@@ -38,11 +38,7 @@ export async function embedTitle(env: Env, title: string): Promise<number[]> {
     })) as BgeEmbeddingResponse;
     if (Array.isArray(embResp?.data) && embResp.data.length > 0) {
       const it = embResp.data[0];
-      return Array.isArray(it?.embedding)
-        ? it.embedding
-        : Array.isArray(it)
-          ? it
-          : [];
+      return Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];
     }
   } catch {
     /* embedding failure is non-fatal */

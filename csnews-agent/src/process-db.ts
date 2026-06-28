@@ -68,10 +68,7 @@ export async function updateTopicScoreById(
  * Returns array of inserted IDs in the same order as input.
  * Returns empty array on complete failure.
  */
-export async function insertNewsBatch(
-  env: Env,
-  newsList: NewsBatchItem[]
-): Promise<string[]> {
+export async function insertNewsBatch(env: Env, newsList: NewsBatchItem[]): Promise<string[]> {
   return insertNewsHotspotsBatch(env, newsList);
 }
 

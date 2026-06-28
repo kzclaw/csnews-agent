@@ -4,6 +4,7 @@
     "@mozilla/readability": "^0.6.0",
     "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.8",
+    "husky": "^9.1.7",
     "linkedom": "^0.18.12",
     "prettier": "^3.5.0",
     "typescript": "^5.3.3",
@@ -16,6 +17,6 @@
     "validate:watch": "vitest",
     "validate:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "prepare": "[ -f ../.privacy-patterns.txt ] || echo 5oi0CuWkp+iZvgroiJLmn68K5oi05aSn5a6dCuaItOiIkuafr+aLjeadvwrmi43mnb/mnYMKa3pjbGF3CktSWzEtOV0Ka3JbMS05XQpQaGFzZVsxLTldClRbMS05XVswLTldezJ9Ck1bMS01XQpGb3VuZGF0aW9uWyBcdF0rWzEtOV0Ka3dva3ppdFwuaW5mbwovVXNlcnMveml0a3dvawo= | base64 -d > ../.privacy-patterns.txt"
+    "prepare": "husky"
   }
 }

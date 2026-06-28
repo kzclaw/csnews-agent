@@ -14,7 +14,10 @@ function modelToLevel(model: string): string {
   return 'L1'; // unknown/default
 }
 
-export async function handleAiUsageAction(env: Env, cors: Record<string, string>): Promise<Response> {
+export async function handleAiUsageAction(
+  env: Env,
+  cors: Record<string, string>
+): Promise<Response> {
   if (!env.AI_USAGE_KV) {
     return jsonResponse({ error: 'AI_USAGE_KV binding missing' }, cors, { status: 503 });
   }

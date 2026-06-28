@@ -6,7 +6,13 @@ import { Env, jsonResponse } from './shared';
 import { resetCacheMetrics } from './cache';
 import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
 import { scoreTitle, classifyTitle } from './process-ai';
-import { createTopicForTitle, updateTopicScoreById, insertNewsBatch, dualWriteVectors, recordTrendForNews } from './process-db';
+import {
+  createTopicForTitle,
+  updateTopicScoreById,
+  insertNewsBatch,
+  dualWriteVectors,
+  recordTrendForNews,
+} from './process-db';
 import { cleanupStaleTopics as cleanupStTopics } from './news-process';
 import type { CleanupStaleTopicsResult, ZakerArticle } from './types';
 
@@ -93,12 +99,15 @@ export async function handleProcessAction(
       });
     }
 
-    return jsonResponse({
-      worker_version: env.WORKER_VERSION || 'unknown',
-      processed: results.length,
-      cleaned: cleaned?.deleted_topic_count || 0,
-      items: results,
-    }, cors);
+    return jsonResponse(
+      {
+        worker_version: env.WORKER_VERSION || 'unknown',
+        processed: results.length,
+        cleaned: cleaned?.deleted_topic_count || 0,
+        items: results,
+      },
+      cors
+    );
   } finally {
     if (env.PROCESS_STATE) {
       const ts = new Date().toISOString();
@@ -163,9 +172,15 @@ async function processZakerItem(
         if (simScore < 0.95) {
           const { saveToR2 } = await import('./news-process');
           r2Key = await saveToR2(env, 'news/zaker', {
-            title, category, score: rule.score, source: 'zaker',
-            topic_id: topicId, level: newsLevel, fission,
-            similarity: simScore, created_at: new Date().toISOString(),
+            title,
+            category,
+            score: rule.score,
+            source: 'zaker',
+            topic_id: topicId,
+            level: newsLevel,
+            fission,
+            similarity: simScore,
+            created_at: new Date().toISOString(),
           });
           isStoredR2 = true;
           storedReason = 'same_topic_new_angle';
@@ -184,8 +199,13 @@ async function processZakerItem(
         isNewTopic = true;
         const { saveToR2 } = await import('./news-process');
         r2Key = await saveToR2(env, 'news/zaker', {
-          title, category, score: rule.score, source: 'zaker',
-          topic_id: topicId, level: newsLevel, fission: false,
+          title,
+          category,
+          score: rule.score,
+          source: 'zaker',
+          topic_id: topicId,
+          level: newsLevel,
+          fission: false,
           created_at: new Date().toISOString(),
         });
         isStoredR2 = true;
@@ -194,8 +214,22 @@ async function processZakerItem(
     }
   }
 
-  return { item, topicId, isNewTopic, newsLevel, newsScore, fission,
-    matchedSimilarity, isStoredR2, storedReason, r2Key, embedding, title, category, rule };
+  return {
+    item,
+    topicId,
+    isNewTopic,
+    newsLevel,
+    newsScore,
+    fission,
+    matchedSimilarity,
+    isStoredR2,
+    storedReason,
+    r2Key,
+    embedding,
+    title,
+    category,
+    rule,
+  };
 }
 
 interface PendingItem {

@@ -330,7 +330,13 @@ export async function runEntitySelfLearn(env: Env): Promise<{
       noise_anchors_count: noiseAnchorsData.anchors.length,
     };
   } catch (e: any) {
-    await logEvent(env, 'error', `[entity-selflearn] failed: ${e?.message || e}`, undefined, 'entity');
+    await logEvent(
+      env,
+      'error',
+      `[entity-selflearn] failed: ${e?.message || e}`,
+      undefined,
+      'entity'
+    );
     return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
   }
 }

@@ -56,23 +56,41 @@ export async function detectSemanticRelations(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
+        Prefer: 'return=representation',
       },
       body: JSON.stringify({ p_sql: sql }),
     });
 
     if (!res.ok) {
       const text = await res.text();
-      await logEvent(env, 'error', `[event-semantic-detector] exec failed: ${res.status} ${text}`, undefined, 'event');
+      await logEvent(
+        env,
+        'error',
+        `[event-semantic-detector] exec failed: ${res.status} ${text}`,
+        undefined,
+        'event'
+      );
       return { detected: 0, errors: 1 };
     }
 
     const data = await res.json();
     const count = Array.isArray(data) ? data.length : 0;
-    await logEvent(env, 'info', `[event-semantic-detector] detected ${count} semantic relations (threshold=${threshold})`, undefined, 'event');
+    await logEvent(
+      env,
+      'info',
+      `[event-semantic-detector] detected ${count} semantic relations (threshold=${threshold})`,
+      undefined,
+      'event'
+    );
     return { detected: count, errors: 0 };
   } catch (e: any) {
-    await logEvent(env, 'error', `[event-semantic-detector] error: ${e?.message || e}`, undefined, 'event');
+    await logEvent(
+      env,
+      'error',
+      `[event-semantic-detector] error: ${e?.message || e}`,
+      undefined,
+      'event'
+    );
     return { detected: 0, errors: 1 };
   }
 }
@@ -80,10 +98,7 @@ export async function detectSemanticRelations(
 /**
  * 获取 semantic pairs (预览模式)
  */
-export async function getSemanticPairs(
-  env: Env,
-  threshold = 0.7
-): Promise<SemanticRelation[]> {
+export async function getSemanticPairs(env: Env, threshold = 0.7): Promise<SemanticRelation[]> {
   const sql = `
     SELECT
       e1.id AS from_event_id,
@@ -100,7 +115,7 @@ export async function getSemanticPairs(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
+        Prefer: 'return=representation',
       },
       body: JSON.stringify({ p_sql: sql }),
     });
@@ -108,7 +123,13 @@ export async function getSemanticPairs(
     if (!res.ok) return [];
     return await res.json();
   } catch (e: any) {
-    await logEvent(env, 'error', `[event-semantic-detector] error: ${e?.message || e}`, undefined, 'event');
+    await logEvent(
+      env,
+      'error',
+      `[event-semantic-detector] error: ${e?.message || e}`,
+      undefined,
+      'event'
+    );
     return [];
   }
 }

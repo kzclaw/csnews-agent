@@ -150,7 +150,13 @@ export async function adjustWeights(
   }
 
   await saveWeights(env, category, adjusted);
-  await logEvent(env, 'info', `[score-rule-weights] adjusted category=${category} accuracy=${accuracy} factor=${factor}`, undefined, 'feedback');
+  await logEvent(
+    env,
+    'info',
+    `[score-rule-weights] adjusted category=${category} accuracy=${accuracy} factor=${factor}`,
+    undefined,
+    'feedback'
+  );
 
   return adjusted;
 }

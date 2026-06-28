@@ -100,7 +100,9 @@ export async function handleProxyAction(
   }
 
   if (!fetchOk || !html) {
-    return jsonResponse({ error: 'fetch_failed', reason: '目标页面内容为空' }, cors, { status: 502 });
+    return jsonResponse({ error: 'fetch_failed', reason: '目标页面内容为空' }, cors, {
+      status: 502,
+    });
   }
 
   // 5. Readability 提取正文
@@ -110,11 +112,9 @@ export async function handleProxyAction(
     const article = reader.parse();
 
     if (!article || !article.content) {
-      return jsonResponse(
-        { error: 'extraction_failed', reason: '无法从页面提取正文内容' },
-        cors,
-        { status: 502 }
-      );
+      return jsonResponse({ error: 'extraction_failed', reason: '无法从页面提取正文内容' }, cors, {
+        status: 502,
+      });
     }
 
     // 6. 返回 text/html (viewer 直接 innerHTML 渲染)
@@ -140,7 +140,12 @@ export async function handleProxyAction(
  * 样式内联,viewer 直接 innerHTML 渲染
  */
 function buildArticleHtml(
-  article: { title?: string | null; content?: string | null; textContent?: string | null; siteName?: string | null },
+  article: {
+    title?: string | null;
+    content?: string | null;
+    textContent?: string | null;
+    siteName?: string | null;
+  },
   sourceUrl: string
 ): string {
   const title = article.title || '正文';

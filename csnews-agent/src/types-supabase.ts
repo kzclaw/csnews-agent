@@ -112,8 +112,9 @@ export function isZakerHotResponse(v: unknown): v is ZakerHotResponse {
 }
 
 export function isCleanupStaleResult(v: unknown): v is CleanupStaleResult {
-  return typeof v === 'object' && v !== null &&
-    'deleted_topic_count' in v && 'deleted_news_count' in v;
+  return (
+    typeof v === 'object' && v !== null && 'deleted_topic_count' in v && 'deleted_news_count' in v
+  );
 }
 
 export function isSimilarNewsItem(v: unknown): v is SimilarNewsItem {
@@ -121,8 +122,7 @@ export function isSimilarNewsItem(v: unknown): v is SimilarNewsItem {
 }
 
 export function isUpdateTopicScoreResult(v: unknown): v is UpdateTopicScoreResult {
-  return typeof v === 'object' && v !== null &&
-    'new_score' in v && 'new_level' in v;
+  return typeof v === 'object' && v !== null && 'new_score' in v && 'new_level' in v;
 }
 
 export function isTrendSnapshotResult(v: unknown): v is TrendSnapshotResult {
