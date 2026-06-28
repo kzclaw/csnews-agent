@@ -422,27 +422,43 @@ export default {
     return await dispatchAction(env, ctx, action, request);
   },
 
-  async scheduled(
+  scheduled(
     controller: ScheduledController,
     env: Env,
     ctx: ExecutionContext,
-  ): Promise<void> {
+  ): void {
     const cron = controller?.cron ?? 'unknown';
 
     // Route to the appropriate handler based on cron expression
     if (cron === '0 3,15 * * *') {
       // Entity selflearn + process + event clustering — twice daily (03:00 & 15:00 UTC)
       // bge-m3 ~5K Neurons/day, within Free Plan 10K/day quota
-      await scheduledEntity(env, ctx, controller);
+      ctx.waitUntil(
+        scheduledEntity(env, ctx, controller).catch(e => {
+          console.error('[scheduled] entity error:', e?.message || e);
+        })
+      );
     } else if (cron === '0 0 * * *') {
       // Process + tavily + knowledge — daily at 00:00 UTC
-      await scheduledProcess(env, ctx, controller);
+      ctx.waitUntil(
+        scheduledProcess(env, ctx, controller).catch(e => {
+          console.error('[scheduled] process error:', e?.message || e);
+        })
+      );
     } else if (cron === '0 1 1 * *') {
       // Archive old entities — monthly 1st at 01:00 UTC
-      await scheduledArchiveOldEntities(env, ctx, controller);
+      ctx.waitUntil(
+        scheduledArchiveOldEntities(env, ctx, controller).catch(e => {
+          console.error('[scheduled] archive error:', e?.message || e);
+        })
+      );
     } else if (cron === '0 4 * * *') {
       // Feedback loop — daily at 04:00 UTC
-      await scheduledFeedback(env, ctx, controller);
+      ctx.waitUntil(
+        scheduledFeedback(env, ctx, controller).catch(e => {
+          console.error('[scheduled] feedback error:', e?.message || e);
+        })
+      );
     }
     // Unknown crons: no-op (ignore silently)
   },
