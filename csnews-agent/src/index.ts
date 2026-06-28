@@ -20,6 +20,7 @@ import type {
 } from './types-supabase';
 import { dispatchAction } from './dispatch';
 import { jsonResponse } from './shared';
+import { logEvent } from './log';
 import {
   scheduledProcess,
   scheduledEntity,
@@ -745,28 +746,28 @@ export default {
       // bge-m3 ~5K Neurons/day, within Free Plan 10K/day quota
       ctx.waitUntil(
         scheduledEntity(env, ctx, controller).catch((e) => {
-          console.error('[scheduled] entity error:', e?.message || e);
+          logEvent(env, 'error', `[scheduled] entity error: ${e?.message || e}`);
         })
       );
     } else if (cron === '0 0 * * *') {
       // Process + tavily + knowledge — daily at 00:00 UTC
       ctx.waitUntil(
         scheduledProcess(env, ctx, controller).catch((e) => {
-          console.error('[scheduled] process error:', e?.message || e);
+          logEvent(env, 'error', `[scheduled] process error: ${e?.message || e}`);
         })
       );
     } else if (cron === '0 1 1 * *') {
       // Archive old entities — monthly 1st at 01:00 UTC
       ctx.waitUntil(
         scheduledArchiveOldEntities(env, ctx, controller).catch((e) => {
-          console.error('[scheduled] archive error:', e?.message || e);
+          logEvent(env, 'error', `[scheduled] archive error: ${e?.message || e}`);
         })
       );
     } else if (cron === '0 4 * * *') {
       // Feedback loop — daily at 04:00 UTC
       ctx.waitUntil(
         scheduledFeedback(env, ctx, controller).catch((e) => {
-          console.error('[scheduled] feedback error:', e?.message || e);
+          logEvent(env, 'error', `[scheduled] feedback error: ${e?.message || e}`);
         })
       );
     }
