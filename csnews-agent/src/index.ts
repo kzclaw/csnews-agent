@@ -423,10 +423,9 @@ export default {
   },
 
   async scheduled(
-    _request: Request,
+    controller: ScheduledController,
     env: Env,
     ctx: ExecutionContext,
-    controller: ScheduledController
   ): Promise<void> {
     const cron = controller?.cron ?? 'unknown';
 
