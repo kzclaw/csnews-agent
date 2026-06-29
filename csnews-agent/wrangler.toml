@@ -27,16 +27,16 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.36.41"
+WORKER_VERSION = "v0.37.0"
 
 [triggers]
 # 4/5 cron 槽位（CF Free Plan 上限 5，剩余 1 备用）
-# 0 0 * * *         → scheduledProcess: ZAKER + Tavily + knowledge（每日 00:00 UTC）
+# 0 * * * *          → scheduledProcess: ZAKER + Tavily + knowledge（每小时 00 分 UTC）
 # 0 3,15 * * *      → scheduledEntity: entity selflearn + event clustering（每日 03:00 & 15:00 UTC）
 # 0 4 * * *         → scheduledFeedback: feedback loop（每日 04:00 UTC）
 # 0 1 1 * *         → scheduledArchiveOldEntities: 30d+ 归档（每月 1 号 01:00 UTC）
 crons = [
-  "0 0 * * *",
+  "0 * * * *",
   "0 3,15 * * *",
   "0 4 * * *",
   "0 1 1 * *",
