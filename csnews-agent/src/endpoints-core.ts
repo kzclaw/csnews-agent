@@ -70,21 +70,27 @@ export async function handlePingAction(
 
 // ===================== model-test =====================
 // 注: extractText + maybeFissionReport 已抽到 utils.ts (避免循环依赖)
+// 兜底: env.AI.run() 异常 (模型未启用 / quota 超 / 临时网络) 需降级而非 500
+// 跟同文件 handleFissionAction (line 316) / utils.ts maybeFissionReport (line 44) try/catch 模式一致
 export async function handleModelTestAction(
   request: Request,
   env: Env,
   url: URL,
   cors: Record<string, string>
 ): Promise<Response> {
-  // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-  const r = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
-    messages: [{ role: 'user', content: '说一段话介绍自己' }],
-    max_tokens: 100,
-  })) as LlamaAIResponse;
-  return jsonResponse(
-    { ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) },
-    cors
-  );
+  try {
+    // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
+    const r = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      messages: [{ role: 'user', content: '说一段话介绍自己' }],
+      max_tokens: 100,
+    })) as LlamaAIResponse;
+    return jsonResponse(
+      { ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) },
+      cors
+    );
+  } catch (e: any) {
+    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  }
 }
 
 // ===================== ai-test =====================
