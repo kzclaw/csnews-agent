@@ -34,19 +34,12 @@ export interface TransitionResult {
  * Transition logic lives server-side in the SQL function so we avoid
  * multiple round-trips (news_count query + velocity query + update).
  */
-export async function transitionEventStage(
-  env: Env,
-  topicId: string
-): Promise<TransitionResult> {
+export async function transitionEventStage(env: Env, topicId: string): Promise<TransitionResult> {
   try {
-    const res = await supabaseFetch(
-      env,
-      '/rest/v1/rpc/update_topic_event_stage',
-      {
-        method: 'POST',
-        body: JSON.stringify({ p_topic_id: topicId }),
-      }
-    );
+    const res = await supabaseFetch(env, '/rest/v1/rpc/update_topic_event_stage', {
+      method: 'POST',
+      body: JSON.stringify({ p_topic_id: topicId }),
+    });
 
     if (!res.ok) {
       const err = await res.text();

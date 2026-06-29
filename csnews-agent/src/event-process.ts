@@ -55,9 +55,7 @@ export async function runEventProcess(env: Env): Promise<{
   const ts = new Date().toISOString();
 
   // Collect all topic_ids from clusters and run event_stage transition
-  const allTopicIds = Array.from(
-    new Set(result.clusters.flatMap((c) => c.topic_ids || []))
-  );
+  const allTopicIds = Array.from(new Set(result.clusters.flatMap((c) => c.topic_ids || [])));
   let stageTransitions = 0;
   if (allTopicIds.length > 0) {
     const stageResults = await transitionEventStageBatch(env, allTopicIds);
@@ -113,6 +111,12 @@ export async function runEventProcess(env: Env): Promise<{
       undefined,
       'event'
     );
-    return { clusters: result.clusters.length, threshold: result.threshold, written: 0, errors: 1, stage_transitions: 0 };
+    return {
+      clusters: result.clusters.length,
+      threshold: result.threshold,
+      written: 0,
+      errors: 1,
+      stage_transitions: 0,
+    };
   }
 }
