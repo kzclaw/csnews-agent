@@ -144,6 +144,7 @@ export interface PullTopicRow {
   score: number;
   last_active_at: string;
   first_news_id: string | null;
+  event_stage: string;
   created_at: string;
   updated_at: string;
 }

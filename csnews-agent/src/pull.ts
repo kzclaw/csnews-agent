@@ -57,10 +57,10 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
   topics: {
     table: 'topics',
     defaultOrderBy: 'score',
-    allowedOrderBy: ['score', 'last_active_at', 'created_at', 'updated_at'],
+    allowedOrderBy: ['score', 'last_active_at', 'created_at', 'updated_at', 'event_stage'],
     defaultSelect:
-      'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
-    allowedFilters: ['level'],
+      'id, topic_key, level, score, last_active_at, first_news_id, event_stage, created_at, updated_at',
+    allowedFilters: ['level', 'event_stage'],
     timeField: 'created_at',
   },
   warnings: {
@@ -77,9 +77,9 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
   'fission-pending': {
     table: 'topics',
     defaultOrderBy: 'score',
-    allowedOrderBy: ['score', 'last_active_at'],
+    allowedOrderBy: ['score', 'last_active_at', 'event_stage'],
     defaultSelect:
-      'id, topic_key, level, score, last_active_at, first_news_id, created_at, updated_at',
+      'id, topic_key, level, score, last_active_at, first_news_id, event_stage, created_at, updated_at',
     allowedFilters: [],
     timeField: 'created_at',
   },

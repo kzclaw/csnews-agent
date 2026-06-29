@@ -1,13 +1,16 @@
 /**
- * CSNEWS Agent · 事件处理 (v0.36.11)
+ * CSNEWS Agent · 事件处理 (v0.36.13)
  *
- * 16:48 确定: 0 DDL = 聚类结果暂存 R2 event-clusters.json
- * 5h 配额期外等 entity 表 schema migration 后启用 writeEventClustersToSupabase
+ * v0.36.13:
+ *   - 聚类完成后对所有 cluster topic_ids 跑 event_stage transition
+ *   - 0 DDL = 聚类结果暂存 R2 event-clusters.json
+ *   - event_stage transition 走 Supabase RPC (server-side 逻辑)
  */
 import { Env } from './shared';
 import { runEventClustering } from './event-cluster';
 import { loadReviewedCandidates, type EntityFinalized } from './entity-process';
 import { logEvent } from './log';
+import { transitionEventStageBatch } from './event-stage';
 export { runEventClustering };
 
 export const EVENT_CLUSTERS_R2_KEY = 'event-clusters.json';
@@ -21,13 +24,14 @@ export interface EventClustersIndexEntry {
 }
 
 /**
- * 主函数: 跑事件聚类 + 暂存 R2
+ * 主函数: 跑事件聚类 + event_stage transition + 暂存 R2
  */
 export async function runEventProcess(env: Env): Promise<{
   clusters: number;
   threshold: number;
   written: number;
   errors: number;
+  stage_transitions: number;
 }> {
   let entities: EntityFinalized[] = [];
   try {
@@ -40,15 +44,34 @@ export async function runEventProcess(env: Env): Promise<{
       undefined,
       'event'
     );
-    return { clusters: 0, threshold: 0, written: 0, errors: 1 };
+    return { clusters: 0, threshold: 0, written: 0, errors: 1, stage_transitions: 0 };
   }
 
   if (entities.length === 0) {
-    return { clusters: 0, threshold: 0, written: 0, errors: 0 };
+    return { clusters: 0, threshold: 0, written: 0, errors: 0, stage_transitions: 0 };
   }
 
   const result = await runEventClustering(env, entities);
   const ts = new Date().toISOString();
+
+  // Collect all topic_ids from clusters and run event_stage transition
+  const allTopicIds = Array.from(
+    new Set(result.clusters.flatMap((c) => c.topic_ids || []))
+  );
+  let stageTransitions = 0;
+  if (allTopicIds.length > 0) {
+    const stageResults = await transitionEventStageBatch(env, allTopicIds);
+    stageTransitions = stageResults.filter((r) => r.changed).length;
+    if (stageTransitions > 0) {
+      await logEvent(
+        env,
+        'info',
+        `[event-process] event_stage transitions: ${stageTransitions}/${allTopicIds.length} topics changed stage`,
+        { changed: stageResults.filter((r) => r.changed) },
+        'event'
+      );
+    }
+  }
 
   try {
     // 暂存 R2 event-clusters.json (0 DDL 原则)
@@ -80,6 +103,7 @@ export async function runEventProcess(env: Env): Promise<{
       threshold: result.threshold,
       written: result.clusters.length,
       errors: 0,
+      stage_transitions: stageTransitions,
     };
   } catch (e: any) {
     await logEvent(
@@ -89,6 +113,6 @@ export async function runEventProcess(env: Env): Promise<{
       undefined,
       'event'
     );
-    return { clusters: result.clusters.length, threshold: result.threshold, written: 0, errors: 1 };
+    return { clusters: result.clusters.length, threshold: result.threshold, written: 0, errors: 1, stage_transitions: 0 };
   }
 }
