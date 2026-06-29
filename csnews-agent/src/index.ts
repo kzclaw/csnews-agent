@@ -754,8 +754,8 @@ export default {
           logEvent(env, 'error', `[scheduled] entity error: ${e?.message || e}`);
         })
       );
-    } else if (cron === '0 0 * * *') {
-      // Process + tavily + knowledge — daily at 00:00 UTC
+    } else if (cron === '0 * * * *') {
+      // Process + tavily + knowledge — hourly at :00 UTC
       ctx.waitUntil(
         scheduledProcess(env, ctx, controller).catch((e) => {
           logEvent(env, 'error', `[scheduled] process error: ${e?.message || e}`);
