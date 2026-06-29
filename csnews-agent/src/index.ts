@@ -661,11 +661,16 @@ export default {
       return new Response(null, { headers: cors });
     }
 
-    const authError = authRequest(request, env);
-    if (authError) return authError;
-
     const url = new URL(request.url);
     const action = url.searchParams.get('action') || 'ping';
+
+    // v0.37.3 鉴权回归修复：public endpoint 白名单
+    // 健康检查/模型测试/health 端点（9 维度）默认放行，无需鉴权
+    const PUBLIC_ACTIONS = new Set(['ping', 'health', 'model-test']);
+    if (!PUBLIC_ACTIONS.has(action)) {
+      const authError = authRequest(request, env);
+      if (authError) return authError;
+    }
 
     if (action === 'diag') {
       const results = [];
