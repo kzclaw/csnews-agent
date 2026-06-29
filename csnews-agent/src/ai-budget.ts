@@ -1,5 +1,5 @@
 /**
- * O12KR1 · AI Budget Tracking (Phase 1-2)
+ * AI Budget Tracking (Phase 1-2)
  * 记录 Neurons 用量 · 提供预算状态查询 · 预算检查 hook
  *
  * Phase 1: Neurons 用量追踪（KV `usage/{YYYY-MM-DD}`，TTL 7 天）
@@ -129,7 +129,7 @@ interface BudgetStatusResult {
 }
 
 /**
- * 获取当前预算状态（用于 health 端点 / O12KR4 监控字段）
+ * 获取当前预算状态（用于 health 端点监控字段）
  */
 export async function getBudgetStatus(env: AiBudgetEnv): Promise<BudgetStatusResult> {
   const used = await getDailyUsage(env);
@@ -177,10 +177,10 @@ export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTot
 /**
  * 判断当前预算是否允许触发指定层级的 AI 调用
  *
- * 集成点（预埋，待 O12KR13 / O7KR1 / O10KR1 启动时接入）：
- * - O12KR13 异步 LLM 深度分析（L4）：warning + severity ≥ L4
- * - O7KR1   裂变搜索 LLM（L5）：topic 触发裂变
- * - O10KR1  Knowledge Engine LLM（L6）：warning 24h 后
+ * 集成点（预埋，启动时接入）：
+ * - 异步 LLM 深度分析（L4）：warning + severity ≥ L4
+ * - 裂变搜索 LLM（L5）：topic 触发裂变
+ * - Knowledge Engine LLM（L6）：warning 24h 后
  *
  * 用法示例：
  *   const shouldAnalyze = shouldTriggerAiCall('L4', severity);
