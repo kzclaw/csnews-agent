@@ -12,7 +12,7 @@
  *
  * Archived is terminal — no backward transitions.
  *
- * SQL: supabase/migrations/20260630_o3kr5_event_stage_rpc.sql
+  * SQL: supabase/migrations/20260630_o3kr5_event_stage_rpc.sql
  */
 import { Env, supabaseFetch, safeJson } from './shared';
 import { logEvent } from './log';

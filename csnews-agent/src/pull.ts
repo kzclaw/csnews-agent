@@ -177,6 +177,7 @@ export interface ParsedFilters {
   topicId?: string;
   status?: string;
   stage?: string;
+  eventStage?: string; // topics.event_stage 独立枚举
   fissionTriggered?: boolean;
   titleLike?: string;
   select?: string;
@@ -186,6 +187,8 @@ export interface ParsedFilters {
 export const VALID_LEVELS = ['follow', 'important', 'explosive'];
 export const VALID_STATUS = ['open', 'acknowledged', 'validated', 'dismissed', 'closed'];
 export const VALID_STAGES = ['emerging', 'growing', 'hot', 'mature', 'declining'];
+// event_stage: topics 表字段,独立枚举值
+export const VALID_EVENT_STAGES = ['detected', 'confirmed', 'growing', 'hot', 'archived'];
 
 // Add stage to trends filters
 TYPE_CONFIG.trends.allowedFilters.push('stage');
@@ -333,6 +336,17 @@ export function parseFilters(
     }
   }
 
+  // event_stage: topics 表专用独立枚举
+  if (config.allowedFilters.includes('event_stage')) {
+    const eventStage = url.searchParams.get('event_stage');
+    if (eventStage) {
+      if (!VALID_EVENT_STAGES.includes(eventStage)) {
+        return { ok: false, error: `event_stage must be one of ${VALID_EVENT_STAGES.join(', ')}` };
+      }
+      filters.eventStage = eventStage;
+    }
+  }
+
   if (config.allowedFilters.includes('fission_triggered')) {
     const ft = url.searchParams.get('fission_triggered');
     if (ft === 'true') filters.fissionTriggered = true;
@@ -424,6 +438,9 @@ export function buildPostgRestQuery(filters: ParsedFilters): string {
   }
   if (filters.stage) {
     params.push(`stage=eq.${encodeURIComponent(filters.stage)}`);
+  }
+  if (filters.eventStage) {
+    params.push(`event_stage=eq.${encodeURIComponent(filters.eventStage)}`);
   }
   if (filters.fissionTriggered !== undefined) {
     params.push(`fission_triggered=eq.${filters.fissionTriggered}`);
@@ -665,6 +682,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
         topic_id: filters.topicId,
         status: filters.status,
         stage: filters.stage,
+        event_stage: filters.eventStage,
         fission_triggered: filters.fissionTriggered,
         title_like: filters.titleLike,
         select: filters.select,
@@ -729,6 +747,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
       topic_id: filters.topicId,
       status: filters.status,
       stage: filters.stage,
+      event_stage: filters.eventStage,
       fission_triggered: filters.fissionTriggered,
       title_like: filters.titleLike,
       select: filters.select,
