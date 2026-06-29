@@ -16,6 +16,7 @@ export const EVENT_CLUSTERS_INDEX_R2_KEY = 'event-clusters-index.json';
 export interface EventClustersIndexEntry {
   cluster_id: string;
   entity_count: number;
+  topic_count: number;
   created_at: string;
 }
 
@@ -69,6 +70,7 @@ export async function runEventProcess(env: Env): Promise<{
     const indexEntry: EventClustersIndexEntry[] = result.clusters.map((c) => ({
       cluster_id: c.cluster_id,
       entity_count: c.entity_count,
+      topic_count: c.topic_ids?.length || 0,
       created_at: c.created_at,
     }));
     await env.csnews_raw.put(EVENT_CLUSTERS_INDEX_R2_KEY, JSON.stringify(indexEntry, null, 2));

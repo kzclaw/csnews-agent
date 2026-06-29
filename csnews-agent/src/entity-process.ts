@@ -31,6 +31,8 @@ export interface EntityFinalized {
   first_seen: string;
   last_seen: string;
   mention_count: number;
+  /** Track which topics this entity was extracted from (for event clustering) */
+  topic_ids: string[];
 }
 
 /**

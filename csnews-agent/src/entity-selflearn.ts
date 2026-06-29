@@ -30,6 +30,8 @@ export interface EntityCandidate {
   confidence: number;
   source: 'selflearn';
   first_seen: string;
+  /** Track which topics this entity was extracted from (for event clustering) */
+  topic_ids: string[];
 }
 
 export const ENTITY_CANDIDATES_R2_KEY = 'entity-candidates.json';
@@ -114,21 +116,23 @@ export function generateUuidV4(): string {
 
 /**
  * 从 news_topic_members 拉 last N hours news
+ * Returns news with topic_id for entity-topic association tracking
  */
 async function fetchRecentNewsTitles(
   env: Env,
   sinceHours: number = 24
-): Promise<{ id: string; text: string }[]> {
+): Promise<{ id: string; text: string; topic_id: string | null }[]> {
   const sinceIso = new Date(Date.now() - sinceHours * 3600 * 1000).toISOString();
   const res = await supabaseFetch(
     env,
-    `/rest/v1/news_hotspots?select=id,title,summary&created_at=gte.${sinceIso}&order=created_at.desc&limit=200`
+    `/rest/v1/news_hotspots?select=id,title,summary,topic_id&created_at=gte.${sinceIso}&order=created_at.desc&limit=200`
   );
   const news = ((await safeJson(res)) as NewsHotspotRow[]) || [];
   return news
     .map((n) => ({
       id: n.id,
       text: `${n.title || ''} ${n.summary || ''}`.trim(),
+      topic_id: n.topic_id,
     }))
     .filter((n) => n.text.length > 0);
 }
@@ -175,6 +179,24 @@ async function loadExistingCandidates(env: Env): Promise<EntityCandidate[]> {
 }
 
 /**
+ * Track which topics each n-gram appears in
+ */
+function buildGramTopicMap(
+  news: { id: string; text: string; topic_id: string | null }[]
+): Map<string, Set<string>> {
+  const gramTopics = new Map<string, Set<string>>();
+  for (const n of news) {
+    if (!n.topic_id) continue;
+    const grams = extractNgramFrequency(n.text);
+    for (const gram of grams.keys()) {
+      if (!gramTopics.has(gram)) gramTopics.set(gram, new Set());
+      gramTopics.get(gram)!.add(n.topic_id);
+    }
+  }
+  return gramTopics;
+}
+
+/**
  * 主函数: 自学习 (5h 配额期可推, 1-2 min 跑完)
  */
 export async function runEntitySelfLearn(env: Env): Promise<{
@@ -189,6 +211,9 @@ export async function runEntitySelfLearn(env: Env): Promise<{
     if (news.length === 0) {
       return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
     }
+
+    // Build topic associations for each n-gram (for event clustering)
+    const gramTopicMap = buildGramTopicMap(news);
 
     // n-gram 频率统计
     const freqs = news.map((n) => extractNgramFrequency(n.text));
@@ -235,7 +260,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{
         : [];
 
     // 启发式 type 推断 + 过滤重复 + noise filter
-    const dedupCandidates: { gram: string; count: number }[] = [];
+    const dedupCandidates: { gram: string; count: number; topic_ids: string[] }[] = [];
     const usedGrams = new Set<string>();
 
     for (let i = 0; i < candidateGrams.length; i++) {
@@ -256,7 +281,10 @@ export async function runEntitySelfLearn(env: Env): Promise<{
       if (usedGrams.has(gram)) continue;
       usedGrams.add(gram);
 
-      dedupCandidates.push({ gram, count: filtered[i].count });
+      // Collect topic_ids for this gram
+      const topicIds = gramTopicMap.get(gram) ? Array.from(gramTopicMap.get(gram)!) : [];
+
+      dedupCandidates.push({ gram, count: filtered[i].count, topic_ids: topicIds });
     }
 
     // noise filter (18:22 确定)
@@ -274,30 +302,39 @@ export async function runEntitySelfLearn(env: Env): Promise<{
     );
 
     // 构造最终 candidates (review 入口) + noise 数组 (review 实战参考)
+    // Include topic_ids for event clustering
     const sampleText = news[0].text.slice(0, 200);
     const candidates: EntityCandidate[] = filterResult.kept
       .sort((a, b) => b.count - a.count)
-      .map((c) => ({
+      .map((c) => {
+        const gramEntry = dedupCandidates.find((d) => d.gram === c.name);
+        return {
+          uuid: generateUuidV4(),
+          name: c.name,
+          type: inferEntityType(c.name),
+          frequency: c.count,
+          sample_context: sampleText,
+          confidence: SELFLEARN_CONFIDENCE,
+          source: 'selflearn' as const,
+          first_seen: new Date().toISOString(),
+          topic_ids: gramEntry?.topic_ids || [],
+        };
+      });
+
+    const noiseCandidates: EntityCandidate[] = filterResult.noise.map((n) => {
+      const gramEntry = dedupCandidates.find((d) => d.gram === n.candidate.name);
+      return {
         uuid: generateUuidV4(),
-        name: c.name,
-        type: inferEntityType(c.name),
-        frequency: c.count,
+        name: n.candidate.name,
+        type: inferEntityType(n.candidate.name),
+        frequency: n.candidate.count,
         sample_context: sampleText,
         confidence: SELFLEARN_CONFIDENCE,
         source: 'selflearn' as const,
         first_seen: new Date().toISOString(),
-      }));
-
-    const noiseCandidates: EntityCandidate[] = filterResult.noise.map((n) => ({
-      uuid: generateUuidV4(),
-      name: n.candidate.name,
-      type: inferEntityType(n.candidate.name),
-      frequency: n.candidate.count,
-      sample_context: sampleText,
-      confidence: SELFLEARN_CONFIDENCE,
-      source: 'selflearn' as const,
-      first_seen: new Date().toISOString(),
-    }));
+        topic_ids: gramEntry?.topic_ids || [],
+      };
+    });
 
     // 写 R2 entity-candidates.json (review 入口 · 含 noise 分组)
     await env.csnews_raw.put(
