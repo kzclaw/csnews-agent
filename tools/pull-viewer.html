@@ -705,6 +705,11 @@ body {
   border-color: var(--danger);
   background: var(--danger-bg);
 }
+.check-card.unknown {
+  /* Soft state: cold start or no traffic yet. Yellow border, no red fill. */
+  border-color: var(--warning);
+  background: var(--warning-bg);
+}
 .check-card.warn { border-color: var(--hairline-strong); }
 .check-card.ok { border-left: 2px solid var(--success); }
 .check-card-header {
@@ -1439,6 +1444,7 @@ body::before {
       <button class="btn" id="settings-btn">设置</button>
     </div>
   </header>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   
   <div class="ticker global-ticker" id="ticker">
@@ -1481,11 +1487,12 @@ body::before {
     <!-- ============ READER VIEW ============ -->
     <section class="view" id="view-reader">
       <div class="reader-body">
+        <!-- sidebar toggle (moved out of <aside> so it stays visible when .sidebar { display:none } hides the rest) -->
+        <button class="sidebar-toggle" id="sidebar-toggle" title="切换侧栏">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
         <!-- sidebar -->
         <aside class="sidebar" id="sidebar">
-          <button class="sidebar-toggle" id="sidebar-toggle" title="切换侧栏">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-          </button>
           <div class="sidebar-section">
             <div class="sidebar-title">热度等级</div>
             <ul class="sidebar-list" id="level-list">
@@ -2581,14 +2588,21 @@ function renderHealth() {
     <div class="health-section">
       <div class="health-section-title">9 维度健康检查</div>
       <div class="health-grid">
-        ${Object.entries(checks).map(([name, c]) => `
-          <div class="check-card ${c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'down'}">
+        ${Object.entries(checks).map(([name, c]) => {
+          // unknown is a soft state (cold start / no traffic) — not a real failure.
+          // Render it as warn (yellow) rather than down (red) so the dashboard does
+          // not look broken when the worker simply has not seen any requests yet.
+          const cls = c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'unknown' ? 'unknown' : 'down';
+          const badge = c.status === 'ok' ? 'badge-ok' : c.status === 'warn' ? 'badge-warn' : c.status === 'unknown' ? 'badge-unknown' : 'badge-down';
+          return `
+          <div class="check-card ${cls}">
             <div class="check-card-header">
               <div class="check-card-name">${escapeHtml(name)}</div>
-              <span class="badge ${c.status === 'ok' ? 'badge-ok' : c.status === 'warn' ? 'badge-warn' : 'badge-down'}">${c.status}</span>
+              <span class="badge ${badge}">${c.status}</span>
             </div>
             <div class="check-card-detail">${escapeHtml(c.detail || '—')}</div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
     </div>
 
