@@ -766,3 +766,60 @@ export async function scheduledFeedback(
     );
   }
 }
+
+/**
+ * AI budget daily reset · 触发 resetDailyCounter(env) 清空当日 Neurons 用量
+ *
+ * 触发频率：每日 0 点 UTC（wrangler.toml cron `0 0 * * *`）
+ * 行为：
+ * - 每日 0 点 UTC 重置 AI_USAGE_KV `usage/{YYYY-MM-DD}` 计数器
+ * - KV TTL 7 天滚动清理兜底（手动 delete 立即生效）
+ * - 不阻塞 scheduled handler return（catch 兜底 + logEvent 持久化）
+ */
+export async function scheduledReset(
+  env: Env,
+  ctx: ExecutionContext,
+  controller: ScheduledController
+): Promise<void> {
+  const start = Date.now();
+  const ts = new Date().toISOString();
+  const cron = controller?.cron || 'unknown';
+
+  await logEvent(env, 'info', `[cron] reset triggered at ${ts} cron=${cron}`);
+  ctx.waitUntil(
+    logEvent(env, 'info', '[cron] reset triggered', { cron, ts }, 'scheduler').catch(() => {})
+  );
+
+  try {
+    // dynamic import 避免 circular dependency（scheduled.ts 不直接依赖 ai-budget.ts 的 symbols）
+    const { resetDailyCounter } = await import('./ai-budget');
+    const result = await resetDailyCounter(env);
+    const elapsed = Date.now() - start;
+    await logEvent(
+      env,
+      'info',
+      `[cron] reset done previousTotal=${result.previousTotal} elapsed=${elapsed}ms`
+    );
+    ctx.waitUntil(
+      logEvent(
+        env,
+        'info',
+        '[cron] reset done',
+        { previous_total: result.previousTotal, elapsed_ms: elapsed },
+        'scheduler'
+      ).catch(() => {})
+    );
+  } catch (e: any) {
+    const elapsed = Date.now() - start;
+    await logEvent(env, 'error', `[cron] reset failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    ctx.waitUntil(
+      logEvent(
+        env,
+        'error',
+        '[cron] reset failed',
+        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        'scheduler'
+      ).catch(() => {})
+    );
+  }
+}

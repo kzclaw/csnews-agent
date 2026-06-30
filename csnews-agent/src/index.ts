@@ -26,6 +26,7 @@ import {
   scheduledEntity,
   scheduledArchiveOldEntities,
   scheduledFeedback,
+  scheduledReset,
 } from './scheduled';
 interface Env {
   AI: Ai;
@@ -773,6 +774,14 @@ export default {
       ctx.waitUntil(
         scheduledFeedback(env, ctx, controller).catch((e) => {
           logEvent(env, 'error', `[scheduled] feedback error: ${e?.message || e}`);
+        })
+      );
+    } else if (cron === '0 0 * * *') {
+      // AI budget daily reset — daily at 00:00 UTC (Phase 1 Neurons tracking)
+      // clears AI_USAGE_KV usage/{YYYY-MM-DD} counter for fresh day budget accounting
+      ctx.waitUntil(
+        scheduledReset(env, ctx, controller).catch((e) => {
+          logEvent(env, 'error', `[scheduled] reset error: ${e?.message || e}`);
         })
       );
     }
