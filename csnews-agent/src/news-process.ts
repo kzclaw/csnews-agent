@@ -417,7 +417,30 @@ export async function recordTrendWithMember(
     }
     // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
-    return Array.isArray(data) ? data[0] || null : null;
+    const result = Array.isArray(data) ? data[0] || null : null;
+
+    // Phase 3: warning 创建后，如果当前 budget 已超限 → 标记 degraded=true + 写 R2 占位
+    if (result?.warning_id) {
+      try {
+        const { shouldTriggerAiCall } = await import('./ai-budget');
+        const { writeDegradedWarning } = await import('./ai-degradation');
+        const l4Degraded = !(await shouldTriggerAiCall(env, 'L4'));
+        if (l4Degraded) {
+          const { r2Key, marked } = await writeDegradedWarning(env, result.warning_id);
+          await logEvent(
+            env,
+            'warn',
+            `[record-trend] warning degraded: r2=${r2Key} marked=${marked} warning=${result.warning_id} news=${newsId} topic=${topicId}`,
+            undefined,
+            'process'
+          );
+        }
+      } catch {
+        // Phase 3 降级失败不阻断主流程（recordTrendWithMember 已成功）
+      }
+    }
+
+    return result;
   } catch (e: any) {
     await logEvent(
       env,

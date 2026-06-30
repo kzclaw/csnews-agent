@@ -54,6 +54,7 @@ import {
 } from './knowledge-validation';
 import { checkRateLimit, rateLimitResponse, readR2Json, incrementHitCounter } from './utils';
 import { shouldTriggerAiCall } from './ai-budget';
+import { writeDegradedKnowledge } from './ai-degradation';
 import type { NewsHotspotRow, TopicRow, R2ContentData } from './types';
 
 // ===================== content (R2 全文内容读取端点) =====================
@@ -639,17 +640,11 @@ export async function runKnowledgeAccumulation(
 export async function runKnowledgeGeneration(
   env: Env
 ): Promise<{ written: number; skipped: number; errors: number }> {
-  // Phase 2: 预算检查 L6（Knowledge generation）
-  if (!(await shouldTriggerAiCall(env, 'L6'))) {
-    await logEvent(
-      env,
-      'warn',
-      '[knowledge-gen] skipped: Neurons budget exceeded for L6 threshold',
-      undefined,
-      'trend'
-    );
-    return { written: 0, skipped: 0, errors: 0 };
-  }
+  // Phase 2 + Phase 3: 预算检查 L6（Knowledge generation）
+  // Phase 3 行为：budget 超限时**不返回**（保留业务记录），改为对每个 warning 写
+  // degraded knowledge record（R2 占位 + Supabase degraded=true + 空 insight）。
+  // 这是 Phase 2 "return 0" 的进化版：业务可被识别"今日 degraded 的 knowledge"，明天自动 retry。
+  const l6Degraded = !(await shouldTriggerAiCall(env, 'L6'));
 
   let written = 0;
   let skipped = 0;
@@ -719,6 +714,26 @@ export async function runKnowledgeGeneration(
             'trend'
           );
           skipped++;
+          continue;
+        }
+
+        // Phase 3: L6 budget 超限 → 写 degraded knowledge record（跳过 LLM 调用）
+        if (l6Degraded) {
+          const { r2Key, marked } = await writeDegradedKnowledge(env, topic.id, w.id, {
+            topic_key: topic.topic_key,
+            warning_type: w.warning_type,
+            severity: w.severity,
+          });
+          await logEvent(
+            env,
+            'warn',
+            `[knowledge-gen] degraded: r2=${r2Key} marked=${marked} warning=${w.id} topic=${topic.topic_key}`,
+            undefined,
+            'trend'
+          );
+          // degraded 视为"占位完成"（业务可被识别 degraded），不算 write 也不算 skip（不算错误）
+          // 用 written++ 让 health 端点能统计今日 degraded knowledge 数量
+          written++;
           continue;
         }
 

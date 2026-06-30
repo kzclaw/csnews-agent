@@ -22,6 +22,7 @@ import { scoreRule, AI_ROUTE_R_THRESHOLD } from './score';
 import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
 import { shouldTriggerAiCall } from './ai-budget';
+import { writeDegradedFission } from './ai-degradation';
 import type {
   LlamaAIResponse,
   BgeEmbeddingResponse,
@@ -330,8 +331,14 @@ export async function handleFissionAction(
       cors
     );
   }
-  // Phase 2 budget check (L5 裂变搜索 LLM · 真实 budget 控制 · 阈值 < shutdown 8K)
+  // Phase 2 + Phase 3 budget check (L5 裂变搜索 LLM · 真实 budget 控制 · 阈值 < shutdown 8K)
   if (!(await shouldTriggerAiCall(env, 'L5'))) {
+    // Phase 3: 写 R2 fission-degraded/{date}/{seed_id}.md 占位（标记 degraded 不调 LLM）
+    const seedId = `${seed}`.slice(0, 32).replace(/[^a-zA-Z0-9-]/g, '-');
+    const r2Key = await writeDegradedFission(env, seedId, {
+      seed,
+      notes: 'L5 fission degraded · 用关键词 + bge-m3 相似替代（业务下游自行处理）',
+    });
     return jsonResponse(
       {
         seed,
@@ -339,6 +346,7 @@ export async function handleFissionAction(
         count: 0,
         skipped: true,
         reason: 'AI budget exceeded for L5 (shutdown threshold)',
+        degraded_r2_key: r2Key,
       },
       cors
     );
