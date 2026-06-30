@@ -3468,22 +3468,10 @@ function closeHelp() { document.getElementById('help-modal').style.display = 'no
 /* ============================================================
  * Bindings
  * ============================================================ */
-document.getElementById('settings-btn').addEventListener('click', openSettings);
-document.getElementById('settings-close').addEventListener('click', closeSettings);
-document.getElementById('settings-cancel').addEventListener('click', closeSettings);
-document.getElementById('settings-save').addEventListener('click', saveSettings);
-document.getElementById('help-btn').addEventListener('click', openHelp);
-document.getElementById('help-close').addEventListener('click', closeHelp);
-document.getElementById('refresh-btn').addEventListener('click', () => {
-  if (STATE.view === 'dashboard') refreshDashboard();
-  else if (STATE.view === 'reader') refreshReader();
-});
-
-['settings-modal', 'help-modal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', e => {
-    if (e.target.id === id) document.getElementById(id).style.display = 'none';
-  });
-});
+// Modal-related bindings (settings / help) are attached at the bottom of <body>
+// AFTER the modal HTML exists — see trailing <script> at the end of this file.
+// (Earlier inline bindings threw TypeError because the modal markup loaded after
+// this script ran, leaving every settings-* / help-* button dead.)
 
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '?')) {
@@ -3522,7 +3510,6 @@ if (isConfigured()) {
 } else {
   setTimeout(openSettings, 400);
 }
-</script>
 
 <!-- ============ SETTINGS MODAL ============ -->
 <div class="modal-backdrop" id="settings-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="设置">
@@ -3596,4 +3583,25 @@ if (isConfigured()) {
   </div>
 </div>
 </body>
+<script>
+// Re-attach event listeners (settings/help modal HTML is loaded after inline JS executes;
+// bind at end of body to ensure elements exist when listeners are wired).
+// Note: the inline <script> block above contains the function definitions used by these
+// listeners, so it must remain before this trailing <script> tag.
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-close').addEventListener('click', closeSettings);
+document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+document.getElementById('settings-save').addEventListener('click', saveSettings);
+document.getElementById('help-btn').addEventListener('click', openHelp);
+document.getElementById('help-close').addEventListener('click', closeHelp);
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  if (STATE.view === 'dashboard') refreshDashboard();
+  else if (STATE.view === 'reader') refreshReader();
+});
+['settings-modal', 'help-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target.id === id) document.getElementById(id).style.display = 'none';
+  });
+});
+</script>
 </html>
