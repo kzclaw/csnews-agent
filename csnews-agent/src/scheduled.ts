@@ -363,9 +363,11 @@ export async function scheduledEntity(
         'scheduler'
       ).catch(() => {})
     );
-
-    // Phase 3: event clustering (读 entity-finalized.json + Jaccard 聚类 + 写 R2)
+  } finally {
+    // Phase 3: event clustering (read entity-finalized.json + Jaccard cluster + write R2)
     // 串行等 entity process 写完, 确保 runEventProcess 能读到最新 finalized
+    // fix(scheduled): 移出 catch 块到 finally 块 — 之前在 catch 块里只在 process 失败时才跑，
+    // 导致 R2 event-clusters.json 70h+ 没更新，health endpoint event_freshness 一直 stale
     const eventStart = Date.now();
     const eventTs = new Date().toISOString();
     await logEvent(env, 'info', `[cron] event triggered at ${eventTs}`);
