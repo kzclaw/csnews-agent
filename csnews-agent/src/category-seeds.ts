@@ -66,15 +66,6 @@ export async function saveCategorySeeds(env: Env, data: CategorySeedsData): Prom
 }
 
 /**
- * bge-m3 batch embedding (复用 entity-noise-filter 同款)
- */
-export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<number[][]> {
-  if (texts.length === 0) return [];
-  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] };
-  return result.data || [];
-}
-
-/**
  * review: 分类错 → 加 seed 到正确类别
  * (18:43 确定 #3 自进化闭环)
  */

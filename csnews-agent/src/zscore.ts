@@ -46,7 +46,7 @@ export const ZSCORE_REASON_PREFIX = 'z-score';
  *   - currentValue=NaN → NaN
  *   - historyValues 包含 NaN → 过滤掉
  */
-export function zScore(currentValue: number, historyValues: number[]): number {
+function zScore(currentValue: number, historyValues: number[]): number {
   // 边界 1: currentValue 必须是有限数
   if (!Number.isFinite(currentValue)) return NaN;
 
@@ -84,7 +84,7 @@ export function zScore(currentValue: number, historyValues: number[]): number {
  * - NaN 永远不是异常 (无效输入)
  * - ±Infinity 都算异常 (偏离无穷)
  */
-export function isAnomaly(z: number): boolean {
+function isAnomaly(z: number): boolean {
   if (Number.isNaN(z)) return false;
   if (!Number.isFinite(z)) return true; // ±Infinity 算异常
   return Math.abs(z) > Z_THRESHOLD; // 双向 |z| > 3
@@ -95,7 +95,7 @@ export function isAnomaly(z: number): boolean {
  *
  * @returns { z, isAnomaly }
  */
-export function calculateZScore(
+function calculateZScore(
   currentValue: number,
   historyValues: number[]
 ): { z: number; isAnomaly: boolean } {
@@ -111,7 +111,7 @@ export function calculateZScore(
  * @param field 字段名 ('score' / 'velocity' / 'acceleration')
  * @returns z-score + 异常判定
  */
-export function calculateZScoreFromSnapshots<T extends Record<string, any>>(
+function calculateZScoreFromSnapshots<T extends Record<string, any>>(
   currentSnapshot: T,
   historySnapshots: T[],
   field: keyof T

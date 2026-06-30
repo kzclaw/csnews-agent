@@ -17,7 +17,7 @@
  */
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
-import { loadNoiseAnchors, filterNoiseCandidates } from './entity-noise-filter';
+import { loadNoiseAnchors, filterNoiseCandidates, cosineSimilarity } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 import { logEvent } from './log';
 
@@ -145,23 +145,6 @@ async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
   // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
   const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as BgeEmbeddingResponse;
   return result.data ? result.data.map((item) => item.embedding ?? []) : [];
-}
-
-/**
- * 余弦相似度
- */
-export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0;
-  let dot = 0,
-    na = 0,
-    nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom > 0 ? dot / denom : 0;
 }
 
 /**

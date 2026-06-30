@@ -7,8 +7,8 @@
  * 复用 entity-noise-filter.ts 80% 代码
  */
 import { Env } from './shared';
-import { loadCategorySeeds, bgeM3BatchEmbedding } from './category-seeds';
-import { cosineSimilarity } from './entity-noise-filter';
+import { loadCategorySeeds } from './category-seeds';
+import { bgeM3BatchEmbedding, cosineSimilarity } from './entity-noise-filter';
 
 /**
  * 自分类主函数 (18:43 确定候选 A 核心)
