@@ -13,7 +13,7 @@
  *   - topics 表更新 fission_count / fission_triggered_at
  *
  * Phase 2：核心逻辑完整实现
- *   - Workers AI 生成搜索词（llama-3-8b-instruct）
+ *   - Workers AI 生成搜索词（llama-3.1-8b-instruct-fp8）
  *   - ZAKER 并行搜索 + Tavily fallback
  *   - Workers AI 生成结构化报告
  *   - R2 写入报告 + index 更新
@@ -207,7 +207,8 @@ ${topicTitle}
 ${relatedCtx}`;
 
   try {
-    const resp = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (替代已 deprecated 的 llama-3-8b-instruct)
+    const resp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 150,
       temperature: 0.3,
@@ -308,7 +309,8 @@ async function generateFissionReport(
 ${newsItems}`;
 
   try {
-    const resp = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (替代已 deprecated 的 llama-3-8b-instruct)
+    const resp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 1024,
       temperature: 0.4,

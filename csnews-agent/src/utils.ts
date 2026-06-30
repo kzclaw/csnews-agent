@@ -43,7 +43,8 @@ export async function maybeFissionReport(title: string, env: Env, rScore: number
   }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-    const resp = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (8B fp8 量化 · llama-3-8b-instruct 替代 · 未 deprecated)
+    const resp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [
         { role: 'user', content: `根据以下新闻，生成一段50字左右的裂变分析报告：\n\n${title}` },
       ],

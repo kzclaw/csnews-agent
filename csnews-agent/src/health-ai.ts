@@ -7,7 +7,7 @@ import { getBudgetStatus } from './ai-budget';
 
 // Map CF Workers AI model names → L1-L6 tier levels
 function modelToLevel(model: string): string {
-  if (model === '@cf/meta/llama-3-8b-instruct') return 'L6';
+  if (model === '@cf/meta/llama-3.1-8b-instruct-fp8') return 'L6';
   if (model === '@cf/baai/bge-m3') return 'L3';
   return 'L1'; // unknown/default
 }

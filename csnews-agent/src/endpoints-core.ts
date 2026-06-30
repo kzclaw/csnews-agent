@@ -80,12 +80,13 @@ export async function handleModelTestAction(
 ): Promise<Response> {
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-    const r = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (8B fp8 量化 · 替代已 deprecated 的 llama-3-8b-instruct)
+    const r = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [{ role: 'user', content: '说一段话介绍自己' }],
       max_tokens: 100,
     })) as LlamaAIResponse;
     return jsonResponse(
-      { ok: true, model: 'llama-3-8b-instruct', response: extractText(r).substring(0, 200) },
+      { ok: true, model: 'llama-3.1-8b-instruct-fp8', response: extractText(r).substring(0, 200) },
       cors
     );
   } catch (e: any) {
@@ -321,7 +322,8 @@ export async function handleFissionAction(
   }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
-    const resp = (await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+    // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (8B fp8 · 替代 deprecated 的 llama-3-8b-instruct)
+    const resp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
       messages: [
         {
           role: 'user',

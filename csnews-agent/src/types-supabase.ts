@@ -5,7 +5,7 @@
 
 /**
  * Workers AI 文本生成响应
- * @cf/meta/llama-3-8b-instruct 返回格式
+ * @cf/meta/llama-3.1-8b-instruct-fp8 返回格式
  */
 export interface AiTextResponse {
   response: string;

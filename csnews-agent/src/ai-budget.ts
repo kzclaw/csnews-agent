@@ -70,7 +70,7 @@ function kvKey(date?: string): string {
 
 /**
  * 记录一次 AI 调用消耗的 Neurons
- * @param model  模型名称（如 @cf/meta/llama-3-8b-instruct）
+ * @param model  模型名称（如 @cf/meta/llama-3.1-8b-instruct-fp8）
  * @param neurons  消耗的 Neurons 数量
  */
 export async function recordAiCall(

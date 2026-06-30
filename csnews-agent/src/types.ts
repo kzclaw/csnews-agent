@@ -154,7 +154,7 @@ export interface PullTopicRow {
 // ============================================================
 
 /**
- * CF Workers AI @cf/meta/llama-3-8b-instruct 响应
+ * CF Workers AI @cf/meta/llama-3.1-8b-instruct-fp8 响应
  * env.AI.run() 运行时才知道确切形状，定义为宽接口
  */
 export interface LlamaAIResponse {
