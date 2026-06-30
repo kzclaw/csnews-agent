@@ -9,6 +9,7 @@
 import { Env } from './shared';
 import { loadCategorySeeds } from './category-seeds';
 import { bgeM3BatchEmbedding, cosineSimilarity } from './entity-noise-filter';
+import { shouldTriggerAiCall } from './ai-budget';
 
 /**
  * 自分类主函数 (18:43 确定候选 A 核心)
@@ -26,6 +27,12 @@ export async function classifyBySemantic(
   top_scores: { category: string; score: number }[];
 }> {
   if (!title || typeof title !== 'string') {
+    return { category: '综合', confidence: 0, top_scores: [] };
+  }
+
+  // Phase 2 budget check (L3 bge-m3 embedding · 永远 allowed per design ·
+  // 保留 hook 跟设计文档 L1-L3 全开对齐 · 触发时 graceful fallback 到 '综合')
+  if (!(await shouldTriggerAiCall(env, 'L3'))) {
     return { category: '综合', confidence: 0, top_scores: [] };
   }
 
@@ -100,6 +107,12 @@ export async function batchClassifyBySemantic(
   env: Env
 ): Promise<Array<{ category: string; confidence: number }>> {
   if (inputTexts.length === 0) return [];
+
+  // Phase 2 budget check (L3 bge-m3 embedding · 永远 allowed per design ·
+  // 保留 hook 跟设计文档 L1-L3 全开对齐 · 触发时 graceful fallback 全 '综合')
+  if (!(await shouldTriggerAiCall(env, 'L3'))) {
+    return inputTexts.map(() => ({ category: '综合', confidence: 0 }));
+  }
 
   // 1. 读 R2 seeds
   const seedsData = await loadCategorySeeds(env);

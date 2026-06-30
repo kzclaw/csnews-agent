@@ -32,9 +32,22 @@ export async function classifyTitle(title: string, env: Env, summary?: string): 
 }
 
 /**
- * Decide whether a title warrants a full Workers AI call.
- * Returns true when rule score meets or exceeds the routing threshold.
+ * Decide whether a title's rule score is high enough to warrant a full
+ * Workers AI call (L2 scoring).
+ *
+ * Returns true when rule score meets or exceeds AI_ROUTE_R_THRESHOLD.
+ *
+ * NOTE: Name renamed from shouldTriggerAiCall → shouldTriggerAiRouting in
+ * v0.37.9 to avoid collision with src/ai-budget.ts shouldTriggerAiCall
+ * (which is the budget-check hook for the Neurons budget control feature).
+ * The two functions answer different questions:
+ *   - shouldTriggerAiRouting(score) → is this title hot enough to deserve LLM?
+ *   - shouldTriggerAiCall(env, level) → is there budget left for this AI level?
+ *
+ * As of v0.37.9 this function has no in-tree callers; callers inline the
+ * comparison `rScore >= AI_ROUTE_R_THRESHOLD` directly. Kept exported for
+ * future use and for any external scripts that may import it.
  */
-export function shouldTriggerAiCall(score: number): boolean {
+export function shouldTriggerAiRouting(score: number): boolean {
   return score >= AI_ROUTE_R_THRESHOLD;
 }

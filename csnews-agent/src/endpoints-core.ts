@@ -21,6 +21,7 @@ import { loadCategorySeeds, addSeedToCategory, removeSeedFromCategory } from './
 import { scoreRule, AI_ROUTE_R_THRESHOLD } from './score';
 import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
+import { shouldTriggerAiCall } from './ai-budget';
 import type {
   LlamaAIResponse,
   BgeEmbeddingResponse,
@@ -78,6 +79,15 @@ export async function handleModelTestAction(
   url: URL,
   cors: Record<string, string>
 ): Promise<Response> {
+  // Phase 2 budget check (L2 AI 评分 · model-test 诊断 endpoint · 永远 allowed
+  // per shouldTriggerAiCall design 但保留 hook 跟 utils.ts maybeFissionReport 一致)
+  if (!(await shouldTriggerAiCall(env, 'L2'))) {
+    return jsonResponse(
+      { error: 'AI budget exceeded for L2', model: 'llama-3.1-8b-instruct-fp8' },
+      cors,
+      { status: 503 }
+    );
+  }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
     // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (8B fp8 量化 · 替代已 deprecated 的 llama-3-8b-instruct)
@@ -320,6 +330,19 @@ export async function handleFissionAction(
       cors
     );
   }
+  // Phase 2 budget check (L5 裂变搜索 LLM · 真实 budget 控制 · 阈值 < shutdown 8K)
+  if (!(await shouldTriggerAiCall(env, 'L5'))) {
+    return jsonResponse(
+      {
+        seed,
+        queries: [],
+        count: 0,
+        skipped: true,
+        reason: 'AI budget exceeded for L5 (shutdown threshold)',
+      },
+      cors
+    );
+  }
   try {
     // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
     // 模型: @cf/meta/llama-3.1-8b-instruct-fp8 (8B fp8 · 替代 deprecated 的 llama-3-8b-instruct)
@@ -422,6 +445,14 @@ export async function handleEmbedAction(
   const text = url.searchParams.get('text') || url.searchParams.get('title') || '';
   if (!text) {
     return jsonResponse({ error: 'missing text param' }, cors, { status: 400 });
+  }
+
+  // Phase 2 budget check (L3 bge-m3 embedding · 永远 allowed per shouldTriggerAiCall
+  // design · 保留 hook 跟设计文档 L1-L3 全开对齐 + 未来切 model 留入口)
+  if (!(await shouldTriggerAiCall(env, 'L3'))) {
+    return jsonResponse({ error: 'AI budget exceeded for L3', model: '@cf/baai/bge-m3' }, cors, {
+      status: 503,
+    });
   }
 
   try {

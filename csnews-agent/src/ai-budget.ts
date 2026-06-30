@@ -175,51 +175,64 @@ export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTot
 // ===========================
 
 /**
- * 判断当前预算是否允许触发指定层级的 AI 调用
+ * 判断当前预算是否允许触发指定层级的 AI 调用（async · 真实 budget 检查）
  *
- * 集成点（预埋，启动时接入）：
+ * 集成点：
  * - 异步 LLM 深度分析（L4）：warning + severity ≥ L4
  * - 裂变搜索 LLM（L5）：topic 触发裂变
  * - Knowledge Engine LLM（L6）：warning 24h 后
+ * - AI 评分（L2）· 同步分类（L3）· 已调用方 utils.ts / endpoints-trend.ts 预埋
+ *
+ * 阈值映射（蓝图 2.9 公式 · 文档 Phase 2 伪代码）：
+ *   L1 / L2 / L3 → 永远 true（规则分类 + 轻量评分 + 同步分类 · 不计入预算）
+ *   L4           → budget < critical (默认 7K, 70%)
+ *   L5           → budget < shutdown (默认 8K, 80%)
+ *   L6           → budget < daily limit (默认 10K, 100%)
+ *
+ * 注：文档"warning 跳过 L6 / critical 跳过 L5+L6 / shutdown 跳过 L4-L6"
+ * 是总体预算策略描述 · 函数级阈值按 Phase 2 伪代码（per-AI-level 独立阈值）
+ *
+ * Fail-open 设计：
+ *   - AI_USAGE_KV 未配置 → getDailyUsage() 返 0 → L4-L6 永远 allowed
+ *   - 跟现有 getDailyUsage / getBudgetStatus 行为一致
  *
  * 用法示例：
- *   const shouldAnalyze = shouldTriggerAiCall('L4', severity);
- *   if (!shouldAnalyze) {
+ *   if (!(await shouldTriggerAiCall(env, 'L4', severity))) {
  *     await markAsDegraded(warningId, 'warnings');
  *     return null;
  *   }
  *   // proceed with LLM call...
+ *
+ * @param env  Worker env (含 AI_USAGE_KV + 阈值 vars)
+ * @param level  AI 层级 (L1-L6)
+ * @param _severity  可选 context (L4 warning 严重度) · 当前未使用 · 预留扩展
+ * @param dailyUsed  可选 override（注入今日已用 Neurons · 主要给 contract test 用）
+ *                   省略时调 getDailyUsage() 从 KV 读
+ * @returns 是否允许调用
  */
-export function shouldTriggerAiCall(
-  _env: AiBudgetEnv,
+export async function shouldTriggerAiCall(
+  env: AiBudgetEnv,
   level: 'L1' | 'L2' | 'L3' | 'L4' | 'L5' | 'L6',
   _severity?: number,
-  _dailyUsed?: number
-): boolean {
-  // L1-L3 不受限
+  dailyUsed?: number
+): Promise<boolean> {
+  // L1-L3 不受限（规则分类 + 轻量评分 + 同步分类 · 蓝图设计 L1-L3 永开）
   if (level === 'L1' || level === 'L2' || level === 'L3') return true;
 
-  // NOTE: 实际调用时需要传入 env 并 await getDailyUsage()
-  // 此函数为同步签名，完整版本示例如下：
-  //
-  // export async function shouldTriggerAiCallAsync(
-  //   level: 'L4' | 'L5' | 'L6',
-  //   severity: number | undefined,
-  //   env: AiBudgetEnv,
-  // ): Promise<boolean> {
-  //   const used = await getDailyUsage(env);
-  //   switch (level) {
-  //     case 'L4': return used < getCriticalThreshold(env);  // < 7K
-  //     case 'L5': return used < getShutdownThreshold(env); // < 8K
-  //     case 'L6': return used < getDailyLimit(env);        // < 10K
-  //     default:   return true;
-  //   }
-  // }
+  // L4-L6: 查今日累计 Neurons 用量 + 阈值比较
+  // dailyUsed 提供时直接用（contract test mock 入口）
+  // 否则从 KV 读真实用量
+  const used = dailyUsed ?? (await getDailyUsage(env));
 
-  // 当前预算阈值（蓝图权威公式）：
-  // L4: budget < 7000（70%）触发降级
-  // L5: budget < 8000（80%）触发降级
-  // L6: budget < 9000（90%）触发降级
-  // 此处返回 true 作为默认（集成前不阻断），实际调用方需用 Async 版本
-  return true;
+  switch (level) {
+    case 'L4':
+      return used < getCriticalThreshold(env); // 7K (70%) 触发降级
+    case 'L5':
+      return used < getShutdownThreshold(env); // 8K (80%) 触发降级
+    case 'L6':
+      return used < getDailyLimit(env); // 10K (100%) 触发降级
+    default:
+      // 未知 level 保守返回 true（fail-open · 不阻断未知调用）
+      return true;
+  }
 }
