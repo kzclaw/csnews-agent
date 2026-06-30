@@ -79,11 +79,11 @@ describe('scheduled() — cron routing contract', () => {
     await expect(promiseArg).resolves.toBeUndefined();
   });
 
-  // ---- Branch 2: '0 0 * * *' → scheduledProcess ----
+  // ---- Branch 2: '0 * * * *' → scheduledProcess ----
 
   it('routes "0 0 * * *" cron to scheduledProcess and calls ctx.waitUntil once', async () => {
     const worker = (await import('../src/index')).default;
-    const controller = { cron: '0 0 * * *' } as unknown as ScheduledController;
+    const controller = { cron: '0 * * * *' } as unknown as ScheduledController;
 
     (worker as unknown as { scheduled: Function }).scheduled(controller, mockEnv, mockCtx);
 
@@ -94,7 +94,7 @@ describe('scheduled() — cron routing contract', () => {
 
   it('scheduledProcess Promise resolves for "0 0 * * *" cron', async () => {
     const worker = (await import('../src/index')).default;
-    const controller = { cron: '0 0 * * *' } as unknown as ScheduledController;
+    const controller = { cron: '0 * * * *' } as unknown as ScheduledController;
 
     (worker as unknown as { scheduled: Function }).scheduled(controller, mockEnv, mockCtx);
 
@@ -196,7 +196,7 @@ describe('scheduled() — error handling contract', () => {
     };
 
     const worker = (await import('../src/index')).default;
-    const controller = { cron: '0 0 * * *' } as unknown as ScheduledController;
+    const controller = { cron: '0 * * * *' } as unknown as ScheduledController;
 
     (worker as unknown as { scheduled: Function }).scheduled(controller, badEnv, mockCtx);
 
@@ -219,7 +219,7 @@ describe('scheduled() — env null-safety contract', () => {
     const mockCtx = { waitUntil: waitUntilSpy } as unknown as ExecutionContext;
 
     const worker = (await import('../src/index')).default;
-    const controller = { cron: '0 0 * * *' } as unknown as ScheduledController;
+    const controller = { cron: '0 * * * *' } as unknown as ScheduledController;
 
     (worker as unknown as { scheduled: Function }).scheduled(controller, mockEnv, mockCtx);
 
@@ -271,7 +271,7 @@ describe('scheduled() — ctx.waitUntil trap awareness', () => {
     const mockCtx = { waitUntil: waitUntilSpy } as unknown as ExecutionContext;
 
     const worker = (await import('../src/index')).default;
-    const controller = { cron: '0 0 * * *' } as unknown as ScheduledController;
+    const controller = { cron: '0 * * * *' } as unknown as ScheduledController;
 
     const start = Date.now();
     const result = (worker as unknown as { scheduled: Function }).scheduled(
@@ -290,7 +290,7 @@ describe('scheduled() — ctx.waitUntil trap awareness', () => {
   it('each cron branch calls waitUntil exactly once from scheduled()', async () => {
     const crons = [
       '0 3,15 * * *',
-      '0 0 * * *',
+      '0 * * * *',
       '0 1 1 * *',
       '0 4 * * *',
     ];
