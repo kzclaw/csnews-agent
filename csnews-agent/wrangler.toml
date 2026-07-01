@@ -27,8 +27,9 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-# v0.37.6: cron route fix (77c3c86) + model-test try/catch (a12b825) + scheduled test rot fix (feed6ca) + deprecated model swap (this commit)
-WORKER_VERSION = "v0.37.6"
+# v0.37.17 (v0.37.17 board decision): 删 WORKER_VERSION 手写版本号 — 改成从 PROCESS_STATE KV 读 `worker_git_sha`
+# 每次 commit + push 之后跑 csnews-write-version.sh 写 KV,健康端点立即显示新 commit 编号
+# 之前 v0.36.10.6 hard rule 删 WORKER_VERSION · v0.37.6 加回手写 · v0.37.17 改用自动 commit 编号
 
 [triggers]
 # 4/5 cron 槽位（CF 账户上限 5 · csnews-fission 用 1 + csnews-agent 用 4）

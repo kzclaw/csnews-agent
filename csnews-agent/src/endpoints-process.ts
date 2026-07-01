@@ -151,7 +151,9 @@ export async function handleProcessAction(
 
     return jsonResponse(
       {
-        worker_version: env.WORKER_VERSION || 'unknown',
+        // v0.37.17 (v0.37.17 board decision): worker_version 由 ?action=health 端点从 PROCESS_STATE KV 读,
+        // process 端点不再重复返回 — 关注处理结果,版本号去 health 查.
+        // 仍保留 last_process_at 以便 process 调用方知道本次 run 时间戳.
         processed: results.length,
         cleaned: cleaned?.deleted_topic_count || 0,
         items: results,

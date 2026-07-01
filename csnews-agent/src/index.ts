@@ -40,8 +40,10 @@ interface Env {
   WORKER_SELF_URL: string;
   /**
    * Worker 版本标识。
+   * v0.37.17 (v0.37.17 board decision): 不再用 wrangler.toml [vars] 手写 — 直接用 git commit 编号。
+   * 改从 PROCESS_STATE KV 的 `worker_git_sha` key 读取 (deploy 后由 csnews-write-version.sh
+   * 脚本写: `wrangler kv:key put --binding PROCESS_STATE worker_git_sha <short_sha>`).
    */
-  WORKER_VERSION?: string;
   /**
    * KV namespace 存 AI Neurons 用量 (Phase 1).
    */

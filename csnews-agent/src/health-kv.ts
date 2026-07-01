@@ -189,11 +189,63 @@ export async function checkNegativeSentinel(env: Env): Promise<{
 }
 
 // ============================================================
-// 4. last_process_stored_reason — v0.37.16
-//    Surfaces the stored_reason distribution from the most recent process
-//    run, so the health endpoint can answer "why isn't R2 getting new
-//    writes?" without re-running the full process pipeline.
+// 5. worker_git_sha — v0.37.17
+//    Reads the short git SHA written by the csnews-write-version.sh
+//    wrapper script right after `git push origin main` lands. This is the
+//    source of truth for `worker_version` (board decision 2026-07-02:
+//    commit SHA > human-readable version string for unambiguous deploy
+//    identification).
 // ============================================================
+export async function checkWorkerGitSha(env: Env): Promise<{
+  worker_git_sha: { sha: string; updated_at: string } | null | { error: string };
+  checks: {
+    worker_git_sha: { status: 'ok' | 'unknown'; detail: string };
+  };
+}> {
+  const checks: any = {};
+  let workerGitSha: { sha: string; updated_at: string } | null | { error: string } = null;
+
+  try {
+    if (!env.PROCESS_STATE) {
+      checks.worker_git_sha = {
+        status: 'unknown',
+        detail: 'PROCESS_STATE KV binding missing',
+      };
+      return { worker_git_sha: null, checks };
+    }
+    const raw = await env.PROCESS_STATE.get('worker_git_sha');
+    if (!raw) {
+      checks.worker_git_sha = {
+        status: 'unknown',
+        detail:
+          'worker_git_sha not yet written (run bin/csnews-write-version.sh after first push to populate)',
+      };
+      return { worker_git_sha: null, checks };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const sha = parsed?.data?.sha ?? parsed?.sha ?? raw;
+      const updatedAt = parsed?.data?.updated_at ?? parsed?.updated_at ?? null;
+      workerGitSha = { sha, updated_at: updatedAt || 'unknown' };
+      checks.worker_git_sha = {
+        status: 'ok',
+        detail: `git SHA ${sha} (updated_at=${updatedAt || 'unknown'}) — version field driven by commit SHA, not wrangler.toml [vars]`,
+      };
+    } catch {
+      // raw may be plain string (older writes)
+      workerGitSha = { sha: raw, updated_at: 'unknown' };
+      checks.worker_git_sha = { status: 'ok', detail: `git SHA ${raw}` };
+    }
+  } catch (e: any) {
+    workerGitSha = { error: e?.message || 'kv read failed' };
+    checks.worker_git_sha = { status: 'unknown', detail: e?.message };
+  }
+
+  return {
+    worker_git_sha: workerGitSha,
+    checks: { worker_git_sha: checks.worker_git_sha },
+  };
+}
 export interface LastProcessStoredReason {
   run_at: string;
   total_items: number;
