@@ -217,6 +217,13 @@ export async function joinTopicMember(
 }
 
 //R2存储(去重存储层)
+// v0.37.13: 把 R2 put 的真实 error 暴露到 module-level 缓存 + globalThis · 让 ?action=process / ?action=diag response 能直接 include
+// 不依赖 console.log (CF observability) 也不依赖 R2 logs/ prefix (R2 写入 broken 时写不进)
+// 这样 agent 自身能拿 R2 put 错误信息 · 不用让用户帮忙看 dashboard
+declare global {
+  // eslint-disable-next-line no-var
+  var __R2_LAST_ERROR__: { ts: string; key: string; err: string; name: string } | undefined;
+}
 export async function saveToR2(env: Env, prefix: string, data: object): Promise<string> {
   const key = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.json`;
   try {
@@ -228,9 +235,21 @@ export async function saveToR2(env: Env, prefix: string, data: object): Promise<
     );
     return key;
   } catch (e: any) {
+    const errMsg = e?.message || String(e);
+    const errName = e?.name || 'n/a';
+    const errStack = (e?.stack || '').slice(0, 500);
     console.error(
-      `[saveToR2] put FAILED key=${key} err=${e?.message || e} name=${e?.name || 'n/a'} stack=${(e?.stack || '').slice(0, 500)}`
+      `[saveToR2] put FAILED key=${key} err=${errMsg} name=${errName} stack=${errStack}`
     );
+    // 暴露到 module-level cache + globalThis, 让 ?action=process response 能 include 真实 R2 错误
+    try {
+      globalThis.__R2_LAST_ERROR__ = {
+        ts: new Date().toISOString(),
+        key,
+        err: errMsg,
+        name: errName,
+      };
+    } catch {}
     throw e;
   }
 }

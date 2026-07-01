@@ -105,9 +105,14 @@ export async function handleProcessAction(
         processed: results.length,
         cleaned: cleaned?.deleted_topic_count || 0,
         items: results,
+        // v0.37.13: include module-level cached R2 put error (from saveToR2) so agent can self-diagnose
+        // without needing CF Dashboard access. Cleared after read.
+        r2_last_error: (globalThis as any).__R2_LAST_ERROR__ || null,
       },
       cors
     );
+    // v0.37.13: clear cached R2 error after reading (next request gets fresh state)
+    delete (globalThis as any).__R2_LAST_ERROR__;
   } finally {
     if (env.PROCESS_STATE) {
       const ts = new Date().toISOString();
