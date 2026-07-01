@@ -187,3 +187,73 @@ export async function checkNegativeSentinel(env: Env): Promise<{
     },
   };
 }
+
+// ============================================================
+// 4. last_process_stored_reason — v0.37.16
+//    Surfaces the stored_reason distribution from the most recent process
+//    run, so the health endpoint can answer "why isn't R2 getting new
+//    writes?" without re-running the full process pipeline.
+// ============================================================
+export interface LastProcessStoredReason {
+  run_at: string;
+  total_items: number;
+  r2_writes: number;
+  r2_skipped: number;
+  distribution: Record<string, number>;
+  human_readable: string;
+}
+
+export async function checkLastProcessStoredReason(env: Env): Promise<{
+  last_process_stored_reason: LastProcessStoredReason | null | { error: string };
+  checks: {
+    last_process_stored_reason: { status: 'ok' | 'info' | 'unknown'; detail: string };
+  };
+}> {
+  const checks: any = {};
+  let lastProcessStoredReason: LastProcessStoredReason | null | { error: string } = null;
+
+  try {
+    if (!env.PROCESS_STATE) {
+      checks.last_process_stored_reason = {
+        status: 'unknown',
+        detail: 'PROCESS_STATE KV binding missing',
+      };
+      return { last_process_stored_reason: null, checks };
+    }
+    const raw = await env.PROCESS_STATE.get('last_process_stored_reason');
+    if (!raw) {
+      checks.last_process_stored_reason = {
+        status: 'unknown',
+        detail: 'no stored_reason snapshot yet (process not run since v0.37.16)',
+      };
+      return { last_process_stored_reason: null, checks };
+    }
+    const parsed = JSON.parse(raw);
+    const inner = parsed?.data?.last_process_stored_reason as LastProcessStoredReason | undefined;
+    if (!inner) {
+      checks.last_process_stored_reason = {
+        status: 'unknown',
+        detail: 'stored_reason snapshot unparseable',
+      };
+      return { last_process_stored_reason: null, checks };
+    }
+    lastProcessStoredReason = inner;
+    // Status:
+    //   - ok: process wrote some R2 (new angles detected this run)
+    //   - info: process skipped all R2 (by design — repeats dominate, see detail)
+    //   - unknown: snapshot missing/old
+    const status = inner.r2_writes > 0 ? 'ok' : 'info';
+    checks.last_process_stored_reason = {
+      status,
+      detail: inner.human_readable,
+    };
+  } catch (e: any) {
+    lastProcessStoredReason = { error: e?.message || 'kv read failed' };
+    checks.last_process_stored_reason = { status: 'unknown', detail: e?.message };
+  }
+
+  return {
+    last_process_stored_reason: lastProcessStoredReason,
+    checks: { last_process_stored_reason: checks.last_process_stored_reason },
+  };
+}

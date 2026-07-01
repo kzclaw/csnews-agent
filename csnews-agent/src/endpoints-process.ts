@@ -30,6 +30,25 @@ export async function handleProcessAction(
   cors: Record<string, string>,
   ctx: ExecutionContext
 ): Promise<Response> {
+  // v0.37.16: hoisted so the finally block (which persists it to PROCESS_STATE
+  // KV) can see the aggregate. Initialised to an empty object so a
+  // `no news` early-return still has a defined value to persist.
+  let lastProcessStoredReason: {
+    run_at: string;
+    total_items: number;
+    r2_writes: number;
+    r2_skipped: number;
+    distribution: Record<string, number>;
+    human_readable: string;
+  } = {
+    run_at: new Date().toISOString(),
+    total_items: 0,
+    r2_writes: 0,
+    r2_skipped: 0,
+    distribution: {},
+    human_readable: 'no items processed in this run',
+  };
+
   try {
     resetCacheMetrics();
     const cleaned = (await cleanupStTopics(env)) as CleanupStaleTopicsResult;
@@ -99,6 +118,37 @@ export async function handleProcessAction(
       });
     }
 
+    // v0.37.16: aggregate stored_reason distribution so consumers can see
+    // *why* R2 didn't get new writes this run. The dominant reason is
+    // usually same_topic_duplicate (similarity ≥ 0.95) — that's by design,
+    // not a sign of a broken pipeline.
+    const storedReasonDistribution: Record<string, number> = {};
+    let r2Writes = 0;
+    let r2Skipped = 0;
+    for (const r of results) {
+      const reason = (r as any).stored_reason || 'unknown';
+      storedReasonDistribution[reason] = (storedReasonDistribution[reason] || 0) + 1;
+      if ((r as any).is_stored_r2) r2Writes++;
+      else r2Skipped++;
+    }
+    lastProcessStoredReason = {
+      run_at: new Date().toISOString(),
+      total_items: results.length,
+      r2_writes: r2Writes,
+      r2_skipped: r2Skipped,
+      distribution: storedReasonDistribution,
+      human_readable:
+        r2Writes === 0
+          ? `All ${results.length} items skipped R2 write (${Object.entries(
+              storedReasonDistribution
+            )
+              .map(([k, v]) => `${v}× ${k}`)
+              .join(
+                ', '
+              )}). R2 only stores new angles (similarity < 0.95); this is the by-design cold-archive behavior.`
+          : `${r2Writes}/${results.length} items wrote to R2 (new angles). ${r2Skipped} skipped (repeats / lightweight) — normal.`,
+    };
+
     return jsonResponse(
       {
         worker_version: env.WORKER_VERSION || 'unknown',
@@ -108,6 +158,10 @@ export async function handleProcessAction(
         // v0.37.13: include module-level cached R2 put error (from saveToR2) so agent can self-diagnose
         // without needing CF Dashboard access. Cleared after read.
         r2_last_error: (globalThis as any).__R2_LAST_ERROR__ || null,
+        // v0.37.16: aggregate stored_reason distribution so consumers know
+        // whether the R2 skip pattern is "all duplicates" (normal) vs
+        // "0% writes" (suspicious — would need investigation).
+        last_process_stored_reason: lastProcessStoredReason,
       },
       cors
     );
@@ -123,6 +177,18 @@ export async function handleProcessAction(
           data: { last_process_at: ts },
         }),
         { expirationTtl: 86400 * 7 }
+      );
+      // v0.37.16: also persist the stored_reason aggregate so the health
+      // endpoint can surface "why R2 isn't getting new writes" without
+      // having to re-run the full process. TTL 2h covers the hourly cron
+      // and gives headroom for retries.
+      await env.PROCESS_STATE.put(
+        'last_process_stored_reason',
+        JSON.stringify({
+          _seed: { fetchedAt: ts, recordCount: 1, state: 'ok' as const, maxContentAgeMin: 0 },
+          data: { last_process_stored_reason: lastProcessStoredReason },
+        }),
+        { expirationTtl: 7200 }
       );
     }
   }

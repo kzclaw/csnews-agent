@@ -1,10 +1,32 @@
 // ============================================================
 // Database health checks
 // ============================================================
+// v0.37.16 (board decision): Supabase is the primary store. The historical
+// field name `r2_latest_supabase_write` is kept for backward compatibility,
+// but the canonical name is now `supabase_latest_write`. Dashboard + scripts
+// should read `supabase_latest_write` going forward.
 
 import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { checkEntityCronHealth, supabaseHeaders } from './utils';
 import type { TrendSnapshotRow } from './types';
+
+// ============================================================
+// data_store_architecture — explains which store is primary vs cold archive
+// ============================================================
+// Surfaced as a top-level field in the health response so consumers don't
+// have to reverse-engineer the storage layout from field names.
+export const DATA_STORE_ARCHITECTURE = {
+  primary_store: 'supabase' as const,
+  primary_store_health_field: 'supabase_latest_write' as const,
+  cold_archive: 'r2' as const,
+  cold_archive_health_field: 'r2_latest_write' as const,
+  primary_store_table: 'news_hotspots' as const,
+  cold_archive_prefix: 'news/zaker/' as const,
+  cold_archive_write_rule:
+    'R2 news/zaker/ is only written when a news item is a new angle (embedding similarity < 0.95). Same-topic duplicates and lightweight items skip R2 by design.' as const,
+  explanation:
+    'Process writes primary data to Supabase (news_hotspots table). R2 stores historical snapshots of new angles only. 14 days of no new R2 writes is NORMAL when news is dominated by repeats — not a sign of a broken pipeline.' as const,
+} as const;
 
 // ============================================================
 // 1. supabase_counts + supabase_reachable — 6 table parallel count
@@ -75,19 +97,30 @@ export async function checkSupabaseCounts(env: Env): Promise<{
 }
 
 // ============================================================
-// 2. r2_latest_supabase_write — latest news_hotspots write (real process state)
+// 2. supabase_latest_write (alias: r2_latest_supabase_write)
+//    — latest news_hotspots write (real process state, PRIMARY store)
 // ============================================================
+// v0.37.16: field renamed for clarity. Supabase is the primary store; the
+// historical `r2_latest_supabase_write` field is preserved as an alias so
+// existing consumers keep working. New `supabase_latest_write` field is the
+// canonical one going forward. Both point at the same object.
 export async function checkR2LatestSupabaseWrite(
   env: Env,
   ts: number
 ): Promise<{
-  r2_latest_supabase_write: { last_write: string; source: string } | null | { error: string };
+  r2_latest_supabase_write:
+    | { last_write: string; source: string; role: 'primary_store' }
+    | { last_write: string; source: string; role: 'primary_store' }
+    | { error: string };
+  supabase_latest_write: any; // alias
   checks: {
     r2_latest_supabase_write: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+    supabase_latest_write: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
   };
 }> {
-  let r2LatestSupabaseWrite: { last_write: string; source: string } | null | { error: string } =
-    null;
+  let r2LatestSupabaseWrite:
+    | { last_write: string; source: string; role: 'primary_store' }
+    | { error: string } = null as any;
   const checks: any = {};
 
   try {
@@ -106,42 +139,55 @@ export async function checkR2LatestSupabaseWrite(
       const lastWriteMs = Date.parse(arr[0].created_at);
       if (Number.isFinite(lastWriteMs)) {
         const ageMs = ts - lastWriteMs;
-        r2LatestSupabaseWrite = { last_write: arr[0].created_at, source: 'supabase_news_hotspots' };
+        r2LatestSupabaseWrite = {
+          last_write: arr[0].created_at,
+          source: 'supabase_news_hotspots',
+          role: 'primary_store' as const,
+        };
+        let status: 'ok' | 'degraded' | 'down';
+        let detail: string;
         if (ageMs < 1.5 * 3600_000) {
-          checks.r2_latest_supabase_write = {
-            status: 'ok',
-            detail: `last news_hotspots write ${Math.round(ageMs / 60000)} min ago`,
-          };
+          status = 'ok';
+          detail = `last news_hotspots write ${Math.round(ageMs / 60000)} min ago · primary store (Supabase) is active`;
         } else if (ageMs < 3 * 3600_000) {
-          checks.r2_latest_supabase_write = {
-            status: 'degraded',
-            detail: `last news_hotspots write ${Math.round(ageMs / 60000)} min ago (> 1.5h, expected every 1h)`,
-          };
+          status = 'degraded';
+          detail = `last news_hotspots write ${Math.round(ageMs / 60000)} min ago (> 1.5h, expected every 1h) · primary store getting stale`;
         } else {
-          checks.r2_latest_supabase_write = {
-            status: 'down',
-            detail: `last news_hotspots write ${Math.round(ageMs / 3600_000)}h ago (> 3h, process stale)`,
-          };
+          status = 'down';
+          detail = `last news_hotspots write ${Math.round(ageMs / 3600_000)}h ago (> 3h, process stale) · primary store NOT being written`;
         }
+        checks.r2_latest_supabase_write = { status, detail };
+        checks.supabase_latest_write = { status, detail };
       } else {
-        r2LatestSupabaseWrite = { last_write: arr[0].created_at, source: 'supabase_news_hotspots' };
+        r2LatestSupabaseWrite = {
+          last_write: arr[0].created_at,
+          source: 'supabase_news_hotspots',
+          role: 'primary_store' as const,
+        };
         checks.r2_latest_supabase_write = { status: 'unknown', detail: 'created_at unparseable' };
+        checks.supabase_latest_write = { status: 'unknown', detail: 'created_at unparseable' };
       }
     } else {
-      r2LatestSupabaseWrite = null;
+      r2LatestSupabaseWrite = null as any;
       checks.r2_latest_supabase_write = {
         status: 'down',
-        detail: 'news_hotspots table empty (no data ever)',
+        detail: 'news_hotspots table empty (no data ever) · primary store has nothing',
       };
+      checks.supabase_latest_write = checks.r2_latest_supabase_write;
     }
   } catch (e: any) {
     r2LatestSupabaseWrite = { error: e?.message || 'supabase query failed' };
     checks.r2_latest_supabase_write = { status: 'down', detail: e?.message };
+    checks.supabase_latest_write = checks.r2_latest_supabase_write;
   }
 
   return {
     r2_latest_supabase_write: r2LatestSupabaseWrite,
-    checks: { r2_latest_supabase_write: checks.r2_latest_supabase_write },
+    supabase_latest_write: r2LatestSupabaseWrite, // alias
+    checks: {
+      r2_latest_supabase_write: checks.r2_latest_supabase_write,
+      supabase_latest_write: checks.supabase_latest_write,
+    },
   };
 }
 

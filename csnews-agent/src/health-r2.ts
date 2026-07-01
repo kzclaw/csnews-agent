@@ -1,29 +1,83 @@
 // ============================================================
 // R2 storage health checks
 // ============================================================
+// v0.37.16 (board decision): R2 is a cold archive (not the primary store).
+//  - Process writes primary data to Supabase (news_hotspots table).
+//  - R2 only stores new-angle snapshots (similarity < 0.95) by design.
+//  - 14 days of no new R2 writes is NORMAL when the news cycle is dominated
+//    by same-topic duplicates, NOT a sign of a broken pipeline.
+//  - The health endpoint now reports R2 as a `cold_archive` with status `info`
+//    (not `ok` and not `down`) and points consumers to `supabase_latest_write`
+//    for the real process health signal.
 
 import { Env } from './shared';
 
 // ============================================================
-// 1. r2_latest_write — news/zaker/ latest write (informational)
+// 1. r2_latest_write — news/zaker/ latest write (informational / cold archive)
+// ============================================================
+// Backward-compatible response: `r2_latest_write` keeps its old shape so
+// existing consumers (dashboard viewer, downstream callers) don't break.
+// New fields added:
+//   - r2_role: 'cold_archive' (was implicit before; now explicit)
+//   - cold_archive_age_hours: number | null
+//   - cold_archive_status_explanation: string (one-line "why is this ok / info")
+//   - primary_store_field: 'supabase_latest_write' (route readers to truth)
+// Alias: r2_cold_archive_latest_write points at the same object.
 // ============================================================
 export async function checkR2LatestWrite(
   env: Env,
   ts: number
 ): Promise<{
   r2_latest_write:
-    | { key: string; uploaded: string | null; source: string }
-    | null
-    | { error: string };
+    | {
+        key: string;
+        uploaded: string | null;
+        source: string;
+        r2_role: 'cold_archive';
+        cold_archive_age_hours: number | null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | {
+        r2_role: 'cold_archive';
+        empty: true;
+        cold_archive_age_hours: null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | { error: string; r2_role: 'cold_archive'; cold_archive_age_hours: null };
+  r2_cold_archive_latest_write: any; // alias of r2_latest_write
   checks: {
-    r2_latest_write: { status: 'ok'; detail: string };
+    r2_latest_write: { status: 'ok' | 'info' | 'down'; detail: string };
   };
 }> {
   const checks: any = {};
-  let r2LatestWrite:
-    | { key: string; uploaded: string | null; source: string }
-    | null
-    | { error: string } = null;
+  let r2LatestWrite: any = null;
+  let ageHours: number | null = null;
+
+  // Compute the one-line explanation based on the R2 age, so consumers
+  // (dashboard, scripts, future alerts) can show a clear, human-readable
+  // message instead of a raw timestamp.
+  const explain = (h: number | null): string => {
+    if (h === null) {
+      return 'R2 cold archive · no objects in news/zaker/ yet. Primary store is Supabase (see supabase_latest_write).';
+    }
+    if (h < 24) {
+      return `R2 cold archive · last write ${h}h ago (active). Primary store: Supabase.`;
+    }
+    if (h < 24 * 7) {
+      return `R2 cold archive · last write ${h}h ago. Process only writes R2 for new angles (similarity < 0.95); repeats and lightweight items skip R2 by design. Primary store (Supabase) is the truth — see supabase_latest_write.`;
+    }
+    const days = Math.round(h / 24);
+    return `R2 cold archive · last write ${days}d ago. Same design rule: 0 new-angle writes because news cycle has been repeats. This is normal, not broken. Primary store (Supabase) is the truth — see supabase_latest_write.`;
+  };
+
+  // Map R2 age → status (cold archive never escalates above 'info')
+  const statusFor = (h: number | null): 'ok' | 'info' | 'down' => {
+    if (h === null) return 'info'; // empty archive is not "down"
+    if (h < 24) return 'ok';
+    return 'info'; // cold archive is never "down" for being quiet
+  };
 
   try {
     const list = await env.csnews_raw.list({ prefix: 'news/zaker/', limit: 1000 });
@@ -49,32 +103,52 @@ export async function checkR2LatestWrite(
           }
         }
       }
+      if (lastWriteTs) {
+        ageHours = Math.round((ts - lastWriteTs) / 3600_000);
+      }
       r2LatestWrite = {
         key: latestObj.key,
         uploaded: latestObj.uploaded ? latestObj.uploaded.toISOString() : null,
         source: lastWriteSource,
+        r2_role: 'cold_archive' as const,
+        cold_archive_age_hours: ageHours,
+        cold_archive_status_explanation: explain(ageHours),
+        primary_store_field: 'supabase_latest_write' as const,
       };
-      const ageLabel = lastWriteTs
-        ? `historical: last R2 news/zaker/ write ${Math.round((ts - lastWriteTs) / 3600_000)}h ago (process no longer writes R2 news/zaker/, see r2_latest_supabase_write for current process status)`
-        : 'no uploaded or content.created_at (historical data)';
-      checks.r2_latest_write = { status: 'ok', detail: ageLabel };
+      const ageLabel =
+        ageHours !== null
+          ? `cold_archive · ${ageHours}h since last new-angle write · ${explain(ageHours)}`
+          : `cold_archive · historical (no parsed timestamp) · ${explain(null)}`;
+      checks.r2_latest_write = { status: statusFor(ageHours), detail: ageLabel };
     } else {
-      r2LatestWrite = null;
+      r2LatestWrite = {
+        r2_role: 'cold_archive' as const,
+        empty: true,
+        cold_archive_age_hours: null,
+        cold_archive_status_explanation: explain(null),
+        primary_store_field: 'supabase_latest_write' as const,
+      };
       checks.r2_latest_write = {
-        status: 'ok',
-        detail: 'no objects in news/zaker/ (historical prefix, informational only)',
+        status: 'info',
+        detail: explain(null),
       };
     }
   } catch (e: any) {
-    r2LatestWrite = { error: e?.message || 'r2 unavailable' };
+    r2LatestWrite = {
+      error: e?.message || 'r2 unavailable',
+      r2_role: 'cold_archive' as const,
+      cold_archive_age_hours: null,
+    };
+    // R2 list failure: still 'info' (cold archive, doesn't block process)
     checks.r2_latest_write = {
-      status: 'ok',
-      detail: `r2 list failed: ${e?.message} (informational, does not impact process status)`,
+      status: 'info',
+      detail: `r2 list failed: ${e?.message} · cold archive, does not block process. Primary store: Supabase (see supabase_latest_write).`,
     };
   }
 
   return {
     r2_latest_write: r2LatestWrite,
+    r2_cold_archive_latest_write: r2LatestWrite, // alias
     checks: { r2_latest_write: checks.r2_latest_write },
   };
 }

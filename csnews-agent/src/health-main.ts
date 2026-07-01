@@ -22,7 +22,9 @@ import {
   checkCacheMetrics,
   checkPullCacheFreshness,
   checkAiCallsBreakdown,
+  checkLastProcessStoredReason,
 } from './health-checks';
+import { DATA_STORE_ARCHITECTURE } from './health-db';
 
 export async function handleHealthAction(
   request: Request,
@@ -31,8 +33,12 @@ export async function handleHealthAction(
   cors: Record<string, string>
 ): Promise<Response> {
   const ts = Date.now();
-  const checks: Record<string, { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: any }> =
-    {};
+  // v0.37.16: added 'info' status to the union so cold-archive / by-design
+  // signals don't get conflated with degraded or down.
+  const checks: Record<
+    string,
+    { status: 'ok' | 'info' | 'degraded' | 'down' | 'unknown'; detail: any }
+  > = {};
   const result: any = { status: 'ok', ts };
   result.worker_version = env.WORKER_VERSION || 'unknown';
 
@@ -52,15 +58,37 @@ export async function handleHealthAction(
   result.supabase_counts = supabaseResult.supabase_counts;
   checks.supabase_reachable = supabaseResult.checks.supabase_reachable;
 
-  // 6. r2_latest_write
+  // 6. r2_latest_write (cold archive)
   const r2LatestResult = await checkR2LatestWrite(env, ts);
   result.r2_latest_write = r2LatestResult.r2_latest_write;
+  // v0.37.16: explicit cold-archive alias so consumers don't have to know
+  // the storage role from the field name alone.
+  result.r2_cold_archive_latest_write = r2LatestResult.r2_latest_write;
   checks.r2_latest_write = r2LatestResult.checks.r2_latest_write;
 
-  // 7. r2_latest_supabase_write
+  // 7. r2_latest_supabase_write (primary store)
   const r2SupabaseResult = await checkR2LatestSupabaseWrite(env, ts);
   result.r2_latest_supabase_write = r2SupabaseResult.r2_latest_supabase_write;
+  // v0.37.16: canonical name for the primary-store health field.
+  // Old name kept as alias for backward compatibility.
+  result.supabase_latest_write = r2SupabaseResult.r2_latest_supabase_write;
   checks.r2_latest_supabase_write = r2SupabaseResult.checks.r2_latest_supabase_write;
+  // Also expose the check under the new canonical name so dashboards can
+  // aggregate status without having to know the legacy key.
+  checks.supabase_latest_write = r2SupabaseResult.checks.r2_latest_supabase_write;
+
+  // 7.1 v0.37.16: top-level data_store_architecture — single source of truth
+  // for which store is primary vs cold archive, so consumers (dashboard,
+  // scripts, alerts) don't have to reverse-engineer the layout.
+  result.data_store_architecture = DATA_STORE_ARCHITECTURE;
+
+  // 7.2 v0.37.16: surface "why R2 isn't getting new writes" from the most
+  // recent process run. Read from PROCESS_STATE KV (TTL 2h, refreshed each
+  // hourly cron). Avoids re-running the full process pipeline on every
+  // health call.
+  const storedReasonResult = await checkLastProcessStoredReason(env);
+  result.last_process_stored_reason = storedReasonResult.last_process_stored_reason;
+  checks.last_process_stored_reason = storedReasonResult.checks.last_process_stored_reason;
 
   // 8. r2_prefix_counts (aggregate prefix-level status)
   const r2PrefixResult = await checkR2PrefixCounts(env);
@@ -133,14 +161,15 @@ export async function handleHealthAction(
   // ---- aggregate overall status ----
   const statuses = Object.values(checks)
     .filter(
-      (c): c is { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: any } =>
+      (c): c is { status: 'ok' | 'info' | 'degraded' | 'down' | 'unknown'; detail: any } =>
         c != null && 'status' in c
     )
     .map((c) => c.status as string);
 
   if (statuses.includes('down')) result.status = 'down';
   else if (statuses.includes('degraded')) result.status = 'degraded';
-  else if (statuses.every((s) => s === 'ok' || s === 'unknown')) result.status = 'ok';
+  else if (statuses.every((s) => s === 'ok' || s === 'info' || s === 'unknown'))
+    result.status = 'ok';
   else result.status = 'degraded';
 
   result.checks = checks;

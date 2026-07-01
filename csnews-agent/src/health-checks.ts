@@ -19,7 +19,13 @@ export {
 } from './health-db';
 export { checkAiBudget, checkAiCallsBreakdown } from './health-ai';
 export { checkR2LatestWrite, checkR2PrefixCounts } from './health-r2';
-export { checkLastProcessAt, checkCacheMetrics, checkNegativeSentinel } from './health-kv';
+export {
+  checkLastProcessAt,
+  checkCacheMetrics,
+  checkNegativeSentinel,
+  checkLastProcessStoredReason,
+} from './health-kv';
+export type { LastProcessStoredReason } from './health-kv';
 export { checkPullCacheFreshness } from './health-cache-freshness';
 export { checkMcpToolsCount } from './health-mcp';
 export type { CheckResult } from './health-mcp';

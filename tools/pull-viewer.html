@@ -456,6 +456,8 @@ body {
 .activity-dot.ok { background: var(--success); }
 .activity-dot.warn { background: var(--text-2); }
 .activity-dot.fail { background: var(--danger); }
+/* v0.37.16: 'info' dot for cold-archive / by-design signals (blue, not alarming). */
+.activity-dot.info { background: var(--info); }
 .activity-content { flex: 1; min-width: 0; }
 .activity-title { color: var(--text); font-weight: 500; margin-bottom: 2px; word-break: break-word; line-height: 1.45; }
 .activity-meta {
@@ -504,6 +506,25 @@ body {
 .badge-unknown {
   background: var(--warning-bg); border-color: var(--warning);
   color: var(--warning);
+}
+/* v0.37.16: 'info' status = cold archive / by-design signal. Blue, not red/green. */
+.badge-info {
+  background: var(--info-bg); border-color: var(--info);
+  color: var(--info);
+}
+/* v0.37.16: cold-archive role badge for R2 panels (neutral grey, not alarming). */
+.badge-cold {
+  background: rgba(148, 163, 184, 0.10); border-color: #94a3b8;
+  color: #94a3b8;
+  font-size: 10px; padding: 1px 6px; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* v0.37.16: primary-store role badge for Supabase panels (green, signals "this is the truth"). */
+.badge-primary {
+  background: var(--success-bg); border-color: var(--success);
+  color: var(--success);
+  font-size: 10px; padding: 1px 6px; letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .badge-tier-normal {
   background: transparent; border-color: var(--hairline-strong);
@@ -716,6 +737,8 @@ body {
 }
 .check-card.warn { border-color: var(--hairline-strong); }
 .check-card.ok { border-left: 2px solid var(--success); }
+/* v0.37.16: 'info' check-card (cold archive / by-design). Blue accent, not red. */
+.check-card.info { border-left: 2px solid var(--info); background: var(--info-bg); }
 .check-card-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 10px;
@@ -2221,6 +2244,7 @@ function renderOverview() {
           <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
             <span>Supabase</span>
+            <span class="badge badge-primary">primary</span>
           </div>
         </div>
         <div class="panel-body">
@@ -2240,7 +2264,9 @@ function renderOverview() {
           <div class="panel-title">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M0 3h22v5H1zM10 12h4"/></svg>
             <span>R2 Prefix</span>
+            <span class="badge badge-cold">cold archive</span>
           </div>
+          ${h.data_store_architecture ? `<div class="panel-actions" style="font-size: 11px; color: var(--text-3);">${escapeHtml(h.data_store_architecture.explanation.split('.').slice(0, 2).join('.') + '.')}</div>` : ''}
         </div>
         <div class="panel-body">
           <table class="stat-table">
@@ -2275,15 +2301,26 @@ function renderOverview() {
         </div>
         <div class="panel-body">
           <ul class="activity-list">
-            ${lastWrite.created_at ? `
+            ${lastWrite.created_at || lastWrite.key ? `
               <li class="activity-item">
-                <span class="activity-dot ok"></span>
+                <span class="activity-dot ${lastWrite.cold_archive_age_hours == null || lastWrite.cold_archive_age_hours < 24 ? 'ok' : 'info'}"></span>
                 <div class="activity-content">
-                  <div class="activity-title">${escapeHtml(lastWrite.title || '(no title)')}</div>
+                  <div class="activity-title">${escapeHtml(lastWrite.title || '(no title — cold archive, no recent new-angle write)')}</div>
                   <div class="activity-meta">
-                    <span>R2 latest write</span><span class="sep">·</span>
-                    <span>${fmtTime(lastWrite.created_at)}</span><span class="sep">·</span>
+                    <span>R2 Cold Archive latest write</span><span class="sep">·</span>
+                    <span>${lastWrite.cold_archive_age_hours != null ? lastWrite.cold_archive_age_hours + 'h ago' : (lastWrite.uploaded ? fmtTime(lastWrite.uploaded) : 'historical')}</span><span class="sep">·</span>
                     <span>${escapeHtml(lastWrite.key || '')}</span>
+                    ${lastWrite.cold_archive_status_explanation ? `<span class="sep">·</span><span style="color: var(--text-3);">${escapeHtml(lastWrite.cold_archive_status_explanation)}</span>` : ''}
+                  </div>
+                </div>
+              </li>` : ''}
+            ${h.last_process_stored_reason ? `
+              <li class="activity-item">
+                <span class="activity-dot ${(h.last_process_stored_reason.r2_writes || 0) > 0 ? 'ok' : 'info'}"></span>
+                <div class="activity-content">
+                  <div class="activity-title">最近 process: ${h.last_process_stored_reason.r2_writes || 0}/${h.last_process_stored_reason.total_items || 0} 写了 R2 (新角度)</div>
+                  <div class="activity-meta">
+                    <span>${escapeHtml(h.last_process_stored_reason.human_readable || '')}</span>
                   </div>
                 </div>
               </li>` : ''}
@@ -2593,11 +2630,12 @@ function renderHealth() {
       <div class="health-section-title">9 维度健康检查</div>
       <div class="health-grid">
         ${Object.entries(checks).map(([name, c]) => {
-          // unknown is a soft state (cold start / no traffic) — not a real failure.
-          // Render it as warn (yellow) rather than down (red) so the dashboard does
-          // not look broken when the worker simply has not seen any requests yet.
-          const cls = c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'unknown' ? 'unknown' : 'down';
-          const badge = c.status === 'ok' ? 'badge-ok' : c.status === 'warn' ? 'badge-warn' : c.status === 'unknown' ? 'badge-unknown' : 'badge-down';
+          // v0.37.16: added 'info' status (blue) for cold-archive / by-design
+          // signals. unknown stays soft-yellow (cold start). down stays red.
+          // info must NOT render as down — that's what caused the "R2 broken"
+          // false alarm in the first place.
+          const cls = c.status === 'ok' ? 'ok' : c.status === 'info' ? 'info' : c.status === 'warn' ? 'warn' : c.status === 'unknown' ? 'unknown' : 'down';
+          const badge = c.status === 'ok' ? 'badge-ok' : c.status === 'info' ? 'badge-info' : c.status === 'warn' ? 'badge-warn' : c.status === 'unknown' ? 'badge-unknown' : 'badge-down';
           return `
           <div class="check-card ${cls}">
             <div class="check-card-header">
