@@ -219,10 +219,20 @@ export async function joinTopicMember(
 //R2存储(去重存储层)
 export async function saveToR2(env: Env, prefix: string, data: object): Promise<string> {
   const key = `${prefix}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.json`;
-  await env.csnews_raw.put(key, JSON.stringify(data), {
-    httpMetadata: { contentType: 'application/json' },
-  });
-  return key;
+  try {
+    const result = await env.csnews_raw.put(key, JSON.stringify(data), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+    console.error(
+      `[saveToR2] put ok key=${key} etag=${result?.etag || 'n/a'} version=${result?.version || 'n/a'}`
+    );
+    return key;
+  } catch (e: any) {
+    console.error(
+      `[saveToR2] put FAILED key=${key} err=${e?.message || e} name=${e?.name || 'n/a'} stack=${(e?.stack || '').slice(0, 500)}`
+    );
+    throw e;
+  }
 }
 
 // ============================================================
