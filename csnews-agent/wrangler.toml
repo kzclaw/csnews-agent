@@ -44,3 +44,9 @@ crons = [
   "0 1 1 * *",
   "0 0 * * *",
 ]
+
+# v0.37.13 (a5a31b0 deployment failed): 加 observability 暴露 console.error
+# 之前 14 天 R2 写入 broken · saveToR2 console.error 看不到是因为 wrangler.toml 缺 [observability] 块
+# 修复: 董事长 push back 指出 "wrangler.toml 根本没有开 log"
+[observability]
+enabled = true
