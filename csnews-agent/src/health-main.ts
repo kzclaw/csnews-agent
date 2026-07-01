@@ -93,6 +93,16 @@ export async function handleHealthAction(
   result.ai_budget_today = aiBudgetResult.ai_budget_today;
   checks.ai_budget_today = aiBudgetResult.checks.ai_budget_today;
 
+  // 11.1 Phase 4: 顶层 alias (matches the Phase 4 design JSON example:
+  //   neurons_daily_limit / neurons_remaining are also available as ai_budget_today
+  //   sub-object fields, but flattened here so business consumers can read them
+  //   directly from the top-level response.)
+  if (aiBudgetResult.ai_budget_today && !('error' in aiBudgetResult.ai_budget_today)) {
+    const ab = aiBudgetResult.ai_budget_today;
+    result.neurons_daily_limit = ab.daily_limit;
+    result.neurons_remaining = ab.remaining;
+  }
+
   // 12-13. entity_freshness + event_freshness
   const freshnessResult = await checkEntityAndEventFreshness(env);
   result.entity_freshness = freshnessResult.entity_freshness;
