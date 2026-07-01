@@ -115,7 +115,7 @@ export async function checkR2LatestSupabaseWrite(
         } else if (ageMs < 3 * 3600_000) {
           checks.r2_latest_supabase_write = {
             status: 'degraded',
-            detail: `last news_hotspots write ${Math.round(ageMs / 60)} min ago (> 1.5h, expected every 1h)`,
+            detail: `last news_hotspots write ${Math.round(ageMs / 60000)} min ago (> 1.5h, expected every 1h)`,
           };
         } else {
           checks.r2_latest_supabase_write = {
