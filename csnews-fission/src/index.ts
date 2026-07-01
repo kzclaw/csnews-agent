@@ -36,23 +36,29 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   }
 
   if (action === 'health') {
-    return new Response(JSON.stringify({
-      ok: true,
-      worker: 'csnews-fission',
-      action: 'health',
-      timestamp: new Date().toISOString(),
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        worker: 'csnews-fission',
+        action: 'health',
+        timestamp: new Date().toISOString(),
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   // 手动触发裂变（用于调试或手动干预）
   if (action === 'fission-manual') {
     try {
       await runFissionTrigger(env);
-      return new Response(JSON.stringify({ ok: true, action: 'fission-manual', result: 'triggered' }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ ok: true, action: 'fission-manual', result: 'triggered' }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     } catch (err) {
       return new Response(JSON.stringify({ ok: false, error: String(err) }), {
         status: 500,

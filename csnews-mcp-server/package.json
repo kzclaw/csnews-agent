@@ -7,9 +7,17 @@
     "csnews-mcp": "./src/index.cjs"
   },
   "scripts": {
-    "start": "node src/index.cjs"
+    "start": "node src/index.cjs",
+    "validate": "vitest run",
+    "format": "prettier --write \"src/**/*.ts\" \"validate/**/*.ts\" \"src/**/*.cjs\"",
+    "lint": "prettier --check \"src/**/*.ts\" \"validate/**/*.ts\" \"src/**/*.cjs\""
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "prettier": "^3.9.4",
+    "vitest": "^4.1.9"
   }
 }

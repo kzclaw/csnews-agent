@@ -14,9 +14,15 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/dist/esm/server/index.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/dist/esm/types.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/dist/esm/types.js';
 
-const CSNEWS_URL = (process.env.CSNEWS_URL || 'https://csnews.kwokzit.info/api/v1').replace(/\/$/, '');
+const CSNEWS_URL = (process.env.CSNEWS_URL || 'https://csnews.kwokzit.info/api/v1').replace(
+  /\/$/,
+  ''
+);
 const CSNEWS_TOKEN = process.env.CSNEWS_TOKEN || '';
 
 // ============================================================
@@ -48,7 +54,8 @@ const TOOLS = [
   },
   {
     name: 'get_explosive_topics',
-    description: '获取爆炸级（explosive level）话题列表，按分数倒序返回。高分爆炸话题通常意味着大规模传播事件。',
+    description:
+      '获取爆炸级（explosive level）话题列表，按分数倒序返回。高分爆炸话题通常意味着大规模传播事件。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,7 +97,8 @@ const TOOLS = [
   },
   {
     name: 'get_trending_velocity',
-    description: '获取趋势速度最快的话题列表（hot + mature 阶段），按速度指标排序。用于发现正在加速传播的内容。',
+    description:
+      '获取趋势速度最快的话题列表（hot + mature 阶段），按速度指标排序。用于发现正在加速传播的内容。',
     inputSchema: {
       type: 'object',
       properties: {

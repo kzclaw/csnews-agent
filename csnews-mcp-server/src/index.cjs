@@ -12,7 +12,10 @@
  *   node src/index.cjs
  */
 
-const CSNEWS_URL = (process.env.CSNEWS_URL || 'https://csnews.kwokzit.info/api/v1').replace(/\/$/, '');
+const CSNEWS_URL = (process.env.CSNEWS_URL || 'https://csnews.kwokzit.info/api/v1').replace(
+  /\/$/,
+  ''
+);
 const CSNEWS_TOKEN = process.env.CSNEWS_TOKEN || '';
 
 // ============================================================
@@ -25,8 +28,20 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: '返回条数上限，默认 20，最大 200', minimum: 1, maximum: 200, default: 20 },
-        max_hours: { type: 'number', description: '只返回最近 N 小时内创建的新闻', minimum: 1, maximum: 720, default: 24 },
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
+        max_hours: {
+          type: 'number',
+          description: '只返回最近 N 小时内创建的新闻',
+          minimum: 1,
+          maximum: 720,
+          default: 24,
+        },
       },
     },
   },
@@ -36,7 +51,13 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: '返回条数上限，默认 20，最大 200', minimum: 1, maximum: 200, default: 20 },
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
       },
     },
   },
@@ -46,9 +67,23 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        severity: { type: 'string', description: 'critical / high / medium / low', enum: ['critical', 'high', 'medium', 'low'] },
-        status: { type: 'string', description: 'open / acknowledged / validated / dismissed / closed', enum: ['open', 'acknowledged', 'validated', 'dismissed', 'closed'] },
-        limit: { type: 'number', description: '返回条数上限，默认 20，最大 200', minimum: 1, maximum: 200, default: 20 },
+        severity: {
+          type: 'string',
+          description: 'critical / high / medium / low',
+          enum: ['critical', 'high', 'medium', 'low'],
+        },
+        status: {
+          type: 'string',
+          description: 'open / acknowledged / validated / dismissed / closed',
+          enum: ['open', 'acknowledged', 'validated', 'dismissed', 'closed'],
+        },
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
       },
     },
   },
@@ -58,7 +93,13 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: '返回条数上限，默认 20，最大 200', minimum: 1, maximum: 200, default: 20 },
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
       },
     },
   },
@@ -69,7 +110,13 @@ const TOOLS = [
       type: 'object',
       properties: {
         topic_id: { type: 'string', description: '话题 ID（UUID 格式）' },
-        limit: { type: 'number', description: '返回条数上限，默认 20，最大 200', minimum: 1, maximum: 200, default: 20 },
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
       },
       required: ['topic_id'],
     },
@@ -168,18 +215,25 @@ process.stdin.on('data', async (chunk) => {
       const request = JSON.parse(line);
 
       // listTools
-      if (request.method === 'initialize' || (request.method === 'tools/list' && request.jsonrpc === '2.0')) {
-        process.stdout.write(JSON.stringify({
-          jsonrpc: '2.0',
-          id: request.id,
-          result: { tools: TOOLS },
-        }) + '\n');
+      if (
+        request.method === 'initialize' ||
+        (request.method === 'tools/list' && request.jsonrpc === '2.0')
+      ) {
+        process.stdout.write(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: request.id,
+            result: { tools: TOOLS },
+          }) + '\n'
+        );
         continue;
       }
 
       // notifications/ping
       if (request.method === 'ping' || request.method === 'notifications/initialized') {
-        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: null }) + '\n');
+        process.stdout.write(
+          JSON.stringify({ jsonrpc: '2.0', id: request.id, result: null }) + '\n'
+        );
         continue;
       }
 
@@ -188,24 +242,36 @@ process.stdin.on('data', async (chunk) => {
         const { name, arguments: args = {} } = request.params;
 
         if (!CSNEWS_TOKEN) {
-          process.stdout.write(JSON.stringify({
-            jsonrpc: '2.0', id: request.id,
-            result: { content: [{ type: 'text', text: '❌ 未设置 CSNEWS_TOKEN 环境变量' }], isError: true },
-          }) + '\n');
+          process.stdout.write(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: request.id,
+              result: {
+                content: [{ type: 'text', text: '❌ 未设置 CSNEWS_TOKEN 环境变量' }],
+                isError: true,
+              },
+            }) + '\n'
+          );
           continue;
         }
 
         try {
           const text = await handleTool(name, args);
-          process.stdout.write(JSON.stringify({
-            jsonrpc: '2.0', id: request.id,
-            result: { content: [{ type: 'text', text }] },
-          }) + '\n');
+          process.stdout.write(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: request.id,
+              result: { content: [{ type: 'text', text }] },
+            }) + '\n'
+          );
         } catch (e) {
-          process.stdout.write(JSON.stringify({
-            jsonrpc: '2.0', id: request.id,
-            result: { content: [{ type: 'text', text: `❌ ${e.message}` }], isError: true },
-          }) + '\n');
+          process.stdout.write(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: request.id,
+              result: { content: [{ type: 'text', text: `❌ ${e.message}` }], isError: true },
+            }) + '\n'
+          );
         }
         continue;
       }

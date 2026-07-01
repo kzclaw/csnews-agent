@@ -184,9 +184,13 @@ async function generateSearchQueries(
     return [topicTitle];
   }
 
-  const relatedCtx = relatedNews.length > 0
-    ? `相关报道标题：\n${relatedNews.slice(0, 3).map((t, i) => `${i + 1}. ${t}`).join('\n')}`
-    : '暂无相关报道。';
+  const relatedCtx =
+    relatedNews.length > 0
+      ? `相关报道标题：\n${relatedNews
+          .slice(0, 3)
+          .map((t, i) => `${i + 1}. ${t}`)
+          .join('\n')}`
+      : '暂无相关报道。';
 
   const prompt = `你是一个新闻裂变搜索词生成专家。
 
@@ -263,12 +267,17 @@ async function generateFissionReport(
   }
 
   const newsItems = searchResults
-    .map((r, i) => `${i + 1}. **${r.title}**\n   来源：${r.source} | ${r.published_at || '时间未知'}\n   ${r.summary || '（无摘要）'}`)
+    .map(
+      (r, i) =>
+        `${i + 1}. **${r.title}**\n   来源：${r.source} | ${r.published_at || '时间未知'}\n   ${r.summary || '（无摘要）'}`
+    )
     .join('\n\n');
 
   // Phase 2: 预算检查 L5（裂变报告生成）
   if (!(await shouldTriggerAiCall(env, 'L5'))) {
-    console.warn('[AI] skipped fission report generation: Neurons budget exceeded for L5 threshold');
+    console.warn(
+      '[AI] skipped fission report generation: Neurons budget exceeded for L5 threshold'
+    );
     return `# 裂变报告：${topicTitle}
 
 > 警告：本次裂变 AI 报告生成跳过（Neurons 预算不足，L5 阈值 8,000）。
@@ -373,7 +382,7 @@ export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
       return [];
     }
 
-    const data = await res.json() as { result?: FissionTopic[] };
+    const data = (await res.json()) as { result?: FissionTopic[] };
     return data.result || [];
   } catch (err) {
     console.error('[fission] findFissionTopics exception:', err);
@@ -407,7 +416,7 @@ async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
 
     if (!res.ok) return [];
 
-    const data = await res.json() as { result?: { title: string }[] };
+    const data = (await res.json()) as { result?: { title: string }[] };
     return (data.result || []).map((r) => r.title).filter(Boolean);
   } catch {
     return [];
@@ -417,7 +426,11 @@ async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
 /**
  * 重置 topic 的 score 为 0，fission_count += 1
  */
-export async function resetTopicScore(env: Env, topicId: string, currentCount: number): Promise<void> {
+export async function resetTopicScore(
+  env: Env,
+  topicId: string,
+  currentCount: number
+): Promise<void> {
   const supabaseUrl = getSupabaseHost(env);
   const now = new Date().toISOString();
 
@@ -426,7 +439,7 @@ export async function resetTopicScore(env: Env, topicId: string, currentCount: n
     headers: {
       ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
       'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
+      Prefer: 'return=minimal',
     },
     body: JSON.stringify({
       score: 0,
@@ -454,7 +467,7 @@ async function recordFissionReport(env: Env, result: FissionResult): Promise<voi
       headers: {
         ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
         'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
+        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         topic_id: result.topic_id,
@@ -528,10 +541,7 @@ async function appendFissionIndex(env: Env, entry: FissionIndexEntry): Promise<v
 /**
  * 并行搜索：每个词调 ZAKER，失败后自动 fallback Tavily
  */
-async function parallelSearch(
-  queries: string[],
-  tavilyKey?: string
-): Promise<SearchResult[]> {
+async function parallelSearch(queries: string[], tavilyKey?: string): Promise<SearchResult[]> {
   const promises = queries.map(async (query): Promise<SearchResult[]> => {
     let results = await searchZaker(query);
 
@@ -561,7 +571,9 @@ async function parallelSearch(
     return true;
   });
 
-  console.log(`[search] total=${allResults.length} unique=${deduped.length} from ${queries.length} queries`);
+  console.log(
+    `[search] total=${allResults.length} unique=${deduped.length} from ${queries.length} queries`
+  );
   return deduped;
 }
 
@@ -572,10 +584,7 @@ async function parallelSearch(
 /**
  * 执行单个 topic 的裂变流程（Phase 2 完整实现）
  */
-export async function runFissionForTopic(
-  env: Env,
-  topic: FissionTopic
-): Promise<void> {
+export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise<void> {
   console.log(`[fission] processing topic=${topic.id} title="${topic.title}"`);
 
   const now = new Date().toISOString();

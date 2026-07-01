@@ -6,11 +6,17 @@
   "main": "src/index.ts",
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "validate": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\" \"validate/**/*.ts\"",
+    "lint": "prettier --check \"src/**/*.ts\" \"validate/**/*.ts\""
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250605.0",
-    "wrangler": "^4.0.0",
-    "typescript": "^5.0.0"
+    "prettier": "^3.9.4",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.9",
+    "wrangler": "^4.0.0"
   }
 }

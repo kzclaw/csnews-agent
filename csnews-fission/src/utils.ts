@@ -3,7 +3,7 @@
  */
 export function supabaseHeaders(serviceKey: string): Record<string, string> {
   return {
-    'apikey': serviceKey,
-    'Authorization': `Bearer ${serviceKey}`,
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
   };
 }

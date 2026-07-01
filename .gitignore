@@ -49,6 +49,12 @@ csnews-agent/scripts/check-privacy.sh
 csnews-agent/validate/privacy-grep.contract.ts
 # 排除测试文件（validate/ 目录整体不入仓库）
 csnews-agent/validate/
+csnews-fission/validate/
+csnews-mcp-server/validate/
+
+# 诊断产物 (curl 探测 / R2 抓取)
+csnews-agent/diagnostic/
+csnews-agent/news/
 
 # Wrangler local cache + build outputs
 .wrangler/
