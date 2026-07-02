@@ -274,7 +274,7 @@ export async function runTavilyPipeline(
     let storedReason = 'lightweight_no_embedding';
 
     if (i < EMBED_COUNT) {
-      embedding = await embedTitle(env, title);
+      embedding = await embedTitle(env, title, article.summary);
 
       if (embedding.length > 0) {
         const similar = await findSimilarForEmbedding(env, embedding, 0.88, 3);

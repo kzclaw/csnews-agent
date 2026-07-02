@@ -229,7 +229,7 @@ async function processZakerItem(
   let embedding: number[] = [];
 
   if (i < fullCount) {
-    embedding = await embedTitle(env, title);
+    embedding = await embedTitle(env, title, item.summary);
 
     if (embedding.length > 0) {
       const similar = await findSimilarForEmbedding(env, embedding, 0.85, 3);

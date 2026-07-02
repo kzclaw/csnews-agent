@@ -28,13 +28,24 @@ export async function fetchZakerHot(): Promise<ZakerArticle[]> {
 }
 
 /**
- * Generate bge-m3 embedding for a single title.
+ * Generate bge-m3 embedding for a news item.
+ * Concatenates title + summary when both present so the vector captures
+ * both the headline angle and the body detail — News Self Growth
+ * topic clustering benefits from the extra semantic signal.
+ *
+ * Still a single bge-m3 API call (text: [combinedText]); the call cost
+ * stays at 1 neuron-billing event, only the input token count grows
+ * (~+10-30% per call vs title-only).
+ *
  * Returns empty array on failure — callers must handle gracefully.
  */
-export async function embedTitle(env: Env, title: string): Promise<number[]> {
+export async function embedTitle(env: Env, title: string, summary?: string): Promise<number[]> {
+  const combined = summary && summary.trim().length > 0
+    ? `${title} ${summary.trim()}`
+    : title;
   try {
     const embResp = (await env.AI.run('@cf/baai/bge-m3', {
-      text: [title],
+      text: [combined],
     })) as BgeEmbeddingResponse;
     if (Array.isArray(embResp?.data) && embResp.data.length > 0) {
       const it = embResp.data[0];
