@@ -27,9 +27,10 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-# v0.37.17 (v0.37.17 board decision): 删 WORKER_VERSION 手写版本号 — 改成从 PROCESS_STATE KV 读 `worker_git_sha`
-# 每次 commit + push 之后跑 csnews-write-version.sh 写 KV,健康端点立即显示新 commit 编号
-# 之前 v0.36.10.6 hard rule 删 WORKER_VERSION · v0.37.6 加回手写 · v0.37.17 改用自动 commit 编号
+WORKER_VERSION = "v0.37.18"
+# v0.37.18 (方案 4 拍板): WORKER_VERSION 由顶层 .husky/pre-commit hook 自动 bump tag (v0.37.x+1).
+# 跟 v0.37.17 KV 注入方案说再见 (那条路 token 权限不够, 走不通). tag 在 post-commit hook 立刻 git tag 绑回.
+# 起点 = v0.37.18 (因为 changelog 上次更新到 v0.37.17). (拍板时间 in changelog v0.37.18 row.)
 
 [triggers]
 # 4/5 cron 槽位（CF 账户上限 5 · csnews-fission 用 1 + csnews-agent 用 4）
