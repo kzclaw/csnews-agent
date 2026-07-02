@@ -1,0 +1,39 @@
+#!/bin/sh
+# ============================================================
+# csnews post-commit hook · 方案 4 (戴舒柯 17:59 拍板)
+#
+# 功能:
+#   - 拿 pre-commit hook 写入的 .git/TAG_NEXT (下一个 tag 名)
+#   - git tag <TAG_NEXT> HEAD (lightweight tag, 没 GPG signing key)
+#   - .git/TAG_NEXT 是临时文件, 完事删除
+#
+# 顺序: pre-commit (sed wrangler.toml + git add) → git commit → post-commit (git tag)
+# 结果: wrangler.toml WORKER_VERSION = "v0.37.18" 跟 tag "v0.37.18" 永远指向同一个 commit
+# ============================================================
+
+set -e
+
+if [ ! -f .git/TAG_NEXT ]; then
+  # No pre-commit hook ran (or pre-commit was skipped) · 静默不报错
+  exit 0
+fi
+
+NEW_TAG=$(cat .git/TAG_NEXT)
+rm -f .git/TAG_NEXT
+
+# 拿刚 commit 的 hash
+COMMIT_HASH=$(git rev-parse HEAD)
+SHORT=$(git rev-parse --short HEAD)
+
+# 创 lightweight tag (没 GPG signing key 也能用)
+# - 不用 -a (annotated) 因为需要 GPG · 我们用 lightweight + 单独 commit message 描述 bump
+echo "[post-commit] tagging $SHORT as $NEW_TAG"
+git tag "$NEW_TAG" "$COMMIT_HASH"
+
+# 验证 tag 真的指向新 commit
+if [ "$(git rev-parse "$NEW_TAG^{commit}")" != "$COMMIT_HASH" ]; then
+  echo "[post-commit] FAIL: tag $NEW_TAG 不指向最新 commit $SHORT" >&2
+  exit 1
+fi
+
+echo "[post-commit] OK · $NEW_TAG → $SHORT"

@@ -47,7 +47,7 @@
   --shadow: none;
   --shadow-hover: 0 1px 0 var(--hairline-strong);
   --font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Cascadia Code', monospace;
-  /* v0.36.11 KR3 (taste-skill v2 适配): Inter 删 (taste-skill §4.1 discouraged default, LLM 最大 tell 之一), 用 system-ui 零成本 + 零 privacy 风险 */
+  /* v0.36.11 (taste-skill v2 适配): Inter 删 (taste-skill §4.1 discouraged default, LLM 最大 tell 之一), 用 system-ui 零成本 + 零 privacy 风险 */
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 280ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -58,7 +58,7 @@
     --bg-1: oklch(9% 0.006 95);
     --bg-2: oklch(12% 0.006 95);
     --bg-hover: oklch(14% 0.006 95);
-    /* v0.36.12 KR3 ("World Engine" (user)Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
+    /* v0.36.12 ("World Engine" (user)Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
     --accent-blue: #00D4FF;
     --accent-green: #00FF88;
     --accent-cyan: #00E5FF;
@@ -95,7 +95,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-size: 13px;
-  /* v0.36.11 KR3: line-height 1.55 → 1.4 (taste-skill §4.7 dense dashboard 紧凑层次) */
+  /* v0.36.11 : line-height 1.55 → 1.4 (taste-skill §4.7 dense dashboard 紧凑层次) */
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -111,7 +111,7 @@ body {
 /* ============================================================
  * Top header — logo + view tabs + actions
  * ============================================================ */
-.app { display: grid; grid-template-rows: 52px 30px 1fr; height: 100vh; }  /* fix 6-5: header (52) + global-ticker (30) + main (1fr) · fix 6-12: 28→30 (ticker 字号 13→15.5) */
+.app { display: grid; grid-template-rows: 52px 30px 1fr; height: 100vh; } /* fix 6-5: header (52) + global-ticker (30) + main (1fr) · fix 6-12: 28→30 (ticker 字号 13→15.5) */
 .header {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -179,33 +179,33 @@ body {
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
 .status.online .status-dot { background: var(--success); animation: ledBlink 1.2s ease-in-out infinite; }
 .status.offline .status-dot { background: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
-.status.config .status-dot { background: var(--text-3); }  /* 未配置 — 灰色 */
+.status.config .status-dot { background: var(--text-3); } /* 未配置 — 灰色 */
 
-/* v0.36.12 KR3 ("World Engine" (user)Dashboard 状态灯闪烁 NASA HUD 感) */
+/* v0.36.12 ("World Engine" (user)Dashboard 状态灯闪烁 NASA HUD 感) */
 @keyframes ledBlink { 0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; } 50% { opacity: 0.4; box-shadow: 0 0 1px currentColor; } }
 .status.online .status-dot { color: var(--success); }
 .status.offline .status-dot { color: var(--danger); }
 
-/* v0.36.12 KR3 ("World Engine" (user)Dashboard 滚动 ticker — 横向新闻条) */
+/* v0.36.12 ("World Engine" (user)Dashboard 滚动 ticker — 横向新闻条) */
 .ticker {
   overflow: hidden; white-space: nowrap;
   background: var(--bg-1); border-bottom: 1px solid var(--hairline);
-  padding: 5px 0;   font-family: var(--font-mono); font-size: 15.5px;  /* fix 5-4: 11→13 · fix 6-12: 13→15.5 (用户 22:20 反馈"再放大一点") */
+  padding: 5px 0; font-family: var(--font-mono); font-size: 15.5px; /* fix 5-4: 11→13 · fix 6-12: 13→15.5 (用户 22:20 反馈"再放大一点") */
   color: var(--text-2); position: relative;
-  z-index: 5;  /* fix 6-5: ticker 在 header 之下 main 之上的 global 位置 */
+  z-index: 5; /* fix 6-5: ticker 在 header 之下 main 之上的 global 位置 */
 }
 /* fix 6-5: global-ticker 不在 view 内 · 切 view 不重置 */
-.global-ticker { height: 30px; flex-shrink: 0; }  /* fix 6-12: 28→30 (字号 15.5px 视觉居中) */
+.global-ticker { height: 30px; flex-shrink: 0; } /* fix 6-12: 28→30 (字号 15.5px 视觉居中) */
 .ticker-track {
   display: inline-block; white-space: nowrap;
   padding-left: 100%;
-  animation: tickerScroll 180s linear infinite;  /* fix 6-2 v2: 120s→180s 再慢 50% (用户 20:47 反馈) */
+  animation: tickerScroll 180s linear infinite; /* fix 6-2 v2: 120s→180s 再慢 50% (用户 20:47 反馈) */
   font-variant-numeric: tabular-nums;
 }
 .ticker-track span { padding: 0 24px; }
 .ticker-track span a { color: inherit; text-decoration: none; transition: color 0.2s; }
 .ticker-track span a:hover { color: var(--gold); }
-.ticker-track span::before { content: ''; }  /* fix 6-15: 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
+.ticker-track span::before { content: ''; } /* fix 6-15: 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
 /* fix 6-12: hover 改"指向标题才停" (用户 22:20 反馈"进入区域就停太敏感")
    - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
      → 标题之间的 padding 空白不会触发暂停
@@ -220,9 +220,9 @@ body {
 .ticker { cursor: default; will-change: transform; }
 .ticker-track { will-change: transform; }
 .ticker-track a { cursor: pointer; }
-@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }  /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
+@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } } /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
 
-/* v0.36.12 KR3 ("World Engine" (user)Dashboard 网格线扫描 — NASA Mission Control 背景) */
+/* v0.36.12 ("World Engine" (user)Dashboard 网格线扫描 — NASA Mission Control 背景) */
 .view#view-dashboard { position: relative; }
 .view#view-dashboard::before {
   content: '';
@@ -241,7 +241,7 @@ body {
   100% { background-position: 0% 100%, 0 0, 0 0; }
 }
 
-/* v0.36.12 KR3 ("World Engine" (user)Dashboard KPI 数字翻牌 + tabular-nums) */
+/* v0.36.12 ("World Engine" (user)Dashboard KPI 数字翻牌 + tabular-nums) */
 .kpi-value {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -257,7 +257,7 @@ body {
   100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 
-/* v0.36.12 KR3 (user wants「HUD 感」: 终端 monospace + 高对比 accent) */
+/* v0.36.12 (user wants「HUD 感」: 终端 monospace + 高对比 accent) */
 .dash-tab, .dash-section-title, .kpi-label, .activity-meta, .log-line {
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
@@ -302,7 +302,7 @@ body {
   position: absolute; inset: 0;
   display: none;
   overflow-y: auto;
-  max-height: calc(100vh - 90px);  /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 · fix 6-12: 28→30 = 82 + 8 buffer = 90 */
+  max-height: calc(100vh - 90px); /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 · fix 6-12: 28→30 = 82 + 8 buffer = 90 */
 }
 .view.active { display: flex; flex-direction: column; }
 
@@ -379,7 +379,7 @@ body {
   letter-spacing: -0.025em;
 }
 .kpi-value.danger { color: var(--danger); }
-.kpi-value.success { color: var(--text); }   /* 不上 success 绿 — 数字就是数字 */
+.kpi-value.success { color: var(--text); } /* 不上 success 绿 — 数字就是数字 */
 .kpi-value.warning { color: var(--text); }
 .kpi-value .suffix { font-size: 14px; color: var(--text-3); font-weight: 400; }
 .kpi-meta {
@@ -431,10 +431,10 @@ body {
 .chart-svg .line { fill: none; stroke: var(--gold); stroke-width: 1.5; }
 .chart-svg .area { fill: var(--gold); opacity: 0.10; }
 .chart-svg .point { fill: var(--gold); }
-.chart-svg .bar { fill: var(--text-3); opacity: 0.55; }   /* 默认灰 */
+.chart-svg .bar { fill: var(--text-3); opacity: 0.55; } /* 默认灰 */
 .chart-svg .bar.warn { fill: var(--text-3); opacity: 0.85; }
 .chart-svg .bar.danger { fill: var(--danger); opacity: 0.7; }
-.chart-svg .bar.alt { fill: var(--gold); opacity: 1; }     /* latest — gold 高亮 */
+.chart-svg .bar.alt { fill: var(--gold); opacity: 1; } /* latest — gold 高亮 */
 .chart-svg .donut-segment { stroke: var(--bg); stroke-width: 2; }
 .chart-empty {
   text-align: center; padding: 60px 20px;
@@ -478,7 +478,7 @@ body {
   padding: 9px 10px; border-bottom: 1px solid var(--hairline); word-break: break-word;
 }
 .stat-table tr:last-child td { border-bottom: none; }
-.stat-table .num { text-align: right; color: var(--text); }   /* 不再 gold */
+.stat-table .num { text-align: right; color: var(--text); } /* 不再 gold */
 .stat-table .num.zero { color: var(--text-3); }
 
 /* badges — 大部分灰, 状态语义用色 */
@@ -897,12 +897,12 @@ body {
   min-height: 0;
 }
 .feed > .card:first-child {
-  /* v0.36.12 KR2: 首条置顶大图 (lead story, 跨整行 16:9) */
+  /* v0.36.12 : 首条置顶大图 (lead story, 跨整行 16:9) */
   grid-column: 1 / -1;
 }
 .feed > .card:first-child .card-title { font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; }
 .feed > .card:first-child .card-image { aspect-ratio: 21/9; }
-/* v0.36.12 KR2: 引擎节拍顶部脉冲条 (世界引擎标志) — 数据流 SVG 背景 */
+/* v0.36.12 : 引擎节拍顶部脉冲条 (世界引擎标志) — 数据流 SVG 背景 */
 body::before {
   content: '';
   position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 100;
@@ -915,7 +915,7 @@ body::before {
   50% { transform: translateX(0%) scaleX(1); opacity: 1; }
   100% { transform: translateX(100%) scaleX(0.4); opacity: 0; }
 }
-/* v0.36.12 KR2: 数据流 SVG 背景 ("World Engine" (user)数据流意象) */
+/* v0.36.12 : 数据流 SVG 背景 ("World Engine" (user)数据流意象) */
 .feed::before {
   content: '';
   position: absolute; inset: 0;
@@ -924,23 +924,23 @@ body::before {
   pointer-events: none; z-index: 0;
 }
 .feed > .card { position: relative; z-index: 1; }
-/* v0.36.12 KR2: 滚动 reveal ("World Engine" (user)卖弄技术微交互) */
+/* v0.36.12 : 滚动 reveal ("World Engine" (user)卖弄技术微交互) */
 .feed > .card { opacity: 0; transform: translateY(20px); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color var(--transition), background var(--transition); }
 .feed > .card.revealed { opacity: 1; transform: translateY(0); }
-/* v0.36.12 KR2: 卡片进场 stagger (cascade animation-delay 0/60/120/180ms) */
+/* v0.36.12 : 卡片进场 stagger (cascade animation-delay 0/60/120/180ms) */
 .feed > .card.revealed:nth-child(1) { transition-delay: 0ms; }
 .feed > .card.revealed:nth-child(2) { transition-delay: 60ms; }
 .feed > .card.revealed:nth-child(3) { transition-delay: 120ms; }
 .feed > .card.revealed:nth-child(4) { transition-delay: 180ms; }
 .feed > .card.revealed:nth-child(5) { transition-delay: 240ms; }
 .feed > .card.revealed:nth-child(6) { transition-delay: 300ms; }
-/* v0.36.12 KR2: 数字 mono tabular-nums (user wants「数字 mono」) */
+/* v0.36.12 : 数字 mono tabular-nums (user wants「数字 mono」) */
 .card-meta, .card-hot, .meta-time, .card-action { font-variant-numeric: tabular-nums; }
-/* v0.36.12 KR2: hover lift -2px (v0.36.11 -1px 升级到 -2px user wants「卖弄技术」) */
+/* v0.36.12 : hover lift -2px (v0.36.11 -1px 升级到 -2px user wants「卖弄技术」) */
 .card:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
-/* v0.36.12 KR2: Headline letter-spacing (user wants「letter-spacing 大标题」) */
+/* v0.36.12 : Headline letter-spacing (user wants「letter-spacing 大标题」) */
 .card-title { letter-spacing: -0.005em; font-feature-settings: "ss01", "cv11"; }
-/* v0.36.12 KR2: Kicker (eyebrow 替代, user wants「标题分级」) */
+/* v0.36.12 : Kicker (eyebrow 替代, user wants「标题分级」) */
 .kicker {
   display: inline-block;
   font-family: var(--font-mono);
@@ -953,7 +953,7 @@ body::before {
   border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
   border-radius: 2px;
 }
-/* v0.36.12 KR2: Standfirst (副标题, user wants「标题分级」) */
+/* v0.36.12 : Standfirst (副标题, user wants「标题分级」) */
 .standfirst {
   font-size: 14px; line-height: 1.55;
   color: var(--text-2);
@@ -961,29 +961,29 @@ body::before {
   margin-top: 4px;
   font-weight: 400;
 }
-/* v0.36.12 KR2: 衬线 class (user wants「衬线+无衬线混排」) */
+/* v0.36.12 : 衬线 class (user wants「衬线+无衬线混排」) */
 .serif { font-family: ui-serif, Georgia, 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', serif; }
-/* v0.36.12 KR2: 图片占主导 (user wants「图片占主导」) */
+/* v0.36.12 : 图片占主导 (user wants「图片占主导」) */
 .card-image {
   width: 100%;
   aspect-ratio: 16/9;
   background: var(--bg-1);
   background-size: cover; background-position: center;
   border-bottom: 1px solid var(--hairline);
-  margin: -18px -22px 14px;  /* negative 抵消 .card-body padding */
+  margin: -18px -22px 14px; /* negative 抵消 .card-body padding */
   width: calc(100% + 44px);
 }
  .card {
   background: var(--bg);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  margin-bottom: 8px; /* v0.36.11 KR3: 12px → 8px (taste-skill §4.7 紧凑 dashboard) */
-  /* v0.36.11 KR3: 加 transform 到 transition, hover 时 translateY(-1px) 物理 push (taste-skill §4.5) */
+  margin-bottom: 8px; /* v0.36.11 : 12px → 8px (taste-skill §4.7 紧凑 dashboard) */
+  /* v0.36.11 : 加 transform 到 transition, hover 时 translateY(-1px) 物理 push (taste-skill §4.5) */
   transition: border-color var(--transition), background var(--transition), transform var(--transition);
   overflow: hidden; position: relative;
 }
 .card:hover { border-color: var(--hairline-strong); transform: translateY(-1px); }
-.card-body:active { transform: scale(0.995); transition: transform 80ms ease; } /* v0.36.11 KR3: :active scale 物理 push (taste-skill §4.5) */
+.card-body:active { transform: scale(0.995); transition: transform 80ms ease; } /* v0.36.11 : :active scale 物理 push (taste-skill §4.5) */
 .card.expanded {
   border-color: var(--hairline-strong);
   background: var(--bg-1);
@@ -1325,7 +1325,7 @@ body::before {
 
   .sidebar { display: none; }
   .filter-bar { padding: 10px 16px; }
-  .feed { padding: 12px 14px 32px; } /* v0.36.11 KR3: 14px 16px 40px → 12px 14px 32px (taste-skill §4.7 紧凑 dashboard) */
+  .feed { padding: 12px 14px 32px; } /* v0.36.11 : 14px 16px 40px → 12px 14px 32px (taste-skill §4.7 紧凑 dashboard) */
   .card-body { padding: 14px 16px; }
   .card-title { font-size: 16px; }
   .modal { max-width: calc(100vw - 24px); margin: 12px; }
@@ -1597,8 +1597,8 @@ const STORAGE = {
 };
 
 const STATE = {
-  view: 'dashboard',                  // 'dashboard' | 'reader'
-  dashTab: 'overview',                // 'overview' | 'data' | 'logs' | 'health'
+  view: 'dashboard', // 'dashboard' | 'reader'
+  dashTab: 'overview', // 'overview' | 'data' | 'logs' | 'health'
   config: STORAGE.get('config', { baseUrl: '', token: '' }),
   // dashboard
   health: null, healthErr: null,
@@ -1608,7 +1608,7 @@ const STATE = {
   // entity review
   entityReviewCandidates: null, entityReviewCandidatesErr: null,
   entityReviewNoiseAnchors: null, entityReviewNoiseAnchorsErr: null,
-  entityReviewLoading: null,  // set of currently-actioning entity ids
+  entityReviewLoading: null, // set of currently-actioning entity ids
   selectedEndpoint: 'pull-news',
   endpointResponse: null, endpointError: null, endpointLoading: false, endpointElapsed: 0,
   logs: [], logsErr: null,
@@ -1619,11 +1619,11 @@ const STATE = {
   filters: { level: '', category: '', sort: 'desc', since: '7d', limit: 200 },
   expandedId: null,
   contentCache: new Map(),
-  // fix 6-13 (KR45): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条" · 抓取时间戳
+  // fix 6-13 (): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条" · 抓取时间戳
   lastFetchedAt: null,
-  // fix 6-14 (KR46): Reader 整点过 60s 自动刷新 · 离开 reader 停
-  hourlySyncTimer: null,         // setInterval handle (60min 周期)
-  hourlySyncInitialTimer: null,  // setTimeout handle (next hour:01:00 首次)
+  // fix 6-14 (): Reader 整点过 60s 自动刷新 · 离开 reader 停
+  hourlySyncTimer: null, // setInterval handle (60min 周期)
+  hourlySyncInitialTimer: null, // setTimeout handle (next hour:01:00 首次)
 };
 
 function getConfig() { return STATE.config; }
@@ -1652,9 +1652,9 @@ function fmtTimeZh(iso) {
   if (isNaN(d.getTime())) return '';
   const now = new Date();
   const diff = (now - d) / 1000;
-  // fix 6-13 (KR45 颗粒度): 5min/今日/昨日/本周/更早/跨年
+  // fix 6-13 ( 颗粒度): 5min/今日/昨日/本周/更早/跨年
   if (diff < 60) return '刚刚';
-  if (diff < 300) return `${Math.floor(diff / 60)} 分钟前`;  // 5 min 内
+  if (diff < 300) return `${Math.floor(diff / 60)} 分钟前`; // 5 min 内
   // 同一日历日 → 今日 (HH:MM)
   if (isSameDay(d, now)) return `今日 ${hhmm(d)}`;
   // 昨天
@@ -1673,7 +1673,7 @@ function pad(n) { return n < 10 ? '0' + n : '' + n; }
 const WEEKDAY_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 function weekdayZh(d) { return WEEKDAY_ZH[d.getDay()]; }
 
-// fix 6-13 (KR45): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+// fix 6-13 (): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
 function fmtLastFetchedAgo() {
   if (!STATE.lastFetchedAt) return '';
   const diff = (Date.now() - STATE.lastFetchedAt) / 1000;
@@ -1689,12 +1689,12 @@ function updateResultMeta() {
   el.textContent = ago ? `最后抓取于 ${ago} · 共 ${STATE.items.length} 条` : `共 ${STATE.items.length} 条`;
 }
 
-// fix 6-14 (KR46): Reader 整点过 60s 自动刷新
+// fix 6-14 (): Reader 整点过 60s 自动刷新
 // - 进 reader view 时调 scheduleHourlySync() (setTimeout 到下个 hour:01:00, 之后 setInterval 60min)
 // - 离开 reader view 时调 clearHourlySync() (clear 两个 timer)
 // - 改 sort/since/level/category refresh 时不重置 schedule (保持整点节奏)
 function scheduleHourlySync() {
-  clearHourlySync();  // 防重复 (sort/since 改 refresh 不重置, 但防止其他路径双调)
+  clearHourlySync(); // 防重复 (sort/since 改 refresh 不重置, 但防止其他路径双调)
   const now = new Date();
   // 下个整点 = nextHour:00:00, 触发 = + 60s = nextHour:01:00
   const next = new Date(now);
@@ -1785,7 +1785,7 @@ function toast(msg, type = 'info') {
  * View router (Dashboard / Reader)
  * ============================================================ */
 function switchView(view) {
-  // fix 6-14 (KR46): 离开 reader 时停掉整点同步 timer · 进 reader 时 schedule
+  // fix 6-14 (): 离开 reader 时停掉整点同步 timer · 进 reader 时 schedule
   if (STATE.view === 'reader' && view !== 'reader') clearHourlySync();
   STATE.view = view;
   document.querySelectorAll('.view-tab').forEach(el => el.classList.toggle('active', el.dataset.view === view));
@@ -1851,7 +1851,7 @@ async function fetchTickerNews() {
   const importantItems = [];
   const explosiveItems = [];
   const seen = new Set();
-  for (const level of ['important', 'explosive']) {  // 重要先
+  for (const level of ['important', 'explosive']) { // 重要先
     const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', level, limit: '15', order: 'desc', format: 'full' });
     for (const it of (r.items || [])) {
       if (!it.title || seen.has(it.title)) continue;
@@ -1888,7 +1888,7 @@ function updateTicker(items) {
       : escapeHtml(prefix + it.title);
     return `<span>${content}</span>`;
   }).join('');
-  const html = spans + spans;  // 2 次重复 · 配合 CSS translateX(-50%) 无缝
+  const html = spans + spans; // 2 次重复 · 配合 CSS translateX(-50%) 无缝
   tracks.forEach(track => track.innerHTML = html);
 }
 async function fetchEntity() { return apiGet('/?action=entity&type=finalized'); }
@@ -2055,7 +2055,7 @@ function svgDonut(segments) {
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (!total) return '<div class="chart-empty">暂无数据</div>';
   const cx = 80, cy = 80, r = 60, ir = 38;
-  const colors = ['var(--text-3)', 'var(--text-2)', 'var(--gold)'];  // 灰 + 浅灰 + gold (3 档足够)
+  const colors = ['var(--text-3)', 'var(--text-2)', 'var(--gold)']; // 灰 + 浅灰 + gold (3 档足够)
   const labeled = colors.slice(0, segments.length);
   let acc = 0;
   const arcs = segments.map((seg, i) => {
@@ -2568,7 +2568,7 @@ function copyCurl() {
   const url = baseUrl() + '/?' + new URLSearchParams(params).toString();
   const cfg = getConfig();
   const masked = cfg.token.length > 6 ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6) : '***';
-  const curl = `curl -s "${url}" \\\n  -H "Authorization: Bearer ${masked}"`;
+  const curl = `curl -s "${url}" \\\n -H "Authorization: Bearer ${masked}"`;
   navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
 }
 
@@ -2828,16 +2828,16 @@ function renderEntityReview() {
           <span>first_seen: ${firstSeen}</span>
         </div>
         <div class="entity-card-actions">
-          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="采纳：接受这个实体，以后优先匹配">
             ✅ 采纳
           </button>
-          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="拒绝：删除这个候选，不再出现">
             ❌ 拒绝
           </button>
-          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''}>
+          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="加噪音词：标记为噪音词，以后遇到相似词自动过滤">
             ➕ 加噪音词
           </button>
-          <button class="btn info-btn" data-action="noise-remove" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''}>
+          <button class="btn info-btn" data-action="noise-remove" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''} title="删噪音词：移除噪音标记，恢复为正常候选">
             ➖ 删噪音词
           </button>
         </div>
@@ -3135,7 +3135,7 @@ function renderFeedSkeleton() {
 function renderFeed() {
   const feed = document.getElementById('feed');
   const items = STATE.items;
-  // fix 6-13 (KR45): 错误时 result-meta 显示 "最后抓取于 X 分钟前 · 共 N 条 · 错误" (保持 lastFetchedAt 提示, 加错误标记)
+  // fix 6-13 (): 错误时 result-meta 显示 "最后抓取于 X 分钟前 · 共 N 条 · 错误" (保持 lastFetchedAt 提示, 加错误标记)
   if (STATE.readerLastError) {
     const ago = fmtLastFetchedAgo();
     const agoStr = ago ? `最后抓取于 ${ago} · ` : '';
@@ -3228,7 +3228,7 @@ function bindCardClicks() {
       });
     }
   });
-  // v0.36.12 KR2 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
+  // v0.36.12 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
   if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -3251,7 +3251,7 @@ function bindCardClicks() {
       if (!item) return;
       const cfg = getConfig();
       const masked = cfg.token.length > 6 ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6) : '***';
-      const curl = `curl -s "${cfg.baseUrl}/?action=pull&type=news&format=full&limit=1" \\\n  -H "Authorization: Bearer ${masked}"`;
+      const curl = `curl -s "${cfg.baseUrl}/?action=pull&type=news&format=full&limit=1" \\\n -H "Authorization: Bearer ${masked}"`;
       navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
     });
   });
@@ -3344,18 +3344,7 @@ function closeReaderFloat() {
   }, { once: true });
 }
 
-// 点击关闭按钮
-document.getElementById('rfloat-close')?.addEventListener('click', closeReaderFloat);
-// 点击 backdrop 关闭
-document.getElementById('reader-float-backdrop')?.addEventListener('click', e => {
-  if (e.target.id === 'reader-float-backdrop') closeReaderFloat();
-});
-// ESC 关闭
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('reader-float-backdrop')?.style.display === 'flex') {
-    closeReaderFloat();
-  }
-});
+// reader popup dismiss handlers 移到了 trailing <script> 末尾（DOM 渲染完成后才绑）。
 
 async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
@@ -3399,7 +3388,7 @@ async function refreshReader() {
     STATE.allItems = deduped;
     STATE.items = applyClientFilters(deduped);
     const dupCount = items.length - deduped.length;
-    // fix 6-13 (KR45): 抓取时间戳 + 顶部小字"最后抓取于 X 分钟前 · 共 N 条"
+    // fix 6-13 (): 抓取时间戳 + 顶部小字"最后抓取于 X 分钟前 · 共 N 条"
     STATE.lastFetchedAt = new Date();
     updateResultMeta();
     // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
@@ -3429,7 +3418,7 @@ function applyFilterAndRender() {
   document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
     x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
   });
-  // fix 6-13 (KR45): filter 切时同步顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+  // fix 6-13 (): filter 切时同步顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
   updateResultMeta();
   // 切 level 时重渲染 category sidebar (按新 level 过滤)
   renderCategoryList(STATE.allItems);
@@ -3440,7 +3429,7 @@ document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
     document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
     el.classList.add('active');
     STATE.filters.level = el.dataset.level || '';
-    applyFilterAndRender();  // 客户端 filter · 不重拉 API
+    applyFilterAndRender(); // 客户端 filter · 不重拉 API
   });
 });
 document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
@@ -3677,6 +3666,19 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
   document.getElementById(id).addEventListener('click', e => {
     if (e.target.id === id) document.getElementById(id).style.display = 'none';
   });
+});
+
+// reader popup dismiss handlers —
+// rfloat-close / reader-float-backdrop 元素定义在 reader-float modal HTML 里，
+// 在第一个内联 <script> 之后才出现在 DOM，绑定必须放在 trailing script 里（DOM ready）。
+document.getElementById('rfloat-close')?.addEventListener('click', closeReaderFloat);
+document.getElementById('reader-float-backdrop')?.addEventListener('click', e => {
+  if (e.target.id === 'reader-float-backdrop') closeReaderFloat();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('reader-float-backdrop')?.style.display === 'flex') {
+    closeReaderFloat();
+  }
 });
 </script>
 </html>

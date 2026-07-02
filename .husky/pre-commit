@@ -1,0 +1,117 @@
+#!/bin/sh
+# ============================================================
+# csnews pre-commit hook · 方案 4 (戴舒柯 17:59 拍板)
+#
+# 功能:
+#   1. privacy-grep 检查 (戴舒柯 05:44 拍板, v0.37.26 起入仓)
+#      扫 staged 的 .ts/.js/.html 文件, 拦截 KR[0-9]+ / 公开人名 / OKR 等
+#   2. 拿当前最大 v* tag (lightweight tag, 不用 -a · 没 GPG signing key)
+#   3. fallback: 起点 tag = v0.37.17 (OKR v0.37.17 之后下一个)
+#   4. 算下一 tag (major.minor.patch +1)
+#   5. sed csnews-agent/wrangler.toml [vars].WORKER_VERSION = 新 tag
+#   6. git add csnews-agent/wrangler.toml (钩子里完成, 用户不用手动 stage)
+#   7. 写 .git/TAG_NEXT (供 post-commit hook 读)
+#
+# 关键设计 (戴舒柯 push back):
+#   - WR 字段 = tag name (不是 commit hash)
+#   - commit hash 跟 tag 不直接对应 (commit 含 STAGED WR), 但 post-commit hook 立刻 git tag 绑回
+#   - 结果: wrangler.toml WR = "v0.37.18" 跟 tag "v0.37.18" 永远指向同一个 commit
+#   - v0.36.10.6 hard rule "pre-commit hook 改 WR 错位" 不再适用 (错位 是 hash vs hash;
+#     现在 hash vs tag, 永不冲突)
+# ============================================================
+
+set -e
+
+# ============================================================
+# privacy-grep 检查 (戴舒柯 05:44 拍板)
+# 扫 staged 的 .ts/.js/.html 文件 (排除 .husky/ 自身含 人名),
+# 拦截 KR[0-9]+ / 公开人名 / 内部方法论代号 等隐私关键字.
+# ============================================================
+echo "[pre-commit] privacy-grep 检查 (KR[0-9] / 公开人名 / OKR)..."
+
+# 拿到 staged 文件 (.ts/.js/.html) · 排除 .husky/ (hook 文件本身含 人名 reference)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null \
+  | grep -E "\.(ts|js|html)$" \
+  | grep -v "^\.husky/" \
+  || true)
+
+# 隐私关键字 (CEO 拍板 5 类, 排除 拍板/噪音词 避免 误报)
+PRIVACY_PATTERNS='KR[0-9]+|戴舒柯|戴大虾|大虾|舒柯|OKR'
+
+VIOLATIONS=""
+for f in $STAGED_FILES; do
+  if [ -f "$f" ]; then
+    matches=$(grep -nE "$PRIVACY_PATTERNS" "$f" 2>/dev/null || true)
+    if [ -n "$matches" ]; then
+      VIOLATIONS="$VIOLATIONS\n--- $f ---\n$matches"
+    fi
+  fi
+done
+
+if [ -n "$VIOLATIONS" ]; then
+  echo "[pre-commit] FAIL: privacy-grep 发现隐私关键字:"
+  echo -e "$VIOLATIONS"
+  echo ""
+  echo "[pre-commit] 规则 (戴舒柯 05:44 拍板):"
+  echo "  - KR[0-9]+ = 内部编号 (公开仓库禁用)"
+  echo "  - 戴舒柯 / 戴大虾 / 大虾 / 舒柯 = 公开人名 (公开仓库禁用)"
+  echo "  - OKR = 内部方法论代号 (公开仓库禁用)"
+  echo ""
+  echo "[pre-commit] 如确需保留 (极少见), 请 CEO 批准 + git commit --no-verify"
+  exit 1
+fi
+echo "[pre-commit] ✓ privacy-grep 0 命中"
+
+# 找当前最大 v* tag (lightweight 或 annotated 都匹配)
+CURRENT_TAG=$(git tag -l 2>/dev/null | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -1)
+
+if [ -z "$CURRENT_TAG" ]; then
+  # 首次运行 · 起点 tag = v0.37.17 (OKR v0.37.17 之后下一个, see OKR changelog)
+  CURRENT_TAG="v0.37.17"
+  echo "[pre-commit] hook 首次运行 · 起点 tag = $CURRENT_TAG"
+fi
+
+# 解析 major.minor.patch → +1 patch (e.g. v0.37.17 → v0.37.18)
+NEW_TAG=$(echo "$CURRENT_TAG" | python3 -c "
+import sys, re
+v = sys.stdin.read().strip()
+m = re.match(r'^v(\d+)\.(\d+)\.(\d+)$', v)
+if not m:
+    print('v0.0.0')
+    sys.exit(0)
+major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+print(f'v{major}.{minor}.{patch + 1}')
+")
+
+echo "[pre-commit] current = $CURRENT_TAG → new = $NEW_TAG"
+
+WRANGLER_TOML="csnews-agent/wrangler.toml"
+if [ ! -f "$WRANGLER_TOML" ]; then
+  echo "[pre-commit] FAIL: $WRANGLER_TOML not found in repo root cwd" >&2
+  exit 1
+fi
+
+# 用 python 改 (macOS BSD sed -i 需要空字符串后缀, 避免 portability 问题)
+python3 -c "
+import re, pathlib
+p = pathlib.Path('$WRANGLER_TOML')
+content = p.read_text()
+new = re.sub(
+    r'^(WORKER_VERSION\s*=\s*\").*?(\")',
+    lambda m: m.group(1) + '$NEW_TAG' + m.group(2),
+    content,
+    flags=re.MULTILINE,
+)
+p.write_text(new)
+print(f'[pre-commit] sed WORKER_VERSION = \"$NEW_TAG\" 完成')
+"
+
+# 自动 git add (用户不需要手动 stage)
+git add "$WRANGLER_TOML"
+
+# 把新 tag 写到 .git/TAG_NEXT (供 post-commit hook 读)
+echo "$NEW_TAG" > .git/TAG_NEXT
+
+echo "[pre-commit] OK · wrangler.toml staged + TAG_NEXT=$NEW_TAG"
+echo "[pre-commit] git status:"
+git status --short
