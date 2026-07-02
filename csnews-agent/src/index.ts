@@ -39,11 +39,13 @@ interface Env {
    */
   WORKER_SELF_URL: string;
   /**
-   * Worker 版本标识。
-   * v0.37.17 (v0.37.17 board decision): 不再用 wrangler.toml [vars] 手写 — 直接用 git commit 编号。
-   * 改从 PROCESS_STATE KV 的 `worker_git_sha` key 读取 (deploy 后由 csnews-write-version.sh
-   * 脚本写: `wrangler kv:key put --binding PROCESS_STATE worker_git_sha <short_sha>`).
+   * Worker 版本标识 (例如 "v0.37.20").
+   * v0.37.20 (CEO 拍板): 版本号来源改成 wrangler.toml [vars] WORKER_VERSION 字段
+   * 直接读 env.WORKER_VERSION. 顶层 .husky/pre-commit hook 自动 bump tag
+   * (commit 后 wrangler.toml 字段值 == tag 名 == HEAD commit, 永不漂移).
+   * 删 v0.37.17 KV 注入路径 (token 缺 KV Write 权限, 路径走不通).
    */
+  WORKER_VERSION?: string;
   /**
    * KV namespace 存 AI Neurons 用量 (Phase 1).
    */

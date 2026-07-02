@@ -17,11 +17,14 @@ export interface Env {
    * 在 wrangler.toml 的 [vars] 里配置（占位符 YOUR-WORKER.workers.dev 部署时替换）。
    */
   WORKER_SELF_URL: string;
-  // v0.37.17: WORKER_VERSION 字段删除 (v0.37.17 board decision — 直接用 git commit 编号作为版本号).
-  // 版本标识改成从 PROCESS_STATE KV 的 `worker_git_sha` key 读取 (deploy 阶段由 csnews-write-version.sh
-  // 包装脚本写: `wrangler kv:key put --binding PROCESS_STATE worker_git_sha <short_sha>`).
-  // 这样每次 commit + push 之后只要再 push 一次 KV,health 端点立刻就能显示新 commit 编号,
-  // 不再需要人手改 wrangler.toml [vars] (v0.36.10.6 hard rule 回归).
+  /**
+   * Worker 版本标识 (例如 "v0.37.20").
+   * v0.37.20 (CEO 拍板): 版本号来源从 wrangler.toml [vars] WORKER_VERSION 字段直接读,
+   * 由顶层 .husky/pre-commit hook 自动 bump tag (commit 后 wrangler.toml 字段值
+   * == tag 名 == HEAD commit, 永不漂移).
+   * 之前 v0.37.17 KV 注入方案作废 (token 缺 KV Write 权限, KV 永远空 → 'unknown' fallback).
+   */
+  WORKER_VERSION?: string;
   /**
    * KV namespace 存 process 最后状态 (last_process_at + last_process_result)。
    * 部署后跑 `npx wrangler kv namespace create PROCESS_STATE` + 把 id 填到 wrangler.toml。

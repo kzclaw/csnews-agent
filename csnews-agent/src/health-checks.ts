@@ -24,7 +24,6 @@ export {
   checkCacheMetrics,
   checkNegativeSentinel,
   checkLastProcessStoredReason,
-  checkWorkerGitSha,
 } from './health-kv';
 export type { LastProcessStoredReason } from './health-kv';
 export { checkPullCacheFreshness } from './health-cache-freshness';

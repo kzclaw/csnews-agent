@@ -23,7 +23,6 @@ import {
   checkPullCacheFreshness,
   checkAiCallsBreakdown,
   checkLastProcessStoredReason,
-  checkWorkerGitSha,
 } from './health-checks';
 import { DATA_STORE_ARCHITECTURE } from './health-db';
 
@@ -42,20 +41,12 @@ export async function handleHealthAction(
   > = {};
   const result: any = { status: 'ok', ts };
 
-  // v0.37.17 (v0.37.17 board decision): worker_version 字段改成从 PROCESS_STATE KV 读 `worker_git_sha`
-  // (deploy 之后由 csnews-write-version.sh 包装脚本写). fallback 'unknown' 表示 KV 还没写入
-  // (例如首次 deploy + 还没跑过 bin/csnews-write-version.sh). 之后再额外存顶层 worker_git_sha 字段
-  // 让 dashboard / 监控脚本能直接拿到结构化 {sha, updated_at}.
-  const workerVersionResult = await checkWorkerGitSha(env);
-  const storedSha = workerVersionResult.worker_git_sha;
-  if (storedSha && !('error' in storedSha) && (storedSha as any).sha) {
-    result.worker_version = (storedSha as any).sha;
-    result.worker_git_sha = storedSha;
-  } else {
-    result.worker_version = 'unknown';
-    result.worker_git_sha = storedSha;
-  }
-  checks.worker_git_sha = workerVersionResult.checks.worker_git_sha;
+  // v0.37.20 (CEO 拍板): 版本号来源改成 wrangler.toml [vars] WORKER_VERSION 字段
+  // 直接读 env.WORKER_VERSION (由顶层 .husky/pre-commit hook 自动 bump tag).
+  // 删 v0.37.17 KV 注入路径 (token 缺 KV Write 权限, KV 永远空 → 'unknown').
+  // 顶层 worker_git_sha 字段保留 null (向后兼容 dashboard/监控脚本读 worker_git_sha.sha).
+  result.worker_version = env.WORKER_VERSION ?? 'unknown';
+  result.worker_git_sha = null;
 
   // 1-2. last_process_at + cron_health
   const lastProcessResult = await checkLastProcessAt(env, ts);
