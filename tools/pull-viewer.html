@@ -1920,8 +1920,7 @@ const ENDPOINTS = [
   { name: 'Content', action: 'content', group: 'daily', method: 'GET', desc: '读单条新闻全文 (R2)', params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
   { name: 'Trend', action: 'trend', group: 'daily', method: 'GET', desc: '话题趋势 (topics / velocity / acceleration)',
     params: [{ key: 'type', label: 'type', type: 'select', options: ['topics', 'velocity', 'acceleration'], default: 'topics' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
-  { name: 'Entity', action: 'entity', group: 'daily', method: 'GET', desc: '自学习 entity candidates', params: [{ key: 'text', label: 'text', type: 'text' }] },
-  { name: 'Event', action: 'event', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster', params: [{ key: 'text', label: 'text', type: 'text' }] },
+  // (B1 v0.37.23 cleanup): Entity/Event 默认 entry 移除 (跟 Entity Candidates / Event Clusters 重复, handleEntityAction 默认 type=candidates, handleEventAction 默认 type=clusters)
   { name: 'Model Test', action: 'model-test', group: 'debug', method: 'GET', desc: '测试 Workers AI 模型', params: [] },
   { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
     params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
@@ -1969,10 +1968,29 @@ const ENDPOINTS = [
     params: [{ key: 'seed', label: 'seed', type: 'text', required: true }] },
   { name: 'Classify Review', action: 'classify', type: 'review', group: 'debug', method: 'GET', desc: '分类评审状态',
     params: [] },
+  // v0.37.23 (CEO 05:03 拍板 Option B): 加 7 missing endpoints (fission / ai-usage / feedback-check / rescore / proxy / tavily / mcp / mcp-list)
+  { name: 'Fission', action: 'fission', group: 'debug', method: 'GET', desc: '裂变搜索 (R<7 跳过)',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }] },
+  { name: 'AI Usage', action: 'ai-usage', group: 'system', method: 'GET', desc: 'Neurons 预算监控 (7 天 history)',
+    params: [{ key: 'days', label: 'days', type: 'number', default: '7' }] },
+  { name: 'Feedback Check', action: 'feedback-check', group: 'engine', method: 'GET', desc: '动态权重 24/48/72h 复查',
+    params: [] },
+  { name: 'Rescore', action: 'rescore', group: 'debug', method: 'GET', desc: '动态 hot-word weights 重打分',
+    params: [{ key: 'mode', label: 'mode', type: 'select', options: ['dry-run', 'apply'], default: 'dry-run' }, { key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Proxy', action: 'proxy', group: 'system', method: 'GET', desc: '代理外部 URL (image_proxy · 用于 reader 图片弹窗)',
+    params: [{ key: 'url', label: 'url', type: 'text', required: true }] },
+  { name: 'Tavily', action: 'tavily', group: 'engine', method: 'GET', desc: 'Tavily 跨源查重 pipeline',
+    params: [{ key: 'topic_id', label: 'topic_id', type: 'text' }] },
+  { name: 'MCP', action: 'mcp', group: 'system', method: 'GET', desc: 'MCP JSON-RPC 2.0 入口',
+    params: [] },
+  { name: 'MCP List', action: 'mcp-list', group: 'system', method: 'GET', desc: 'MCP tools 列表',
+    params: [] },
 ];
 const GROUPS = {
   daily: { name: '日常检查', desc: 'pull × 4 + trend + entity 6-type + event 5-type + logs + ping + health + content' },
-  debug: { name: '内部调试', desc: 'score / classify 5-type + batch-score + save + list + embed + zaker-hot + process + knowledge + model-test + ai-test' }
+  engine: { name: '引擎 sidebar', desc: 'trend / knowledge / entity / event / classify + feedback-check + tavily (动态权重 + 跨源查重)' },
+  debug: { name: '内部调试', desc: 'score / classify 5-type + batch-score + save + list + embed + zaker-hot + process + knowledge + model-test + ai-test + fission + rescore' },
+  system: { name: '系统 sidebar', desc: 'health 9+1 维度 + list R2 prefix + embed bge-m3 + ai-usage Neurons + proxy image_proxy + mcp + mcp-list' }
 };
 
 function highlightJson(json) {
