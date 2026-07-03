@@ -11,7 +11,7 @@ export const VIEWER_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark">
 <title>CSNEWS Console</title>
@@ -1312,32 +1312,125 @@ body::before {
 
 /* ============================================================
  * Responsive
+ * v0.37.31: iPhone 适配 (P2P 反馈 内容溢出)
+ *   - 全局 html/body overflow-x hidden (防 任何 横向 滚动)
+ *   - html -webkit-text-size-adjust 100% (禁 iOS 文字 自动 缩放)
+ *   - .dash-pane-inner.max-width 100% (override desktop 1280px)
+ *   - .entity-review-wrap / entity-section 紧凑 移动端
+ *   - tabs / dash-tabs horizontal scroll (mobile 窄 屏 不挤)
+ *   - @media 480 给 iPhone SE 等 更小屏
  * ============================================================ */
+
+/* 全局 移动端 reset (跟 @media 块 外, 默认 应用 mobile-first 防 溢出) */
+html, body { overflow-x: hidden; }
+html { -webkit-text-size-adjust: 100%; }
+body { word-wrap: break-word; overflow-wrap: anywhere; }
+
 @media (max-width: 1100px) {
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .row-2 { grid-template-columns: 1fr; }
   .row-3 { grid-template-columns: 1fr; }
   .health-grid { grid-template-columns: repeat(2, 1fr); }
   .data-wrap { grid-template-columns: 1fr; }
-  
-
 }
+
 @media (max-width: 768px) {
-  .header { padding: 0 14px; gap: 12px; }
+  /* app layout */
+  .app { grid-template-rows: 48px 26px 1fr; } /* header (48) + ticker (26) + main */
+  .header { padding: 0 12px; gap: 8px; }
   .logo-sub { display: none; }
-  .view-tabs { gap: 0; }
-  .view-tab { padding: 8px 10px; font-size: 11.5px; }
-  .dash-pane-inner { padding: 16px 16px 40px; }
+  .logo { font-size: 14px; }
+  .header .actions { gap: 6px; }
+  .header .actions .btn { padding: 4px 9px; font-size: 11px; height: 26px; }
+  .kbd { display: none; } /* 移动端 隐藏 键盘快捷键 提示 */
+
+  /* global ticker */
+  .global-ticker { height: 26px; }
+  .ticker { font-size: 13px; padding: 4px 0; }
+  .ticker-track span { padding: 0 18px; }
+
+  /* view tabs (顶部 切换 dashboard/feed) */
+  .view-tabs { padding: 0 8px; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .view-tab { padding: 6px 9px; font-size: 11px; flex-shrink: 0; }
+  .view-tab .count { display: none; }
+
+  /* dash tabs (dashboard 内 4 sub-tab) */
+  .dash-tabs { padding: 0 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 0; }
+  .dash-tab { padding: 8px 11px; font-size: 11.5px; flex-shrink: 0; }
+
+  /* dash pane content */
+  .dash-pane-inner { padding: 14px 14px 40px; }
+  .dash-pane-inner.active { max-width: 100%; }
   .kpi-grid { grid-template-columns: 1fr; }
   .health-grid { grid-template-columns: 1fr; }
-  
 
+  /* KPI cards */
+  .kpi { padding: 12px 14px; }
+  .kpi-label { font-size: 10px; }
+  .kpi-value { font-size: 22px; }
+  .kpi-sub { font-size: 10.5px; }
+
+  .row-2, .row-3 { gap: 12px; }
+
+  /* feed / cards */
   .sidebar { display: none; }
-  .filter-bar { padding: 10px 16px; }
-  .feed { padding: 12px 14px 32px; } /* v0.36.11 : 14px 16px 40px → 12px 14px 32px (taste-skill §4.7 紧凑 dashboard) */
-  .card-body { padding: 14px 16px; }
-  .card-title { font-size: 16px; }
-  .modal { max-width: calc(100vw - 24px); margin: 12px; }
+  .filter-bar { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
+  .filter-bar input, .filter-bar select, .filter-bar .btn { font-size: 12.5px; height: 28px; }
+  .feed { padding: 10px 12px 28px; }
+  .card-body { padding: 12px 14px; }
+  .card-title { font-size: 15px; line-height: 1.35; }
+  .card-meta { font-size: 10.5px; gap: 6px; }
+
+  /* modals */
+  .modal { max-width: calc(100vw - 16px); margin: 8px; }
+  .modal-header { padding: 12px 14px; }
+  .modal-body { padding: 14px; font-size: 13px; }
+
+  /* entity review */
+  .entity-review-wrap { padding: 14px 12px 40px; }
+  .entity-section { padding: 12px 14px; margin-bottom: 14px; }
+  .entity-card { padding: 12px; }
+  .entity-card-name { font-size: 13px; }
+  .entity-card-meta { font-size: 10.5px; }
+  .entity-card-actions { gap: 4px; }
+  .entity-card-actions .btn { font-size: 11px; padding: 3px 7px; height: 26px; }
+  .entity-anchors-wrap { gap: 6px; }
+
+  /* reader float modal */
+  .reader-float-backdrop { padding: 16px 12px; }
+  .reader-float { border-radius: 10px; }
+  .reader-float .modal-body { font-size: 13.5px; line-height: 1.7; }
+
+  /* tables / code blocks */
+  pre, code { white-space: pre-wrap; word-break: break-word; }
+  table { font-size: 11.5px; }
+}
+
+@media (max-width: 480px) {
+  /* iPhone SE / iPhone mini / 小 Android */
+  .header { padding: 0 10px; gap: 6px; }
+  .logo { font-size: 13px; }
+  .header .actions .btn { padding: 4px 7px; font-size: 10.5px; }
+  .header .actions .btn .btn-label { display: none; } /* 只 显示 icon */
+
+  .view-tab { padding: 5px 8px; font-size: 10.5px; }
+  .view-tab .dot { width: 4px; height: 4px; }
+
+  .dash-tab { padding: 7px 9px; font-size: 11px; }
+
+  .dash-pane-inner { padding: 12px 10px 32px; }
+  .kpi { padding: 10px 12px; }
+  .kpi-value { font-size: 20px; }
+
+  .feed { padding: 8px 10px 24px; }
+  .card-body { padding: 10px 12px; }
+  .card-title { font-size: 14px; }
+
+  .entity-review-wrap { padding: 12px 10px 32px; }
+  .entity-card { padding: 10px; }
+  .entity-card-actions .btn { font-size: 10.5px; padding: 3px 6px; }
+
+  .modal { max-width: calc(100vw - 12px); margin: 6px; }
 }
 
 /* ============================================================
@@ -3691,5 +3784,4 @@ document.addEventListener('keydown', e => {
   }
 });
 </script>
-</html>
-`;
+</html>`;
