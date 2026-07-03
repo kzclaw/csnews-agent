@@ -19,6 +19,7 @@ import type {
   TopicRecord,
 } from './types-supabase';
 import { dispatchAction } from './dispatch';
+import { VIEWER_HTML } from './viewer-page';
 import { jsonResponse } from './shared';
 import { logEvent } from './log';
 import {
@@ -676,6 +677,23 @@ export default {
       const authError = authRequest(request, env);
       if (authError) return authError;
     }
+
+    // v0.37.28 (viewer via worker): GET /viewer → 返 viewer HTML (Content-Type text/html)
+    // 让 viewer 通过 同源 HTTPS 访问, 避免 Chrome Mixed Content block
+    // (http://local viewer fetch https://worker block)
+    // viewer URL: https://csnews.kwokzit.info/api/v1/viewer
+    // 注: viewer endpoint 走 PUBLIC (类似 ping/health),  因为 user 需 要 看 viewer 才能 输入 token
+    if (url.pathname.endsWith('/viewer') && request.method === 'GET') {
+      return new Response(VIEWER_HTML, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          ...cors,
+          'Cache-Control': 'public, max-age=300',
+        },
+      });
+    }
+
 
     if (action === 'diag') {
       const results = [];

@@ -1,0 +1,3695 @@
+// ============================================================
+// /viewer endpoint HTML content (v0.37.28 起入仓, 跟 tools/pull-viewer.html 同步)
+//
+// 用途: GET /viewer 返 viewer HTML (Content-Type text/html) · 同源 HTTPS 解决
+//       Chrome Mixed Content block (viewer HTTPS → worker HTTPS, no blocked).
+//
+// 注: 大 template literal 是 viewer HTML embed.  当 tools/pull-viewer.html 改 时,
+//     该 文件 需 重新 生成.  build 时 直接 bundle 到 worker,  无 外部 依赖.
+
+export const VIEWER_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
+<title>CSNEWS Console</title>
+<style>
+/* ============================================================
+ * CSNEWS Console (merged)
+ * Linear / Vercel / Raycast 风格 · Neo Kinpaku tokens
+ * Gold 仅用在: logo / 主 CTA / 关键数字 · 其余灰色系
+ * 本地工具 · 零外部依赖 · Token 仅存 localStorage
+ * ============================================================ */
+
+:root {
+  color-scheme: dark;
+  --bg: #14110f;
+  --bg-1: #1c1814;
+  --bg-2: #251f1a;
+  --bg-hover: #2e2722;
+  --bg-overlay: rgba(20, 17, 15, 0.72);
+  --hairline: rgba(240, 230, 215, 0.12);
+  --hairline-strong: rgba(240, 230, 215, 0.28);
+  --text: #f0e6d7;
+  --text-2: #c8b8a0;
+  --text-3: #8a7a64;
+  --gold: #d4a253;
+  --gold-2: #e3bf75;
+  --gold-bg: rgba(212, 162, 83, 0.10);
+  --gold-bg-strong: rgba(212, 162, 83, 0.16);
+  --success: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.08);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.08);
+  /* reserved tokens (避免 break JS, 不在 chrome 使用) */
+  --patina: #7ab3a8;
+  --patina-bg: rgba(122, 179, 168, 0.10);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.10);
+  --info: #60a5fa;
+  --info-bg: rgba(96, 165, 250, 0.10);
+  --radius: 4px;
+  --radius-sm: 2px;
+  --radius-lg: 6px;
+  --shadow: none;
+  --shadow-hover: 0 1px 0 var(--hairline-strong);
+  --font-mono: 'SF Mono', ui-monospace, 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  /* v0.36.11 (taste-skill v2 适配): Inter 删 (taste-skill §4.1 discouraged default, LLM 最大 tell 之一), 用 system-ui 零成本 + 零 privacy 风险 */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@supports (color: oklch(0% 0 0)) {
+  :root {
+    --bg: oklch(7% 0.006 95);
+    --bg-1: oklch(9% 0.006 95);
+    --bg-2: oklch(12% 0.006 95);
+    --bg-hover: oklch(14% 0.006 95);
+    /* v0.36.12 ("World Engine" (user)Dashboard 科技感): 电光蓝/绿辅助 accent (NASA/SpaceX HUD 配色) */
+    --accent-blue: #00D4FF;
+    --accent-green: #00FF88;
+    --accent-cyan: #00E5FF;
+    --bg-overlay: oklch(7% 0.006 95 / 72%);
+    --hairline: oklch(78% 0 0 / 0.12);
+    --hairline-strong: oklch(78% 0 0 / 0.28);
+    --text: oklch(92% 0.005 95);
+    --text-2: oklch(72% 0.008 95);
+    --text-3: oklch(52% 0.008 95);
+    --gold: oklch(84% 0.19 80.46);
+    --gold-2: oklch(88% 0.16 80.46);
+    --gold-bg: oklch(84% 0.19 80.46 / 10%);
+    --gold-bg-strong: oklch(84% 0.19 80.46 / 16%);
+    --patina: oklch(70% 0.105 190);
+    --patina-bg: oklch(70% 0.105 190 / 10%);
+    --success: oklch(72% 0.16 150);
+    --success-bg: oklch(72% 0.16 150 / 8%);
+    --danger: oklch(62% 0.21 25);
+    --danger-bg: oklch(62% 0.21 25 / 8%);
+    --warning: oklch(78% 0.17 80);
+    --warning-bg: oklch(78% 0.17 80 / 10%);
+    --info: oklch(65% 0.15 240);
+    --info-bg: oklch(65% 0.15 240 / 10%);
+  }
+}
+
+/* ============================================================
+ * Reset & base
+ * ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  /* v0.36.11 : line-height 1.55 → 1.4 (taste-skill §4.7 dense dashboard 紧凑层次) */
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--hairline-strong); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* ============================================================
+ * Top header — logo + view tabs + actions
+ * ============================================================ */
+.app { display: grid; grid-template-rows: 52px 30px 1fr; height: 100vh; } /* fix 6-5: header (52) + global-ticker (30) + main (1fr) · fix 6-12: 28→30 (ticker 字号 13→15.5) */
+.header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+  gap: 24px;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em;
+}
+.logo-mark {
+  width: 22px; height: 22px;
+  background: var(--gold); color: oklch(15% 0 0);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+}
+.logo-text { color: var(--text); }
+.logo-sep { color: var(--text-3); margin: 0 1px; }
+.logo-sub {
+  color: var(--text-3); font-weight: 400; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* 顶层 view 切换 */
+.view-tabs {
+  display: flex; align-items: center; gap: 2px;
+  margin: 0 auto;
+}
+.view-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-3);
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  user-select: none; font-family: var(--font-sans);
+  border-radius: var(--radius);
+}
+.view-tab:hover { color: var(--text-2); background: var(--bg-1); }
+.view-tab.active { color: var(--gold); background: var(--bg-1); }
+.view-tab .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.6; }
+.view-tab .count {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 5px;
+  background: var(--bg-2); border-radius: 3px;
+}
+.view-tab.active .count { color: var(--gold); background: var(--gold-bg); }
+
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* status pill — 只 success / danger 两色 */
+.status {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 10px 4px 9px;
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 11.5px; color: var(--text-2); font-family: var(--font-mono);
+}
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.status.online .status-dot { background: var(--success); animation: ledBlink 1.2s ease-in-out infinite; }
+.status.offline .status-dot { background: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
+.status.config .status-dot { background: var(--text-3); } /* 未配置 — 灰色 */
+
+/* v0.36.12 ("World Engine" (user)Dashboard 状态灯闪烁 NASA HUD 感) */
+@keyframes ledBlink { 0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor; } 50% { opacity: 0.4; box-shadow: 0 0 1px currentColor; } }
+.status.online .status-dot { color: var(--success); }
+.status.offline .status-dot { color: var(--danger); }
+
+/* v0.36.12 ("World Engine" (user)Dashboard 滚动 ticker — 横向新闻条) */
+.ticker {
+  overflow: hidden; white-space: nowrap;
+  background: var(--bg-1); border-bottom: 1px solid var(--hairline);
+  padding: 5px 0; font-family: var(--font-mono); font-size: 15.5px; /* fix 5-4: 11→13 · fix 6-12: 13→15.5 (用户 22:20 反馈"再放大一点") */
+  color: var(--text-2); position: relative;
+  z-index: 5; /* fix 6-5: ticker 在 header 之下 main 之上的 global 位置 */
+}
+/* fix 6-5: global-ticker 不在 view 内 · 切 view 不重置 */
+.global-ticker { height: 30px; flex-shrink: 0; } /* fix 6-12: 28→30 (字号 15.5px 视觉居中) */
+.ticker-track {
+  display: inline-block; white-space: nowrap;
+  padding-left: 100%;
+  animation: tickerScroll 180s linear infinite; /* fix 6-2 v2: 120s→180s 再慢 50% (用户 20:47 反馈) */
+  font-variant-numeric: tabular-nums;
+}
+.ticker-track span { padding: 0 24px; }
+.ticker-track span a { color: inherit; text-decoration: none; transition: color 0.2s; }
+.ticker-track span a:hover { color: var(--gold); }
+.ticker-track span::before { content: ''; } /* fix 6-15: 去掉蓝色 ◆ 装饰符 · 标题前只剩 ★/◆ (level prefix) */
+/* fix 6-12: hover 改"指向标题才停" (用户 22:20 反馈"进入区域就停太敏感")
+   - 关键: span 有 24px 左右 padding (fix 6-12 v2 调试发现), 选 a:hover 而不是 span:hover
+     → 标题之间的 padding 空白不会触发暂停
+   - cursor 容器 default · 标题 pointer (暗示"可点")
+   - fix 6-16 (Safari hover 标题后退):
+     · Safari WebKit animation-play-state: paused 触发瞬间会重置 transform 到 0% (CSDN/PHP中文网确认)
+     · Chrome/Firefox 正确 (保留当前动画帧)
+     · 修法: 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结
+       (即使 Safari 重置, inline style.transform 立刻覆盖回去)
+     · will-change: transform 强制 GPU 加速 (Safari 兼容)
+     · -webkit- 前缀给 Safari 旧版 (虽然动画本就在跑, 但 inline style 覆盖时一致) */
+.ticker { cursor: default; will-change: transform; }
+.ticker-track { will-change: transform; }
+.ticker-track a { cursor: pointer; }
+@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } } /* fix 6-2 v3: spans 重复 2x 时 translateX(-50%) 滚 1 组宽 = 无缝循环 (原 -100% + 4x spans 错配 = 边缘跳回 = user"hover 跳走"真根因) */
+
+/* v0.36.12 ("World Engine" (user)Dashboard 网格线扫描 — NASA Mission Control 背景) */
+.view#view-dashboard { position: relative; }
+.view#view-dashboard::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--accent-blue) 6%, transparent) 50%, transparent 100%),
+    repeating-linear-gradient(0deg, transparent 0px, transparent 39px, color-mix(in oklab, var(--accent-blue) 4%, transparent) 40px, transparent 41px),
+    repeating-linear-gradient(90deg, transparent 0px, transparent 79px, color-mix(in oklab, var(--accent-blue) 4%, transparent) 80px, transparent 81px);
+  background-size: 100% 600px, 100% 100%, 100% 100%;
+  animation: gridScan 8s linear infinite;
+  pointer-events: none; z-index: 0;
+}
+.view#view-dashboard > * { position: relative; z-index: 1; }
+@keyframes gridScan {
+  0% { background-position: 0% -100%, 0 0, 0 0; }
+  100% { background-position: 0% 100%, 0 0, 0 0; }
+}
+
+/* v0.36.12 ("World Engine" (user)Dashboard KPI 数字翻牌 + tabular-nums) */
+.kpi-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.kpi-value.flipping { animation: flipIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes flipIn {
+  0% { opacity: 0; transform: translateY(8px) scale(0.95); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+/* v0.36.12 (user wants「HUD 感」: 终端 monospace + 高对比 accent) */
+.dash-tab, .dash-section-title, .kpi-label, .activity-meta, .log-line {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.kpi-label { color: var(--accent-blue); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 5px 11px;
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 12px; font-family: var(--font-sans); font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  height: 28px; white-space: nowrap; text-decoration: none;
+}
+.btn:hover { background: var(--bg-hover); color: var(--text); border-color: var(--hairline-strong); }
+.btn:active { transform: scale(0.98); }
+.btn.primary {
+  background: var(--gold); color: oklch(15% 0 0);
+  border-color: var(--gold); font-weight: 600;
+}
+.btn.primary:hover { background: var(--gold-2); border-color: var(--gold-2); }
+.btn.ghost { border-color: transparent; }
+.btn.ghost:hover { background: var(--bg-hover); border-color: var(--hairline); }
+.btn.small { height: 24px; font-size: 11px; padding: 3px 8px; }
+.btn svg { width: 13px; height: 13px; }
+
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-2);
+}
+
+/* main area */
+.main { background: var(--bg-1); overflow: hidden; position: relative; min-height: 0; }
+.view {
+  position: absolute; inset: 0;
+  display: none;
+  overflow-y: auto;
+  max-height: calc(100vh - 90px); /* fix 6-5: header 52 + global-ticker 28 = 80 + 8 buffer = 88 · fix 6-12: 28→30 = 82 + 8 buffer = 90 */
+}
+.view.active { display: flex; flex-direction: column; }
+
+/* ============================================================
+ * DASHBOARD view — 4 sub-tabs (Overview / Data / Logs / Health)
+ * ============================================================ */
+.dash-tabs {
+  display: flex; align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+  gap: 2px;
+  flex-shrink: 0;
+}
+.dash-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  color: var(--text-3);
+  font-size: 12.5px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition);
+  font-family: var(--font-sans);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.dash-tab:hover { color: var(--text-2); background: var(--bg-1); }
+.dash-tab.active {
+  color: var(--gold); background: var(--bg-1);
+  border-color: var(--hairline);
+  border-bottom: 1px solid var(--bg-1);
+  margin-bottom: -1px;
+}
+.dash-tab .count {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 5px;
+  background: var(--bg-2); border-radius: 3px;
+}
+.dash-tab.active .count { color: var(--gold); background: var(--gold-bg); }
+
+.dash-pane {
+  flex: 1; overflow-y: auto;
+  background: var(--bg-1);
+}
+.dash-pane-inner { display: none; padding: 24px 32px 60px; }
+.dash-pane-inner.active { display: block; max-width: 1280px; margin: 0 auto; }
+
+/* KPI grid */
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 24px;
+}
+.kpi {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  position: relative;
+  transition: border-color var(--transition);
+}
+.kpi:hover { border-color: var(--hairline-strong); }
+.kpi-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 12px;
+}
+.kpi-label .icon { width: 12px; height: 12px; color: var(--text-3); }
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 30px; font-weight: 600;
+  color: var(--text);
+  line-height: 1; margin-bottom: 10px;
+  letter-spacing: -0.025em;
+}
+.kpi-value.danger { color: var(--danger); }
+.kpi-value.success { color: var(--text); } /* 不上 success 绿 — 数字就是数字 */
+.kpi-value.warning { color: var(--text); }
+.kpi-value .suffix { font-size: 14px; color: var(--text-3); font-weight: 400; }
+.kpi-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3); font-family: var(--font-mono);
+}
+.kpi-status {
+  position: absolute; top: 16px; right: 16px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-3);
+}
+.kpi-status.ok { background: var(--success); color: var(--success); animation: ledBlink 1.2s ease-in-out infinite; }
+.kpi-status.fail { background: var(--danger); color: var(--danger); animation: ledBlink 0.6s ease-in-out infinite; }
+
+.row-2 {
+  display: grid; grid-template-columns: 2fr 1fr;
+  gap: 14px; margin-bottom: 24px;
+}
+.row-3 {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+.panel {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--hairline);
+}
+.panel-title {
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-title .icon { width: 13px; height: 13px; color: var(--text-3); }
+.panel-actions {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-3);
+}
+.panel-body { padding: 18px 20px; }
+
+/* SVG charts */
+.chart-svg { width: 100%; height: 180px; display: block; }
+.chart-svg .axis { stroke: var(--hairline); stroke-width: 1; }
+.chart-svg .axis-label { fill: var(--text-3); font-size: 10px; font-family: var(--font-mono); }
+.chart-svg .grid-line { stroke: var(--hairline); stroke-width: 0.5; stroke-dasharray: 2 4; }
+.chart-svg .line { fill: none; stroke: var(--gold); stroke-width: 1.5; }
+.chart-svg .area { fill: var(--gold); opacity: 0.10; }
+.chart-svg .point { fill: var(--gold); }
+.chart-svg .bar { fill: var(--text-3); opacity: 0.55; } /* 默认灰 */
+.chart-svg .bar.warn { fill: var(--text-3); opacity: 0.85; }
+.chart-svg .bar.danger { fill: var(--danger); opacity: 0.7; }
+.chart-svg .bar.alt { fill: var(--gold); opacity: 1; } /* latest — gold 高亮 */
+.chart-svg .donut-segment { stroke: var(--bg); stroke-width: 2; }
+.chart-empty {
+  text-align: center; padding: 60px 20px;
+  color: var(--text-3); font-size: 12px;
+}
+
+/* activity list */
+.activity-list { list-style: none; max-height: 320px; overflow-y: auto; }
+.activity-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-3); margin-top: 7px; flex-shrink: 0;
+}
+.activity-dot.ok { background: var(--success); }
+.activity-dot.warn { background: var(--text-2); }
+.activity-dot.fail { background: var(--danger); }
+/* v0.37.16: 'info' dot for cold-archive / by-design signals (blue, not alarming). */
+.activity-dot.info { background: var(--info); }
+.activity-content { flex: 1; min-width: 0; }
+.activity-title { color: var(--text); font-weight: 500; margin-bottom: 2px; word-break: break-word; line-height: 1.45; }
+.activity-meta {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3);
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.activity-meta .sep { color: var(--hairline-strong); }
+
+/* stat tables */
+.stat-table { width: 100%; border-collapse: collapse; }
+.stat-table th {
+  text-align: left; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); padding: 0 10px 10px; border-bottom: 1px solid var(--hairline);
+}
+.stat-table td {
+  font-family: var(--font-mono); font-size: 12px; color: var(--text);
+  padding: 9px 10px; border-bottom: 1px solid var(--hairline); word-break: break-word;
+}
+.stat-table tr:last-child td { border-bottom: none; }
+.stat-table .num { text-align: right; color: var(--text); } /* 不再 gold */
+.stat-table .num.zero { color: var(--text-3); }
+
+/* badges — 大部分灰, 状态语义用色 */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  font-size: 10.5px; font-weight: 500;
+  font-family: var(--font-mono); text-transform: lowercase;
+  background: var(--bg-1); color: var(--text-2);
+}
+.badge-ok {
+  background: var(--success-bg); border-color: var(--success);
+  color: var(--success);
+}
+.badge-down {
+  background: var(--danger-bg); border-color: var(--danger);
+  color: var(--danger);
+}
+.badge-warn {
+  background: transparent; border-color: var(--text-2);
+  color: var(--text-2);
+}
+.badge-unknown {
+  background: var(--warning-bg); border-color: var(--warning);
+  color: var(--warning);
+}
+/* v0.37.16: 'info' status = cold archive / by-design signal. Blue, not red/green. */
+.badge-info {
+  background: var(--info-bg); border-color: var(--info);
+  color: var(--info);
+}
+/* v0.37.16: cold-archive role badge for R2 panels (neutral grey, not alarming). */
+.badge-cold {
+  background: rgba(148, 163, 184, 0.10); border-color: #94a3b8;
+  color: #94a3b8;
+  font-size: 10px; padding: 1px 6px; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* v0.37.16: primary-store role badge for Supabase panels (green, signals "this is the truth"). */
+.badge-primary {
+  background: var(--success-bg); border-color: var(--success);
+  color: var(--success);
+  font-size: 10px; padding: 1px 6px; letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.badge-tier-normal {
+  background: transparent; border-color: var(--hairline-strong);
+  color: var(--text-2);
+}
+.badge-tier-low {
+  background: var(--gold-bg); border-color: var(--gold);
+  color: var(--gold);
+}
+.badge-tier-high {
+  background: transparent; border-color: var(--text-2);
+  color: var(--text);
+}
+.badge-tier-degraded {
+  background: var(--danger-bg); border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Data tab — endpoint browser */
+.data-wrap {
+  display: grid; grid-template-columns: 280px 1fr;
+  gap: 16px;
+}
+.endpoint-sidebar {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 14px 0;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  position: sticky; top: 0;
+}
+.endpoint-group { margin-bottom: 14px; }
+.endpoint-group:last-child { margin-bottom: 0; }
+.endpoint-group-title {
+  padding: 0 14px 6px;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.endpoint-group-title .count {
+  font-family: var(--font-mono); color: var(--text-3); font-weight: 400;
+}
+.endpoint-list { list-style: none; }
+.endpoint-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--text-2); font-size: 12.5px;
+  border-left: 2px solid transparent;
+  transition: all var(--transition);
+  font-family: var(--font-mono);
+}
+.endpoint-item:hover { background: var(--bg-1); color: var(--text); }
+.endpoint-item.active {
+  background: var(--bg-1); color: var(--gold);
+  border-left-color: var(--gold);
+}
+.endpoint-item .method {
+  font-size: 9.5px; padding: 0 5px;
+  background: var(--bg-2); color: var(--text-3);
+  border-radius: 2px; font-weight: 600; letter-spacing: 0.04em;
+}
+.endpoint-item.post .method { background: var(--bg-2); color: var(--text-2); border: 1px solid var(--hairline-strong); }
+
+.endpoint-detail {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  display: flex; flex-direction: column; overflow: hidden;
+  max-height: calc(100vh - 200px);
+}
+.endpoint-detail-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--hairline);
+}
+.endpoint-detail-title {
+  font-size: 13.5px; font-weight: 600; color: var(--text);
+  margin-bottom: 4px; font-family: var(--font-mono);
+}
+.endpoint-detail-desc {
+  font-size: 12px; color: var(--text-3); line-height: 1.5;
+}
+.endpoint-params {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.param {
+  display: inline-flex; align-items: center;
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  height: 28px;
+}
+.param:focus-within { border-color: var(--gold); }
+.param-label {
+  padding: 0 8px;
+  font-size: 10.5px; color: var(--text-3);
+  font-family: var(--font-mono);
+  border-right: 1px solid var(--hairline);
+  height: 100%; display: flex; align-items: center;
+}
+.param input, .param select {
+  background: transparent; border: none;
+  color: var(--text);
+  padding: 0 10px; height: 100%;
+  font-size: 11.5px; font-family: var(--font-mono);
+  outline: none; min-width: 50px;
+}
+.param select {
+  cursor: pointer; padding-right: 24px;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23c8b8a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.param input::placeholder { color: var(--text-3); }
+.endpoint-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.endpoint-response {
+  flex: 1; overflow-y: auto;
+  padding: 16px 22px;
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6;
+  color: var(--text); white-space: pre-wrap; word-break: break-word;
+}
+.endpoint-response-meta {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 22px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg-1);
+  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
+}
+.endpoint-response-meta strong { color: var(--text); font-weight: 500; }
+
+/* Logs tab */
+.logs-controls {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 16px; flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+}
+.logs-controls .field-label {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 4px; display: block;
+}
+.logs-controls input, .logs-controls select {
+  background: var(--bg-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 5px 10px;
+  font-size: 12px; font-family: var(--font-mono);
+  outline: none; height: 28px;
+}
+.logs-controls input:focus, .logs-controls select:focus { border-color: var(--gold); }
+
+.logs-table {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  border-collapse: separate; border-spacing: 0;
+  overflow: hidden;
+}
+.logs-table th, .logs-table td {
+  padding: 9px 16px; text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11.5px; font-family: var(--font-mono); vertical-align: top;
+}
+.logs-table th {
+  background: var(--bg-1); color: var(--text-3);
+  font-weight: 600; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.logs-table tr:last-child td { border-bottom: none; }
+.logs-table .level {
+  font-weight: 600; text-transform: uppercase; font-size: 10px;
+}
+.logs-table .level.info { color: var(--text-2); }
+.logs-table .level.warn { color: var(--warning); }
+.logs-table .level.error { color: var(--danger); }
+.logs-table .level.debug { color: var(--text-3); }
+
+/* Health tab */
+.health-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; margin-bottom: 24px;
+}
+.check-card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  transition: border-color var(--transition);
+}
+.check-card:hover { border-color: var(--hairline-strong); }
+.check-card.down {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+.check-card.unknown {
+  /* Soft state: cold start or no traffic yet. Yellow border, no red fill. */
+  border-color: var(--warning);
+  background: var(--warning-bg);
+}
+.check-card.warn { border-color: var(--hairline-strong); }
+.check-card.ok { border-left: 2px solid var(--success); }
+/* v0.37.16: 'info' check-card (cold archive / by-design). Blue accent, not red. */
+.check-card.info { border-left: 2px solid var(--info); background: var(--info-bg); }
+.check-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.check-card-name {
+  font-size: 12.5px; font-weight: 600;
+  color: var(--text); font-family: var(--font-mono);
+}
+.check-card-detail {
+  font-size: 11px; color: var(--text-3);
+  font-family: var(--font-mono); word-break: break-word; line-height: 1.5;
+}
+.health-section { margin-bottom: 24px; }
+.health-section-title {
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 12px; padding-left: 2px;
+}
+
+/* ============================================================
+ * READER view — sidebar + filter bar + feed
+ * ============================================================ */
+
+
+.sidebar {
+  background: var(--bg);
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+  padding: 20px 0 28px;
+  transition: transform 0.3s ease, width 0.3s ease;
+}
+.sidebar-toggle {
+  position: absolute; left: 12px; top: 12px;
+  background: var(--bg-2); border: 1px solid var(--hairline);
+  border-radius: 4px; padding: 6px 8px; cursor: pointer;
+  color: var(--text-2); z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+}
+.sidebar-toggle:hover { color: var(--gold); border-color: var(--gold); }
+.sidebar-toggle .icon { width: 16px; height: 16px; }
+/* fix 6-1: sidebar 自动隐藏 (响应式) · 默认折叠 · viewport > 1280 自动展开 */
+.sidebar { display: none; }
+@media (min-width: 1280px) {
+  .sidebar { display: block; }
+}
+/* 小屏时手动 toggle 用 (小屏手动 toggle) */
+.sidebar-toggle { display: none; }
+@media (max-width: 1279px) {
+  .sidebar-toggle { display: flex; }
+  .reader-body.sidebar-shown .sidebar { display: block; }
+}
+.sidebar-section { margin-bottom: 24px; }
+
+.sidebar-title {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px 8px;
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+.sidebar-list { list-style: none; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 16px;
+  cursor: pointer;
+  color: var(--text-2); font-size: 13px;
+  border-left: 2px solid transparent;
+  transition: all var(--transition);
+  user-select: none;
+}
+.sidebar-item:hover { background: var(--bg-1); color: var(--text); }
+.sidebar-item.active {
+  background: var(--bg-1); color: var(--gold);
+  border-left-color: var(--gold);
+}
+.sidebar-item .icon {
+  width: 14px; height: 14px;
+  color: var(--text-3); flex-shrink: 0;
+}
+.sidebar-item.active .icon { color: var(--gold); }
+.sidebar-item .count {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-3); padding: 1px 6px;
+  background: var(--bg-2); border-radius: 3px;
+}
+.sidebar-item.active .count { color: var(--gold); background: var(--gold-bg); }
+.sidebar-divider { height: 1px; background: var(--hairline); margin: 8px 16px; }
+.sidebar-footer {
+  padding: 12px 16px 0;
+  font-size: 11px; color: var(--text-3); line-height: 1.5;
+}
+.sidebar-footer code {
+  font-family: var(--font-mono); background: var(--bg-1);
+  padding: 1px 5px; border-radius: 3px; font-size: 10.5px;
+}
+
+
+
+
+.filter-bar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--hairline);
+  padding: 14px 28px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font-size: 12px; color: var(--text-2);
+  cursor: pointer; transition: all var(--transition);
+  user-select: none; font-family: var(--font-sans); font-weight: 500;
+}
+.chip:hover { background: var(--bg-1); border-color: var(--hairline-strong); color: var(--text); }
+.chip.active {
+  background: var(--bg-1); border-color: var(--gold);
+  color: var(--gold);
+}
+.chip .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; opacity: 0.7; }
+
+.select {
+  appearance: none; -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  padding: 5px 28px 5px 11px;
+  font-size: 12px; font-family: var(--font-sans); font-weight: 500;
+  cursor: pointer; height: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M0 4l3 3 3-3' fill='none' stroke='%23c8b8a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 9px center;
+}
+.select:hover { border-color: var(--hairline-strong); color: var(--text); }
+.select:focus { outline: none; border-color: var(--gold); }
+.select option { background: var(--bg-1); color: var(--text); }
+.filter-spacer { flex: 1; }
+.filter-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+
+ .feed {
+   padding: 20px 28px 60px;
+   max-width: 920px; width: 100%; margin: 0 auto;
+   display: grid;
+   /* fix: ::before (SVG bg) 需要 relative 定位锚点，否则 inset:0 撑开父容器 */
+   position: relative;
+  
+  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: row dense;
+  gap: 12px;
+  
+  min-height: 0;
+}
+.feed > .card:first-child {
+  /* v0.36.12 : 首条置顶大图 (lead story, 跨整行 16:9) */
+  grid-column: 1 / -1;
+}
+.feed > .card:first-child .card-title { font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; }
+.feed > .card:first-child .card-image { aspect-ratio: 21/9; }
+/* v0.36.12 : 引擎节拍顶部脉冲条 (世界引擎标志) — 数据流 SVG 背景 */
+body::before {
+  content: '';
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 100;
+  background: linear-gradient(90deg, transparent 0%, var(--gold) 30%, var(--gold) 70%, transparent 100%);
+  animation: enginePulse 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  pointer-events: none;
+}
+@keyframes enginePulse {
+  0% { transform: translateX(-100%) scaleX(0.4); opacity: 0; }
+  50% { transform: translateX(0%) scaleX(1); opacity: 1; }
+  100% { transform: translateX(100%) scaleX(0.4); opacity: 0; }
+}
+/* v0.36.12 : 数据流 SVG 背景 ("World Engine" (user)数据流意象) */
+.feed::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><g fill='none' stroke='%23ffb800' stroke-width='0.5' opacity='0.06'><path d='M0 100 Q 50 60 100 100 T 200 100'/><path d='M0 130 Q 50 90 100 130 T 200 130'/><path d='M0 70 Q 50 30 100 70 T 200 70'/><circle cx='100' cy='100' r='1'/><circle cx='50' cy='90' r='0.6'/><circle cx='150' cy='110' r='0.6'/></g></svg>");
+  background-size: 200px 200px;
+  pointer-events: none; z-index: 0;
+}
+.feed > .card { position: relative; z-index: 1; }
+/* v0.36.12 : 滚动 reveal ("World Engine" (user)卖弄技术微交互) */
+.feed > .card { opacity: 0; transform: translateY(20px); transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color var(--transition), background var(--transition); }
+.feed > .card.revealed { opacity: 1; transform: translateY(0); }
+/* v0.36.12 : 卡片进场 stagger (cascade animation-delay 0/60/120/180ms) */
+.feed > .card.revealed:nth-child(1) { transition-delay: 0ms; }
+.feed > .card.revealed:nth-child(2) { transition-delay: 60ms; }
+.feed > .card.revealed:nth-child(3) { transition-delay: 120ms; }
+.feed > .card.revealed:nth-child(4) { transition-delay: 180ms; }
+.feed > .card.revealed:nth-child(5) { transition-delay: 240ms; }
+.feed > .card.revealed:nth-child(6) { transition-delay: 300ms; }
+/* v0.36.12 : 数字 mono tabular-nums (user wants「数字 mono」) */
+.card-meta, .card-hot, .meta-time, .card-action { font-variant-numeric: tabular-nums; }
+/* v0.36.12 : hover lift -2px (v0.36.11 -1px 升级到 -2px user wants「卖弄技术」) */
+.card:hover { border-color: var(--hairline-strong); transform: translateY(-2px); }
+/* v0.36.12 : Headline letter-spacing (user wants「letter-spacing 大标题」) */
+.card-title { letter-spacing: -0.005em; font-feature-settings: "ss01", "cv11"; }
+/* v0.36.12 : Kicker (eyebrow 替代, user wants「标题分级」) */
+.kicker {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 8px;
+  padding: 2px 6px;
+  background: color-mix(in oklab, var(--gold) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--gold) 30%, transparent);
+  border-radius: 2px;
+}
+/* v0.36.12 : Standfirst (副标题, user wants「标题分级」) */
+.standfirst {
+  font-size: 14px; line-height: 1.55;
+  color: var(--text-2);
+  max-width: 60ch;
+  margin-top: 4px;
+  font-weight: 400;
+}
+/* v0.36.12 : 衬线 class (user wants「衬线+无衬线混排」) */
+.serif { font-family: ui-serif, Georgia, 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', serif; }
+/* v0.36.12 : 图片占主导 (user wants「图片占主导」) */
+.card-image {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: var(--bg-1);
+  background-size: cover; background-position: center;
+  border-bottom: 1px solid var(--hairline);
+  margin: -18px -22px 14px; /* negative 抵消 .card-body padding */
+  width: calc(100% + 44px);
+}
+ .card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 8px; /* v0.36.11 : 12px → 8px (taste-skill §4.7 紧凑 dashboard) */
+  /* v0.36.11 : 加 transform 到 transition, hover 时 translateY(-1px) 物理 push (taste-skill §4.5) */
+  transition: border-color var(--transition), background var(--transition), transform var(--transition);
+  overflow: hidden; position: relative;
+}
+.card:hover { border-color: var(--hairline-strong); transform: translateY(-1px); }
+.card-body:active { transform: scale(0.995); transition: transform 80ms ease; } /* v0.36.11 : :active scale 物理 push (taste-skill §4.5) */
+.card.expanded {
+  border-color: var(--hairline-strong);
+  background: var(--bg-1);
+  /* fix 6-6: 展开后跨整行 · 避免 grid 同行其他 card 位置错乱 (用户 21:05 反馈"旁边卡片也变大") */
+  grid-column: 1 / -1;
+}
+.card.expanded::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; width: 2px; height: 100%;
+  background: var(--gold);
+}
+.card-body { padding: 18px 22px; cursor: pointer; }
+.card-meta {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+  font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono);
+}
+.meta-source {
+  color: var(--text-2); font-weight: 500; text-transform: lowercase;
+}
+.meta-dot {
+  width: 2px; height: 2px; background: var(--text-3); border-radius: 50%;
+}
+.meta-time { color: var(--text-3); }
+
+.badge-explosive {
+  background: var(--danger-bg); border-color: var(--danger); color: var(--danger);
+}
+.badge-important {
+  background: var(--gold-bg); border-color: var(--gold); color: var(--gold);
+}
+.badge-follow {
+  background: transparent; border-color: var(--hairline-strong); color: var(--text-2);
+}
+.badge-category {
+  background: transparent; border-color: var(--hairline-strong); color: var(--text-2);
+}
+
+.card-title {
+  font-size: 17px; font-weight: 600; color: var(--text);
+  line-height: 1.4; margin-bottom: 8px;
+  letter-spacing: -0.012em; text-wrap: balance;
+}
+.card-summary {
+  color: var(--text-2); font-size: 13.5px; line-height: 1.65;
+  margin-bottom: 12px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card.expanded .card-summary { display: block; -webkit-line-clamp: unset; }
+
+.card-footer {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-3);
+}
+.card-hot {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--font-mono); color: var(--gold); font-weight: 500;
+}
+.card-hot.cool { color: var(--text-3); }
+.card-action {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--text-3); font-family: var(--font-mono);
+}
+.card-action:hover { color: var(--gold); }
+
+.card-popup {
+  display: none;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  padding: 20px 22px 22px;
+}
+.card.expanded .card-popup { display: block; }
+.popup-content {
+  font-size: 14px; line-height: 1.75;
+  color: var(--text); white-space: pre-wrap;
+  word-break: break-word; font-family: var(--font-sans);
+}
+.popup-content p { margin-bottom: 12px; }
+.popup-content p:last-child { margin-bottom: 0; }
+.popup-actions {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+.popup-actions .btn { font-size: 11.5px; height: 28px; padding: 5px 12px; }
+
+/* ============================================================
+ * Shared — states / modals / toast / json
+ * ============================================================ */
+.state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 80px 20px; text-align: center;
+}
+.state-icon { width: 36px; height: 36px; color: var(--text-3); margin-bottom: 14px; opacity: 0.5; }
+.state-title { font-size: 14px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+.state-desc { font-size: 12.5px; color: var(--text-3); max-width: 380px; line-height: 1.65; }
+.state-desc code {
+  font-family: var(--font-mono); background: var(--bg-2);
+  padding: 1px 5px; border-radius: 3px; font-size: 11px; color: var(--text-2);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-1) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.kpi-skeleton { height: 80px; border-radius: var(--radius); }
+.chart-skeleton { height: 180px; border-radius: var(--radius); margin-top: 12px; }
+.skeleton-card {
+  background: var(--bg); border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 12px; padding: 18px 22px;
+}
+.skeleton-card .sk-line { height: 10px; margin-bottom: 10px; }
+.skeleton-card .sk-title { height: 16px; width: 78%; margin-bottom: 14px; }
+.skeleton-card .sk-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.skeleton-card .sk-tag { width: 48px; height: 14px; }
+.skeleton-card .sk-dot { width: 56px; height: 10px; }
+
+.error-banner {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.error-banner-title {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--danger); font-size: 12.5px; font-weight: 500;
+  margin-bottom: 6px;
+}
+.error-banner-body {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.json-view {
+  font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65;
+  white-space: pre; word-break: normal; overflow-x: auto;
+}
+.json-key { color: var(--gold); }
+.json-string { color: var(--text-2); }
+.json-number { color: var(--text); }
+.json-bool { color: var(--gold); font-weight: 600; }
+.json-null { color: var(--text-3); font-style: italic; }
+.json-punct { color: var(--text-3); }
+
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  animation: fadein 150ms;
+}
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-lg);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.modal-body { padding: 18px 20px; overflow-y: auto; }
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--hairline);
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.field { margin-bottom: 14px; }
+.field:last-child { margin-bottom: 0; }
+.field-label {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 6px;
+  display: flex; align-items: center; gap: 6px;
+}
+.field-input {
+  background: var(--bg); border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 11px;
+  font-size: 12.5px; font-family: var(--font-mono);
+  outline: none; transition: border-color var(--transition);
+  width: 100%;
+}
+.field-input:focus { border-color: var(--gold); }
+.field-hint { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+.field-hint code {
+  font-family: var(--font-mono); background: var(--bg-2);
+  padding: 1px 4px; border-radius: 3px; font-size: 10.5px; color: var(--text-2);
+}
+
+.help-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 9px 11px; border-radius: var(--radius);
+  transition: background var(--transition);
+}
+.help-row:hover { background: var(--bg-2); }
+.help-keys { display: flex; gap: 4px; min-width: 110px; }
+.help-desc { font-size: 12.5px; color: var(--text-2); flex: 1; }
+.help-section-title {
+  font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin: 14px 0 6px; padding: 0 11px;
+}
+.help-section-title:first-child { margin-top: 0; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg-1); border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  font-size: 12.5px; color: var(--text);
+  z-index: 200;
+  opacity: 0;
+  transition: all var(--transition-slow);
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ============================================================
+ * ENTITY REVIEW tab styles
+ * ============================================================ */
+.entity-review-wrap { padding: 20px 28px 60px; max-width: 1100px; margin: 0 auto; }
+.entity-review-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+.entity-review-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.entity-review-meta { font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); margin-left: auto; }
+.entity-section { margin-bottom: 28px; }
+.entity-section-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px;
+}
+.entity-section-title .count {
+  font-family: var(--font-mono); font-size: 10px; padding: 1px 6px;
+  background: var(--bg-2); border-radius: 3px; color: var(--text-3);
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+}
+.entity-card {
+  background: var(--bg);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  transition: border-color var(--transition), background var(--transition);
+}
+.entity-card:hover { border-color: var(--hairline-strong); background: var(--bg-1); }
+.entity-card-header {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 10px;
+}
+.entity-card-name { font-size: 13.5px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; word-break: break-word; }
+.entity-card-badge {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 7px;
+  background: var(--bg-2); border: 1px solid var(--hairline-strong);
+  border-radius: 3px; color: var(--text-2); flex-shrink: 0;
+}
+.entity-card-meta {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-3); font-family: var(--font-mono);
+  margin-bottom: 12px;
+}
+.entity-card-meta span { display: flex; align-items: center; gap: 4px; }
+.entity-card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.entity-card-actions .btn { font-size: 11.5px; height: 26px; padding: 3px 10px; }
+.entity-card-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.entity-card-actions .btn.success-btn { border-color: var(--success); color: var(--success); }
+.entity-card-actions .btn.success-btn:hover { background: var(--success-bg); }
+.entity-card-actions .btn.danger-btn { border-color: var(--danger); color: var(--danger); }
+.entity-card-actions .btn.danger-btn:hover { background: var(--danger-bg); }
+.entity-card-actions .btn.warning-btn { border-color: var(--warning); color: var(--warning); }
+.entity-card-actions .btn.warning-btn:hover { background: var(--warning-bg); }
+.entity-card-actions .btn.info-btn { border-color: var(--info); color: var(--info); }
+.entity-card-actions .btn.info-btn:hover { background: var(--info-bg); }
+
+/* noise anchor chip */
+.noise-anchor-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-1); border: 1px solid var(--hairline);
+  border-radius: var(--radius); padding: 4px 10px;
+  font-size: 12px; color: var(--text-2);
+}
+.noise-anchor-chip .remove-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); padding: 0 2px; font-size: 14px; line-height: 1;
+  display: flex; align-items: center;
+  transition: color var(--transition);
+}
+.noise-anchor-chip .remove-btn:hover { color: var(--danger); }
+.entity-anchors-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
+ * Responsive
+ * ============================================================ */
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .row-2 { grid-template-columns: 1fr; }
+  .row-3 { grid-template-columns: 1fr; }
+  .health-grid { grid-template-columns: repeat(2, 1fr); }
+  .data-wrap { grid-template-columns: 1fr; }
+  
+
+}
+@media (max-width: 768px) {
+  .header { padding: 0 14px; gap: 12px; }
+  .logo-sub { display: none; }
+  .view-tabs { gap: 0; }
+  .view-tab { padding: 8px 10px; font-size: 11.5px; }
+  .dash-pane-inner { padding: 16px 16px 40px; }
+  .kpi-grid { grid-template-columns: 1fr; }
+  .health-grid { grid-template-columns: 1fr; }
+  
+
+  .sidebar { display: none; }
+  .filter-bar { padding: 10px 16px; }
+  .feed { padding: 12px 14px 32px; } /* v0.36.11 : 14px 16px 40px → 12px 14px 32px (taste-skill §4.7 紧凑 dashboard) */
+  .card-body { padding: 14px 16px; }
+  .card-title { font-size: 16px; }
+  .modal { max-width: calc(100vw - 24px); margin: 12px; }
+}
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+.reader-float-backdrop {
+  position: fixed; inset: 0;
+  background: var(--bg-overlay);
+  display: flex; align-items: flex-start; justify-content: center;
+  z-index: 200;
+  padding: 48px 16px 24px;
+  overflow-y: auto;
+  animation: rfloat-fadein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes rfloat-fadein { from { opacity: 0; } to { opacity: 1; } }
+.reader-float-backdrop.closing {
+  animation: rfloat-fadeout 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes rfloat-fadeout { from { opacity: 1; } to { opacity: 0; } }
+.reader-float {
+  background: oklch(11% 0 0);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 760px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  animation: rfloat-slidein 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 0 1px rgba(212, 162, 83, 0.08), 0 8px 32px rgba(0,0,0,0.48);
+}
+@keyframes rfloat-slidein {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.reader-float-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gold-bg-strong);
+  background: var(--bg);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.reader-float-title {
+  font-size: 13px; font-weight: 600; color: var(--gold);
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reader-float-close {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-3); padding: 4px;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--transition), background var(--transition);
+  flex-shrink: 0;
+}
+.reader-float-close:hover { color: var(--text); background: var(--bg-hover); }
+.reader-float-close svg { width: 18px; height: 18px; }
+.reader-float-body {
+  flex: 1; overflow-y: auto; max-height: calc(100vh - 200px);
+}
+.reader-float-content {
+  padding: 0;
+  font-size: 15px; line-height: 1.75; color: var(--text);
+}
+.reader-float-content iframe {
+  width: 100%; min-height: 60vh;
+  border: none; display: block;
+  background: white;
+}
+.reader-float-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 20px; gap: 12px; color: var(--text-3); font-size: 13px;
+}
+.reader-float-loading-spinner {
+  width: 24px; height: 24px; border: 2px solid var(--hairline);
+  border-top-color: var(--gold); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.reader-float-error {
+  padding: 32px 24px; text-align: center; color: var(--danger); font-size: 13px;
+}
+.reader-float-source {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  font-size: 11px; color: var(--text-3);
+  flex-shrink: 0;
+}
+.reader-float-source a { color: var(--text-2); text-decoration: none; }
+.reader-float-source a:hover { color: var(--gold); text-decoration: underline; }
+.reader-float-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hairline);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.reader-float-footer .kbd { font-size: 10px; }
+.reader-float-footer span { font-size: 11px; color: var(--text-3); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">C</div>
+      <span class="logo-text">CSNEWS</span>
+      <span class="logo-sep">·</span>
+      <span class="logo-sub">Console</span>
+    </div>
+    <nav class="view-tabs" id="view-tabs">
+      <button class="view-tab active" data-view="dashboard">
+        <span class="dot"></span>
+        <span>Dashboard</span>
+        <span class="count" id="dash-count">—</span>
+      </button>
+      <button class="view-tab" data-view="reader">
+        <span class="dot"></span>
+        <span>Reader</span>
+        <span class="count" id="reader-count">—</span>
+      </button>
+    </nav>
+    <div class="header-actions">
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">未配置</span>
+      </div>
+      <button class="btn" id="help-btn" title="快捷键 (⌘K)">
+        <span style="font-family: var(--font-mono); font-size: 11px;">⌘K</span>
+        <span>帮助</span>
+      </button>
+      <button class="btn" id="refresh-btn" title="刷新 (⌘R)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/><path d="M0 21v-5h5"/></svg>
+        <span>刷新</span>
+      </button>
+      <button class="btn" id="settings-btn">设置</button>
+    </div>
+  </header>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  
+  <div class="ticker global-ticker" id="ticker">
+    <div class="ticker-track" id="ticker-track">
+      <span>加载最新新闻中…</span>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- ============ DASHBOARD VIEW ============ -->
+    <section class="view active" id="view-dashboard">
+      <nav class="dash-tabs" id="dash-tabs">
+        <button class="dash-tab active" data-tab="overview">
+          <span>Overview</span>
+        </button>
+        <button class="dash-tab" data-tab="data">
+          <span>Data</span>
+          <span class="count">38</span>
+        </button>
+        <button class="dash-tab" data-tab="logs">
+          <span>Logs</span>
+        </button>
+        <button class="dash-tab" data-tab="health">
+          <span>Health</span>
+        </button>
+        <button class="dash-tab" data-tab="entity-review">
+          <span>实体审核</span>
+        </button>
+      </nav>
+      <div class="dash-pane">
+        <div class="dash-pane-inner active" id="pane-overview"></div>
+        <div class="dash-pane-inner" id="pane-data"></div>
+        <div class="dash-pane-inner" id="pane-logs"></div>
+        <div class="dash-pane-inner" id="pane-health"></div>
+        <div class="dash-pane-inner" id="pane-entity-review"></div>
+      </div>
+    </section>
+
+    <!-- ============ READER VIEW ============ -->
+    <section class="view" id="view-reader">
+      <div class="reader-body">
+        <!-- sidebar toggle (moved out of <aside> so it stays visible when .sidebar { display:none } hides the rest) -->
+        <button class="sidebar-toggle" id="sidebar-toggle" title="切换侧栏">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <!-- sidebar -->
+        <aside class="sidebar" id="sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-title">热度等级</div>
+            <ul class="sidebar-list" id="level-list">
+              <li class="sidebar-item active" data-level="">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                <span>全部</span>
+                <span class="count" id="level-all-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="explosive">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <span>爆炸</span>
+                <span class="count" id="level-explosive-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="important">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>重要</span>
+                <span class="count" id="level-important-count">—</span>
+              </li>
+              <li class="sidebar-item" data-level="follow">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                <span>关注</span>
+                <span class="count" id="level-follow-count">—</span>
+              </li>
+            </ul>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-section">
+            <div class="sidebar-title">分类</div>
+            <ul class="sidebar-list" id="category-list"></ul>
+          </div>
+          <div class="sidebar-footer">
+            按 <kbd>1</kbd>/<kbd>2</kbd> 切换视图<br/>
+            <code>⌘R</code> 刷新 · <code>Esc</code> 收起卡片
+          </div>
+        </aside>
+
+        <!-- filter bar -->
+        <div class="filter-bar">
+          <select class="select" id="sort-select">
+            <option value="desc">最新优先</option>
+            <option value="hot">热度优先</option>
+            <option value="asc">最旧优先</option>
+          </select>
+          <select class="select" id="since-select">
+            <option value="24h">24 小时内</option>
+            <option value="7d" selected>7 天</option>
+            <option value="30d">30 天</option>
+            <option value="all">全部</option>
+          </select>
+          <div class="filter-spacer"></div>
+          <span class="filter-meta" id="result-meta">—</span>
+        </div>
+
+        <!-- feed -->
+        <div class="feed" id="feed">
+          <div class="state">
+            <div class="state-title">点击「Reader」刷新</div>
+            <div class="state-desc">或按 <code>⌘R</code> 加载新闻列表</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+<script>
+/* ============================================================
+ * CSNEWS Console
+ * Local-only · Worker URL + Bearer Token stored in localStorage
+ * ============================================================ */
+
+const STORAGE = {
+  base: 'csnews_console',
+  get(k, d) { try { const v = localStorage.getItem(this.base + ':' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(this.base + ':' + k, JSON.stringify(v)); } catch {} },
+  remove(k) { localStorage.removeItem(this.base + ':' + k); }
+};
+
+const STATE = {
+  view: 'dashboard', // 'dashboard' | 'reader'
+  dashTab: 'overview', // 'overview' | 'data' | 'logs' | 'health'
+  config: STORAGE.get('config', { baseUrl: '', token: '' }),
+  // dashboard
+  health: null, healthErr: null,
+  news7d: [], news7dErr: null,
+  entity: null, entityErr: null,
+  event: null, eventErr: null,
+  // entity review
+  entityReviewCandidates: null, entityReviewCandidatesErr: null,
+  entityReviewNoiseAnchors: null, entityReviewNoiseAnchorsErr: null,
+  entityReviewLoading: null, // set of currently-actioning entity ids
+  selectedEndpoint: 'pull-news',
+  endpointResponse: null, endpointError: null, endpointLoading: false, endpointElapsed: 0,
+  logs: [], logsErr: null,
+  logsDate: 'today', logsHour: '', logsLimit: 100,
+  loading: false,
+  // reader
+  items: [], readerLastError: null, readerLoading: false,
+  filters: { level: '', category: '', sort: 'desc', since: '7d', limit: 200 },
+  expandedId: null,
+  contentCache: new Map(),
+  // fix 6-13 (): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条" · 抓取时间戳
+  lastFetchedAt: null,
+  // fix 6-14 (): Reader 整点过 60s 自动刷新 · 离开 reader 停
+  hourlySyncTimer: null, // setInterval handle (60min 周期)
+  hourlySyncInitialTimer: null, // setTimeout handle (next hour:01:00 首次)
+};
+
+function getConfig() { return STATE.config; }
+function isConfigured() { return STATE.config.baseUrl && STATE.config.token; }
+function baseUrl() { return STATE.config.baseUrl.replace(/\\/+$/, ''); }
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return \`\${Math.floor(diff / 60)}m ago\`;
+  if (diff < 86400) return \`\${Math.floor(diff / 3600)}h ago\`;
+  return \`\${Math.floor(diff / 86400)}d ago\`;
+}
+
+function fmtTimeZh(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  // fix 6-13 ( 颗粒度): 5min/今日/昨日/本周/更早/跨年
+  if (diff < 60) return '刚刚';
+  if (diff < 300) return \`\${Math.floor(diff / 60)} 分钟前\`; // 5 min 内
+  // 同一日历日 → 今日 (HH:MM)
+  if (isSameDay(d, now)) return \`今日 \${hhmm(d)}\`;
+  // 昨天
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+  if (isSameDay(d, yesterday)) return \`昨日 \${hhmm(d)}\`;
+  // 本周 (7 天内)
+  if (diff < 7 * 86400) return \`\${weekdayZh(d)} \${hhmm(d)}\`;
+  // 同年 → MM-DD
+  if (d.getFullYear() === now.getFullYear()) return \`\${pad(d.getMonth() + 1)}-\${pad(d.getDate())}\`;
+  // 跨年 → YYYY-MM-DD
+  return \`\${d.getFullYear()}-\${pad(d.getMonth() + 1)}-\${pad(d.getDate())}\`;
+}
+function isSameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function hhmm(d) { return \`\${pad(d.getHours())}:\${pad(d.getMinutes())}\`; }
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+const WEEKDAY_ZH = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+function weekdayZh(d) { return WEEKDAY_ZH[d.getDay()]; }
+
+// fix 6-13 (): 顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+function fmtLastFetchedAgo() {
+  if (!STATE.lastFetchedAt) return '';
+  const diff = (Date.now() - STATE.lastFetchedAt) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return \`\${Math.floor(diff / 60)} 分钟前\`;
+  if (diff < 86400) return \`\${Math.floor(diff / 3600)} 小时前\`;
+  return \`\${Math.floor(diff / 86400)} 天前\`;
+}
+function updateResultMeta() {
+  const el = document.getElementById('result-meta');
+  if (!el) return;
+  const ago = fmtLastFetchedAgo();
+  el.textContent = ago ? \`最后抓取于 \${ago} · 共 \${STATE.items.length} 条\` : \`共 \${STATE.items.length} 条\`;
+}
+
+// fix 6-14 (): Reader 整点过 60s 自动刷新
+// - 进 reader view 时调 scheduleHourlySync() (setTimeout 到下个 hour:01:00, 之后 setInterval 60min)
+// - 离开 reader view 时调 clearHourlySync() (clear 两个 timer)
+// - 改 sort/since/level/category refresh 时不重置 schedule (保持整点节奏)
+function scheduleHourlySync() {
+  clearHourlySync(); // 防重复 (sort/since 改 refresh 不重置, 但防止其他路径双调)
+  const now = new Date();
+  // 下个整点 = nextHour:00:00, 触发 = + 60s = nextHour:01:00
+  const next = new Date(now);
+  next.setHours(now.getHours() + 1, 1, 0, 0);
+  const delay = next - now;
+  STATE.hourlySyncInitialTimer = setTimeout(() => {
+    STATE.hourlySyncInitialTimer = null;
+    if (STATE.view !== 'reader' || !isConfigured()) return;
+    refreshReader();
+    // 之后每 60min 一次 (nextHour:01, nextHour+1:01, ...)
+    STATE.hourlySyncTimer = setInterval(() => {
+      if (STATE.view !== 'reader' || !isConfigured()) {
+        clearHourlySync();
+        return;
+      }
+      refreshReader();
+    }, 60 * 60 * 1000);
+  }, delay);
+}
+function clearHourlySync() {
+  if (STATE.hourlySyncInitialTimer) { clearTimeout(STATE.hourlySyncInitialTimer); STATE.hourlySyncInitialTimer = null; }
+  if (STATE.hourlySyncTimer) { clearInterval(STATE.hourlySyncTimer); STATE.hourlySyncTimer = null; }
+}
+
+function fmtNumber(n) { if (n == null) return '—'; return n.toLocaleString('en-US'); }
+
+async function apiGet(path, params) {
+  const cfg = getConfig();
+  let url = baseUrl() + path;
+  if (params) url += '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || \`HTTP \${res.status}\`);
+  return data;
+}
+
+/* ============================================================
+ * Status / Toast (shared)
+ * ============================================================ */
+function updateStatus() {
+  const status = document.getElementById('status');
+  const text = document.getElementById('status-text');
+  status.className = 'status';
+  if (!isConfigured()) {
+    status.classList.add('config');
+    text.textContent = '未配置';
+  } else if (STATE.loading || STATE.readerLoading) {
+    text.textContent = '加载中…';
+  } else if (STATE.healthErr && STATE.view === 'dashboard') {
+    status.classList.add('offline');
+    text.textContent = '连接失败';
+  } else if (STATE.readerLastError && STATE.view === 'reader') {
+    status.classList.add('offline');
+    text.textContent = '错误';
+    const rc = document.getElementById('reader-count');
+    if (rc) rc.textContent = STATE.items.length;
+  } else if (STATE.health && STATE.view === 'dashboard') {
+    const s = STATE.health.status;
+    if (s === 'ok' || s === 'healthy' || s === 'up') {
+      status.classList.add('online');
+      text.textContent = STATE.health.worker_version || 'OK';
+    } else if (s === 'degraded') {
+      status.classList.add('offline');
+      text.textContent = 'degraded';
+    } else {
+      status.classList.add('offline');
+      text.textContent = s || 'down';
+    }
+  } else if (STATE.view === 'reader' && isConfigured()) {
+    status.classList.add('online');
+    text.textContent = \`\${STATE.items.length} 条\`;
+    // update reader-count tab badge
+    const rc = document.getElementById('reader-count');
+    if (rc) rc.textContent = STATE.items.length;
+  }
+}
+
+let toastTimer = null;
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = \`toast \${type} show\`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2400);
+}
+
+/* ============================================================
+ * View router (Dashboard / Reader)
+ * ============================================================ */
+function switchView(view) {
+  // fix 6-14 (): 离开 reader 时停掉整点同步 timer · 进 reader 时 schedule
+  if (STATE.view === 'reader' && view !== 'reader') clearHourlySync();
+  STATE.view = view;
+  document.querySelectorAll('.view-tab').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + view));
+  updateStatus();
+  if (view === 'dashboard') refreshDashboard();
+  else if (view === 'reader') { refreshReader(); scheduleHourlySync(); }
+}
+
+document.querySelectorAll('.view-tab').forEach(el => {
+  el.addEventListener('click', () => switchView(el.dataset.view));
+});
+
+/* fix 6-16: Safari WebKit animation-play-state: paused 触发的瞬间会重置 transform 到 0% (跳回起点)
+   - 不用 CSS :has() 暂停 · 改 JS 监听 hover + 强制设 inline transform 冻结当前位置
+   - 核心思路: 鼠标进入 A 链接时, 读当前 computed transform matrix → 设 inline style.transform + animation-play-state: paused
+   - 鼠标离开 A 链接时, 清 inline style + animation-play-state 恢复
+   - 即使 Safari 重置了 transform, 我们设的 inline style.transform 立即覆盖回去
+   - mouseover/mouseout 配对用 relatedTarget 排除内部移动 (避免 spans 间移动闪烁) */
+(function initTickerHoverFreeze() {
+  const ticker = document.getElementById('ticker');
+  const track = document.getElementById('ticker-track');
+  if (!ticker || !track) return;
+  let tickerHovering = false;
+  ticker.addEventListener('mouseover', (e) => {
+    if (!e.target.closest || !e.target.closest('.ticker-track a')) return;
+    if (tickerHovering) return;
+    tickerHovering = true;
+    // 读当前 computed transform (matrix 形式) + 强制冻结
+    const matrix = getComputedStyle(track).transform;
+    track.style.transform = matrix;
+    track.style.animationPlayState = 'paused';
+    track.style.webkitAnimationPlayState = 'paused';
+  });
+  ticker.addEventListener('mouseout', (e) => {
+    // 内部移动 (a → a): 不算离开
+    if (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.ticker-track a')) return;
+    if (!tickerHovering) return;
+    tickerHovering = false;
+    // 清 inline style · CSS animation 恢复
+    track.style.transform = '';
+    track.style.animationPlayState = '';
+    track.style.webkitAnimationPlayState = '';
+  });
+})();
+
+/* ============================================================
+ * DASHBOARD module
+ * ============================================================ */
+async function fetchHealth() { return apiGet('/?action=health'); }
+async function fetchNews7d() {
+  // fix 4-2: Worker hard cap limit=200 (line 167 src/pull.ts) · 之前 500 抛错被静默 catch
+  const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '200', format: 'full' });
+  return r.items || [];
+}
+
+// fix 5-3: 拉 7 天 important/explosive 新闻 · 加 url 给点击跳转
+// fix 6-11: 同一 title 可能 explosive + important 同时命中 (Worker 评分时一条新闻被打了两个 level) · 用 Set 去重 · explosive 优先 (循环在前)
+async function fetchTickerNews() {
+  // fix 6-15: 改 important 先 + 交叉排 (★/◆ 交替) · 走马灯 30-40s 一圈里就能看到 ★/◆ 交替 · 不再单调
+  // 旧: 循环 [explosive, important] → items 顺序 = [★ × 10, ◆ × 9] · 30-40s 内全 ★
+  // 新: 循环 [important, explosive] → 交叉排: i0=重要 i1=爆炸 i2=重要 i3=爆炸 ...
+  const importantItems = [];
+  const explosiveItems = [];
+  const seen = new Set();
+  for (const level of ['important', 'explosive']) { // 重要先
+    const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', level, limit: '15', order: 'desc', format: 'full' });
+    for (const it of (r.items || [])) {
+      if (!it.title || seen.has(it.title)) continue;
+      seen.add(it.title);
+      if (level === 'important') importantItems.push({ title: it.title, url: it.url, level });
+      else explosiveItems.push({ title: it.title, url: it.url, level });
+    }
+  }
+  // 交叉: important[0] + explosive[0] + important[1] + explosive[1] + ...
+  const items = [];
+  const maxLen = Math.max(importantItems.length, explosiveItems.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (importantItems[i]) items.push(importantItems[i]);
+    if (explosiveItems[i]) items.push(explosiveItems[i]);
+  }
+  return items;
+}
+
+function updateTicker(items) {
+  // fix 6-5: 改为精确选择 #ticker-track (global-ticker) · 不再 querySelectorAll (避免重复)
+  const tracks = document.querySelectorAll('#ticker-track');
+  if (!tracks.length) return;
+  if (!items || !items.length) {
+    tracks.forEach(track => track.innerHTML = '<span>暂无最新重要新闻 · 等待下次 cron 抓取</span>');
+    return;
+  }
+  // fix 6-2 v3: spans 重复 2 次 + CSS translateX(-50%) = 滚 1 组宽 = 无缝循环
+  // (原 4 次重复 + translateX(-100%) 错配 = 边缘跳回 = 用户 20:47 反馈 hover 跳走真根因)
+  // fix 5-3: 加 url 链接 + 等级前缀 (★/◆) 区分
+  const spans = items.map(it => {
+    const prefix = it.level === 'explosive' ? '★ ' : '◆ ';
+    const content = it.url
+      ? \`<a href="\${escapeHtml(it.url)}" target="_blank" rel="noopener">\${escapeHtml(prefix + it.title)}</a>\`
+      : escapeHtml(prefix + it.title);
+    return \`<span>\${content}</span>\`;
+  }).join('');
+  const html = spans + spans; // 2 次重复 · 配合 CSS translateX(-50%) 无缝
+  tracks.forEach(track => track.innerHTML = html);
+}
+async function fetchEntity() { return apiGet('/?action=entity&type=finalized'); }
+async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
+async function fetchLogs(date, hour, limit) {
+  const params = { action: 'logs', limit: String(limit) };
+  if (date) params.date = date;
+  if (hour !== '' && hour != null) params.hour = String(hour);
+  return apiGet('/', params);
+}
+
+// --- Endpoints catalog (22) ---
+const ENDPOINTS = [
+  { name: 'Pull News', action: 'pull', type: 'news', group: 'daily', method: 'GET', desc: '拉取新闻热点,默认按 created_at desc',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' },
+             { key: 'since', label: 'since', type: 'text', placeholder: '24h / ISO 8601' },
+             { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] },
+             { key: 'category', label: 'category', type: 'text' }] },
+  { name: 'Pull Topics', action: 'pull', type: 'topics', group: 'daily', method: 'GET', desc: '拉取话题列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }, { key: 'level', label: 'level', type: 'select', options: ['', 'follow', 'important', 'explosive'] }] },
+  { name: 'Pull Warnings', action: 'pull', type: 'warnings', group: 'daily', method: 'GET', desc: '拉取警告',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Pull Fission Pending', action: 'pull', type: 'fission-pending', group: 'daily', method: 'GET', desc: '拉取待裂变',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Logs', action: 'logs', group: 'daily', method: 'GET', desc: '查 R2 持久化日志',
+    params: [{ key: 'date', label: 'date', type: 'text', default: 'today' }, { key: 'hour', label: 'hour', type: 'number', min: 0, max: 23 }, { key: 'limit', label: 'limit', type: 'number', default: '100' }] },
+  { name: 'Ping', action: 'ping', group: 'daily', method: 'GET', desc: '健康检查 (空 action fallback)', params: [] },
+  { name: 'Health', action: 'health', group: 'daily', method: 'GET', desc: '9 维度健康检查 + AI 配额', params: [] },
+  { name: 'Content', action: 'content', group: 'daily', method: 'GET', desc: '读单条新闻全文 (R2)', params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
+  { name: 'Trend', action: 'trend', group: 'daily', method: 'GET', desc: '话题趋势 (topics / velocity / acceleration)',
+    params: [{ key: 'type', label: 'type', type: 'select', options: ['topics', 'velocity', 'acceleration'], default: 'topics' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  // (B1 v0.37.23 cleanup): Entity/Event 默认 entry 移除 (跟 Entity Candidates / Event Clusters 重复, handleEntityAction 默认 type=candidates, handleEventAction 默认 type=clusters)
+  { name: 'Model Test', action: 'model-test', group: 'debug', method: 'GET', desc: '测试 Workers AI 模型', params: [] },
+  { name: 'AI Test', action: 'ai-test', group: 'debug', method: 'GET', desc: 'AI 模型 + 内容生成',
+    params: [{ key: 'title', label: 'title', type: 'text', placeholder: 'AI 评分/分类测试标题' }] },
+  { name: 'Score', action: 'score', group: 'debug', method: 'GET', desc: '单条标题打分', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Classify Single', action: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类 (快捷)', params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Batch Score', action: 'batch-score', group: 'debug', method: 'POST', desc: '批量打分 (POST)', params: [] },
+  { name: 'Save', action: 'save', group: 'debug', method: 'POST', desc: '手动入库 (POST)', params: [] },
+  { name: 'List', action: 'list', group: 'debug', method: 'GET', desc: 'R2 prefix 列表', params: [{ key: 'prefix', label: 'prefix', type: 'text' }, { key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Embed', action: 'embed', group: 'debug', method: 'GET', desc: 'bge-m3 向量化', params: [{ key: 'text', label: 'text', type: 'text', required: true }] },
+  { name: 'Zaker Hot', action: 'zaker-hot', group: 'debug', method: 'GET', desc: '拉 ZAKER 热点 (调试)', params: [] },
+  { name: 'Process', action: 'process', group: 'debug', method: 'GET', desc: '手动触发 process (cron normally)', params: [] },
+  { name: 'Knowledge', action: 'knowledge', group: 'debug', method: 'GET', desc: '知识累积 daily/topic', params: [{ key: 'type', label: 'type', type: 'select', options: ['daily', 'topic'], default: 'daily' }] },
+  // entity sub-actions
+  { name: 'Entity Candidates', action: 'entity', type: 'candidates', group: 'daily', method: 'GET', desc: '候选实体列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Entity Selflearn', action: 'entity', type: 'selflearn', group: 'daily', method: 'GET', desc: '自学习 entity 追加训练',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Entity Process', action: 'entity', type: 'process', group: 'daily', method: 'GET', desc: '手动触发 entity 流程',
+    params: [] },
+  { name: 'Entity Finalized', action: 'entity', type: 'finalized', group: 'daily', method: 'GET', desc: '已采纳实体列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Entity Noise Anchors', action: 'entity', type: 'noise-anchors', group: 'daily', method: 'GET', desc: '噪音词锚点列表',
+    params: [] },
+  { name: 'Entity Noise', action: 'entity', type: 'noise', group: 'daily', method: 'GET', desc: '噪音实体列表',
+    params: [] },
+  // event sub-actions
+  { name: 'Event Clusters', action: 'event', type: 'clusters', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster 列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Event Cluster', action: 'event', type: 'cluster', group: 'daily', method: 'GET', desc: '单条 cluster 明细',
+    params: [{ key: 'id', label: 'id', type: 'text', required: true }] },
+  { name: 'Event Process', action: 'event', type: 'process', group: 'daily', method: 'GET', desc: '手动触发 event 流程',
+    params: [] },
+  { name: 'Event Review', action: 'event', type: 'review', group: 'daily', method: 'GET', desc: '待审核 event 列表',
+    params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
+  { name: 'Event Threshold', action: 'event', type: 'threshold', group: 'daily', method: 'GET', desc: 'Jaccard 阈值配置查询',
+    params: [] },
+  // classify sub-actions
+  { name: 'Classify', action: 'classify', type: 'classify', group: 'debug', method: 'GET', desc: '单条标题分类',
+    params: [{ key: 'title', label: 'title', type: 'text', required: true }] },
+  { name: 'Classify Seeds', action: 'classify', type: 'seeds', group: 'debug', method: 'GET', desc: '分类种子词列表',
+    params: [] },
+  { name: 'Classify Add Seed', action: 'classify', type: 'add-seed', group: 'debug', method: 'GET', desc: '追加分类种子词',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }, { key: 'category', label: 'category', type: 'text', required: true }] },
+  { name: 'Classify Remove Seed', action: 'classify', type: 'remove-seed', group: 'debug', method: 'GET', desc: '删除分类种子词',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }] },
+  { name: 'Classify Review', action: 'classify', type: 'review', group: 'debug', method: 'GET', desc: '分类评审状态',
+    params: [] },
+  // v0.37.23 (CEO 05:03 拍板 Option B): 加 7 missing endpoints (fission / ai-usage / feedback-check / rescore / proxy / tavily / mcp / mcp-list)
+  { name: 'Fission', action: 'fission', group: 'debug', method: 'GET', desc: '裂变搜索 (R<7 跳过)',
+    params: [{ key: 'seed', label: 'seed', type: 'text', required: true }] },
+  { name: 'AI Usage', action: 'ai-usage', group: 'system', method: 'GET', desc: 'Neurons 预算监控 (7 天 history)',
+    params: [{ key: 'days', label: 'days', type: 'number', default: '7' }] },
+  { name: 'Feedback Check', action: 'feedback-check', group: 'engine', method: 'GET', desc: '动态权重 24/48/72h 复查',
+    params: [] },
+  { name: 'Rescore', action: 'rescore', group: 'debug', method: 'GET', desc: '动态 hot-word weights 重打分',
+    params: [{ key: 'mode', label: 'mode', type: 'select', options: ['dry-run', 'apply'], default: 'dry-run' }, { key: 'limit', label: 'limit', type: 'number', default: '50' }] },
+  { name: 'Proxy', action: 'proxy', group: 'system', method: 'GET', desc: '代理外部 URL (image_proxy · 用于 reader 图片弹窗)',
+    params: [{ key: 'url', label: 'url', type: 'text', required: true }] },
+  { name: 'Tavily', action: 'tavily', group: 'engine', method: 'GET', desc: 'Tavily 跨源查重 pipeline',
+    params: [{ key: 'topic_id', label: 'topic_id', type: 'text' }] },
+  { name: 'MCP', action: 'mcp', group: 'system', method: 'GET', desc: 'MCP JSON-RPC 2.0 入口',
+    params: [] },
+  { name: 'MCP List', action: 'mcp-list', group: 'system', method: 'GET', desc: 'MCP tools 列表',
+    params: [] },
+];
+const GROUPS = {
+  daily: { name: '日常检查', desc: 'pull × 4 + trend + entity 6-type + event 5-type + logs + ping + health + content' },
+  engine: { name: '引擎 sidebar', desc: 'trend / knowledge / entity / event / classify + feedback-check + tavily (动态权重 + 跨源查重)' },
+  debug: { name: '内部调试', desc: 'score / classify 5-type + batch-score + save + list + embed + zaker-hot + process + knowledge + model-test + ai-test + fission + rescore' },
+  system: { name: '系统 sidebar', desc: 'health 9+1 维度 + list R2 prefix + embed bge-m3 + ai-usage Neurons + proxy image_proxy + mcp + mcp-list' }
+};
+
+function highlightJson(json) {
+  const escaped = escapeHtml(typeof json === 'string' ? json : JSON.stringify(json, null, 2));
+  return escaped.replace(
+    /("(?:\\\\.|[^"\\\\])*")(\\s*:)?|\\b(true|false|null)\\b|(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)|([{}\\[\\],])/g,
+    (m, str, colon, bool, num, punct) => {
+      if (str) {
+        return colon
+          ? \`<span class="json-key">\${str}</span><span class="json-punct">\${colon}</span>\`
+          : \`<span class="json-string">\${str}</span>\`;
+      }
+      if (bool) return bool === 'null' ? \`<span class="json-null">\${bool}</span>\` : \`<span class="json-bool">\${bool}</span>\`;
+      if (num) return \`<span class="json-number">\${num}</span>\`;
+      if (punct) return \`<span class="json-punct">\${punct}</span>\`;
+      return m;
+    }
+  );
+}
+
+// --- SVG charts ---
+function svgLineChart(data, opts = {}) {
+  if (!data.length) return '<div class="chart-empty">暂无数据</div>';
+  const w = 600, h = 180, padL = 40, padR = 12, padT = 12, padB = 28;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const max = Math.max(1, ...data.map(d => d.value));
+  const step = innerW / Math.max(1, data.length - 1);
+  const points = data.map((d, i) => {
+    const x = padL + i * step;
+    const y = padT + innerH - (d.value / max) * innerH;
+    return { x, y, ...d };
+  });
+  const pathD = points.map((p, i) => \`\${i === 0 ? 'M' : 'L'} \${p.x.toFixed(1)} \${p.y.toFixed(1)}\`).join(' ');
+  const areaD = pathD + \` L \${points[points.length - 1].x} \${padT + innerH} L \${points[0].x} \${padT + innerH} Z\`;
+  const yLines = [0, 0.5, 1].map(t => {
+    const y = padT + innerH - t * innerH;
+    return \`<line class="grid-line" x1="\${padL}" y1="\${y}" x2="\${w - padR}" y2="\${y}"/>\`;
+  }).join('');
+  const yLabels = [0, 0.5, 1].map(t => {
+    const y = padT + innerH - t * innerH;
+    const v = Math.round(t * max);
+    return \`<text class="axis-label" x="\${padL - 6}" y="\${y + 3}" text-anchor="end">\${v}</text>\`;
+  }).join('');
+  const xLabels = data.map((d, i) => {
+    if (i % Math.ceil(data.length / 7) !== 0 && i !== data.length - 1) return '';
+    const x = padL + i * step;
+    return \`<text class="axis-label" x="\${x}" y="\${h - 8}" text-anchor="middle">\${d.label || d.key}</text>\`;
+  }).join('');
+  const dots = points.map(p => \`<circle class="point" cx="\${p.x}" cy="\${p.y}" r="2.5"/>\`).join('');
+  return \`
+    <svg class="chart-svg" viewBox="0 0 \${w} \${h}" preserveAspectRatio="xMidYMid meet">
+      <line class="axis" x1="\${padL}" y1="\${padT}" x2="\${padL}" y2="\${padT + innerH}"/>
+      <line class="axis" x1="\${padL}" y1="\${padT + innerH}" x2="\${w - padR}" y2="\${padT + innerH}"/>
+      \${yLines}\${yLabels}\${xLabels}
+      <path class="area" d="\${areaD}"/>
+      <path class="line" d="\${pathD}"/>
+      \${dots}
+    </svg>\`;
+}
+
+function svgDonut(segments) {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  if (!total) return '<div class="chart-empty">暂无数据</div>';
+  const cx = 80, cy = 80, r = 60, ir = 38;
+  const colors = ['var(--text-3)', 'var(--text-2)', 'var(--gold)']; // 灰 + 浅灰 + gold (3 档足够)
+  const labeled = colors.slice(0, segments.length);
+  let acc = 0;
+  const arcs = segments.map((seg, i) => {
+    const startAngle = (acc / total) * 2 * Math.PI - Math.PI / 2;
+    acc += seg.value;
+    const endAngle = (acc / total) * 2 * Math.PI - Math.PI / 2;
+    const largeArc = (endAngle - startAngle) > Math.PI ? 1 : 0;
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const ix1 = cx + ir * Math.cos(endAngle);
+    const iy1 = cy + ir * Math.sin(endAngle);
+    const ix2 = cx + ir * Math.cos(startAngle);
+    const iy2 = cy + ir * Math.sin(startAngle);
+    if (seg.value === 0) return '';
+    const path = \`M \${x1} \${y1} A \${r} \${r} 0 \${largeArc} 1 \${x2} \${y2} L \${ix1} \${iy1} A \${ir} \${ir} 0 \${largeArc} 0 \${ix2} \${iy2} Z\`;
+    return \`<path class="donut-segment" d="\${path}" fill="\${labeled[i % labeled.length]}"/>\`;
+  }).join('');
+  const legend = segments.map((seg, i) => \`
+    <div style="display:flex; align-items:center; gap:6px; font-size:11px; padding:2px 0;">
+      <span style="width:8px; height:8px; background:\${labeled[i % labeled.length]}; border-radius:1px;"></span>
+      <span style="color:var(--text-2);">\${escapeHtml(seg.label)}</span>
+      <span style="margin-left:auto; font-family:var(--font-mono); color:var(--text);">\${seg.value}</span>
+      <span style="color:var(--text-3); font-family:var(--font-mono);">\${((seg.value / total) * 100).toFixed(0)}%</span>
+    </div>
+  \`).join('');
+  return \`
+    <div style="display: flex; align-items: center; gap: 18px;">
+      <svg viewBox="0 0 160 160" width="160" height="160" style="flex-shrink:0;">\${arcs}</svg>
+      <div style="flex:1;">\${legend}</div>
+    </div>\`;
+}
+
+function svgHistogram(bins) {
+  if (!bins.length || bins.every(b => b === 0)) return '<div class="chart-empty">暂无数据</div>';
+  const w = 600, h = 180, padL = 36, padR = 12, padT = 12, padB = 28;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const max = Math.max(1, ...bins);
+  const barW = innerW / bins.length;
+  const bars = bins.map((v, i) => {
+    const bh = (v / max) * innerH;
+    const x = padL + i * barW + 2;
+    const y = padT + innerH - bh;
+    const w2 = barW - 4;
+    let cls = 'bar';
+    if (i >= 7) cls = 'bar warn';
+    if (i === bins.length - 1) cls = 'bar alt';
+    return \`<rect class="\${cls}" x="\${x}" y="\${y}" width="\${w2}" height="\${bh}" rx="1"/>\`;
+  }).join('');
+  return \`
+    <svg class="chart-svg" viewBox="0 0 \${w} \${h}" preserveAspectRatio="xMidYMid meet">
+      <line class="axis" x1="\${padL}" y1="\${padT + innerH}" x2="\${w - padR}" y2="\${padT + innerH}"/>
+      <text class="axis-label" x="\${padL}" y="\${h - 8}" text-anchor="start">0</text>
+      <text class="axis-label" x="\${padL + innerW / 2}" y="\${h - 8}" text-anchor="middle">5</text>
+      <text class="axis-label" x="\${w - padR}" y="\${h - 8}" text-anchor="end">10</text>
+      \${bars}
+    </svg>\`;
+}
+
+function renderOverview() {
+  const c = document.getElementById('pane-overview');
+  if (STATE.loading && !STATE.health) { c.innerHTML = renderOverviewSkeleton(); return; }
+  if (STATE.healthErr && !STATE.health) {
+    c.innerHTML = \`
+      <div class="error-banner">
+        <div class="error-banner-title">⚠ 后端连接失败</div>
+        <div class="error-banner-body">\${escapeHtml(STATE.healthErr.message || String(STATE.healthErr))}</div>
+      </div>
+      <div class="state">
+        <div class="state-title">无法拉取后端状态</div>
+        <div class="state-desc">检查 <code>Worker URL</code> / <code>Token</code> / 网络,或按 <code>⌘R</code> 重试</div>
+      </div>\`;
+    return;
+  }
+
+  const h = STATE.health || {};
+  const counts = h.supabase_counts || {};
+  const r2Counts = h.r2_prefix_counts || {};
+  const cronHist = (h.cron_history && h.cron_history.this_hour) || {};
+  const zscore = h.zscore_signals_today || {};
+  const aiBudget = h.ai_budget_today || {};
+  const lastWrite = h.r2_latest_write || {};
+  const checks = h.checks || {};
+  const okCount = Object.values(checks).filter(c => c.status === 'ok').length;
+  const totalChecks = Object.keys(checks).length;
+  const cronDown = h.cron_health === 'down';
+
+  const byDay = {};
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    byDay[key] = 0;
+  }
+  STATE.news7d.forEach(it => {
+    const ts = it.published_at || it.created_at;
+    if (!ts) return;
+    const key = new Date(ts).toISOString().slice(0, 10);
+    if (key in byDay) byDay[key]++;
+  });
+  const trendData = Object.entries(byDay).map(([k, v]) => {
+    const d = new Date(k);
+    return { key: k, label: \`\${d.getMonth() + 1}/\${d.getDate()}\`, value: v };
+  });
+
+  const levelDist = { follow: 0, important: 0, explosive: 0 };
+  STATE.news7d.forEach(it => { if (it.level && levelDist[it.level] != null) levelDist[it.level]++; });
+  const levelTotal = levelDist.follow + levelDist.important + levelDist.explosive;
+
+  const scoreBins = new Array(10).fill(0);
+  STATE.news7d.forEach(it => {
+    const s = Number(it.score) || 0;
+    if (s >= 0 && s <= 10) scoreBins[Math.min(9, Math.floor(s))]++;
+  });
+
+  const tierBadgeClass = \`badge-tier-\${aiBudget.tier || 'normal'}\`;
+  const tierLabel = (aiBudget.tier || 'normal').toUpperCase();
+
+  c.innerHTML = \`
+    \${cronDown ? \`
+      <div class="error-banner" style="margin-bottom: 16px;">
+        <div class="error-banner-title">⚠ Cron 异常 — \${fmtTime(h.last_process_at)} 之后没跑过 process</div>
+        <div class="error-banner-body">检查 CF Workers Triggers 配置,或 worker 日志 (Logs tab) 看 scheduler 是否报错</div>
+      </div>\` : ''}
+
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-status \${cronDown ? 'fail' : 'ok'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Cron 状态</span>
+        </div>
+        <div class="kpi-value \${cronDown ? 'danger' : ''}">\${cronDown ? 'DOWN' : 'OK'}</div>
+        <div class="kpi-meta">\${h.last_process_at ? \`上次 \${fmtTime(h.last_process_at)}\` : '从未跑过'}</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-status \${okCount === totalChecks ? 'ok' : 'fail'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>健康评分</span>
+        </div>
+        <div class="kpi-value \${okCount < totalChecks / 2 ? 'danger' : ''}">\${okCount}<span class="suffix">/\${totalChecks}</span></div>
+        <div class="kpi-meta">\${totalChecks ? Math.round((okCount / totalChecks) * 100) : 0}% 维度正常 · worker \${h.worker_version || '—'}</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-status \${(aiBudget.used || 0) >= (aiBudget.quota || 1) * 0.8 ? 'fail' : 'ok'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M0.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M0 12h4M18 12h4M0.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          <span>AI 配额 (今日)</span>
+        </div>
+        <div class="kpi-value">\${fmtNumber(aiBudget.used || 0)}<span class="suffix">/\${fmtNumber(aiBudget.quota || 0)}</span></div>
+        <div class="kpi-meta">
+          <span class="badge \${tierBadgeClass}">\${tierLabel}</span>
+          <span>\${fmtNumber(aiBudget.remaining || 0)} remaining</span>
+        </div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-status ok"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
+          <span>数据规模</span>
+        </div>
+        <div class="kpi-value">\${fmtNumber(counts.news_hotspots || 0)}</div>
+        <div class="kpi-meta">news · \${fmtNumber(counts.topics || 0)} topics · \${fmtNumber(counts.trend_snapshots || 0)} trends</div>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+            <span>7 天入库趋势</span>
+          </div>
+          <div class="panel-actions">共 \${STATE.news7d.length} 条</div>
+        </div>
+        <div class="panel-body">\${svgLineChart(trendData)}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+            <span>Level 分布 (7d)</span>
+          </div>
+          <div class="panel-actions">\${levelTotal} 条</div>
+        </div>
+        <div class="panel-body">\${svgDonut([
+          { label: 'follow', value: levelDist.follow },
+          { label: 'important', value: levelDist.important },
+          { label: 'explosive', value: levelDist.explosive }
+        ])}</div>
+      </div>
+    </div>
+
+    <div class="row-3">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M0 9h18M9 21V9"/></svg>
+            <span>Supabase</span>
+            <span class="badge badge-primary">primary</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
+            <tbody>
+              \${['news_hotspots', 'topics', 'news_topic_members', 'trend_snapshots', 'warnings', 'fission_searches'].map(t => \`
+                <tr><td>\${t}</td><td class="num \${counts[t] === 0 ? 'zero' : ''}">\${fmtNumber(counts[t] || 0)}</td></tr>
+              \`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M0 3h22v5H1zM10 12h4"/></svg>
+            <span>R2 Prefix</span>
+            <span class="badge badge-cold">cold archive</span>
+          </div>
+          \${h.data_store_architecture ? \`<div class="panel-actions" style="font-size: 11px; color: var(--text-3);">\${escapeHtml(h.data_store_architecture.explanation.split('.').slice(0, 2).join('.') + '.')}</div>\` : ''}
+        </div>
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
+            <tbody>
+              \${['news/', 'news/zaker/', 'embeddings/', 'fission/', 'trends/', 'warnings/', 'logs/'].map(p => \`
+                <tr><td>\${p}</td><td class="num \${r2Counts[p] === 0 ? 'zero' : ''}">\${fmtNumber(r2Counts[p] || 0)}</td></tr>
+              \`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M0 3v18h18"/><path d="M7 17l4-4 4 4 6-6"/></svg>
+            <span>Score 分布 (7d)</span>
+          </div>
+        </div>
+        <div class="panel-body">\${svgHistogram(scoreBins)}</div>
+      </div>
+    </div>
+
+    <div class="row-2" style="margin-top: 24px; grid-template-columns: 1fr 1fr;">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+            <span>最近活动</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <ul class="activity-list">
+            \${lastWrite.created_at || lastWrite.key ? \`
+              <li class="activity-item">
+                <span class="activity-dot \${lastWrite.cold_archive_age_hours == null || lastWrite.cold_archive_age_hours < 24 ? 'ok' : 'info'}"></span>
+                <div class="activity-content">
+                  <div class="activity-title">\${escapeHtml(lastWrite.title || '(no title — cold archive, no recent new-angle write)')}</div>
+                  <div class="activity-meta">
+                    <span>R2 Cold Archive latest write</span><span class="sep">·</span>
+                    <span>\${lastWrite.cold_archive_age_hours != null ? lastWrite.cold_archive_age_hours + 'h ago' : (lastWrite.uploaded ? fmtTime(lastWrite.uploaded) : 'historical')}</span><span class="sep">·</span>
+                    <span>\${escapeHtml(lastWrite.key || '')}</span>
+                    \${lastWrite.cold_archive_status_explanation ? \`<span class="sep">·</span><span style="color: var(--text-3);">\${escapeHtml(lastWrite.cold_archive_status_explanation)}</span>\` : ''}
+                  </div>
+                </div>
+              </li>\` : ''}
+            \${h.last_process_stored_reason ? \`
+              <li class="activity-item">
+                <span class="activity-dot \${(h.last_process_stored_reason.r2_writes || 0) > 0 ? 'ok' : 'info'}"></span>
+                <div class="activity-content">
+                  <div class="activity-title">最近 process: \${h.last_process_stored_reason.r2_writes || 0}/\${h.last_process_stored_reason.total_items || 0} 写了 R2 (新角度)</div>
+                  <div class="activity-meta">
+                    <span>\${escapeHtml(h.last_process_stored_reason.human_readable || '')}</span>
+                  </div>
+                </div>
+              </li>\` : ''}
+            <li class="activity-item">
+              <span class="activity-dot \${cronDown ? 'fail' : 'ok'}"></span>
+              <div class="activity-content">
+                <div class="activity-title">\${cronHist.scheduler_log_count != null ? \`本小时 scheduler \${cronHist.scheduler_log_count} 次日志\` : '无 cron 历史'}</div>
+                <div class="activity-meta">
+                  <span>\${cronHist.hour || '—'}</span>
+                  \${cronDown ? '<span class="sep">·</span><span style="color: var(--danger);">328+ min 未跑</span>' : ''}
+                </div>
+              </div>
+            </li>
+            <li class="activity-item">
+              <span class="activity-dot ok"></span>
+              <div class="activity-content">
+                <div class="activity-title">z-score 异常检测: 7d 内 \${zscore.total_7d || 0} 个信号</div>
+                <div class="activity-meta">
+                  <span>score: \${(zscore.by_field_7d || {}).score || 0}</span><span class="sep">·</span>
+                  <span>velocity: \${(zscore.by_field_7d || {}).velocity || 0}</span><span class="sep">·</span>
+                  <span>acceleration: \${(zscore.by_field_7d || {}).acceleration || 0}</span>
+                </div>
+              </div>
+            </li>
+            <li class="activity-item">
+              <span class="activity-dot ok"></span>
+              <div class="activity-content">
+                <div class="activity-title">AI 配额今日已用 \${fmtNumber(aiBudget.used || 0)} / \${fmtNumber(aiBudget.quota || 0)} Neurons</div>
+                <div class="activity-meta"><span>tier: \${tierLabel}</span></div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11H5a2 2 0 00-2 2v7h18v-7a2 2 0 00-2-2h-4M9 11V7a3 3 0 016 0v4"/></svg>
+            <span>Entity / Event</span>
+          </div>
+        </div>
+        <div class="panel-body">
+          <ul class="activity-list">
+            \${STATE.entity && STATE.entity.candidates ? (STATE.entity.candidates.slice(0, 5).map(c => \`
+              <li class="activity-item">
+                <span class="activity-dot ok"></span>
+                <div class="activity-content">
+                  <div class="activity-title">\${escapeHtml(c.name)} <span style="color:var(--text-3); font-size:11px; font-family:var(--font-mono);">(\${escapeHtml(c.type)})</span></div>
+                  <div class="activity-meta">
+                    <span>freq \${c.frequency || 0}</span><span class="sep">·</span>
+                    <span>conf \${((c.confidence || 0) * 100).toFixed(0)}%</span><span class="sep">·</span>
+                    <span>\${c.source || '—'}</span>
+                  </div>
+                </div>
+              </li>\`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 entity 数据</div></div></li>') : ''}
+            \${STATE.event && STATE.event.clusters ? (STATE.event.clusters.slice(0, 3).map(c => \`
+              <li class="activity-item">
+                <span class="activity-dot warn"></span>
+                <div class="activity-content">
+                  <div class="activity-title">Cluster \${escapeHtml(c.cluster_id)} · \${c.entity_count} entities</div>
+                  <div class="activity-meta">
+                    <span>\${c.jaccard_pairs || 0} jaccard pairs</span><span class="sep">·</span>
+                    <span>\${escapeHtml(c.reviewed || 'pending')}</span>
+                  </div>
+                </div>
+              </li>\`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 event 数据</div></div></li>') : ''}
+          </ul>
+        </div>
+      </div>
+    </div>\`;
+}
+
+function renderOverviewSkeleton() {
+  return \`
+    <div class="kpi-grid">
+      \${Array(4).fill(0).map(() => '<div class="kpi"><div class="skeleton" style="height: 24px; width: 60%; margin-bottom: 12px;"></div><div class="skeleton" style="height: 36px; width: 40%;"></div></div>').join('')}
+    </div>
+    <div class="row-2">
+      <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
+      <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
+    </div>\`;
+}
+
+function renderData() {
+  const c = document.getElementById('pane-data');
+  const ep = ENDPOINTS.find(e => e.action + (e.type ? '-' + e.type : '') === STATE.selectedEndpoint)
+    || ENDPOINTS.find(e => e.action === STATE.selectedEndpoint) || ENDPOINTS[0];
+
+  c.innerHTML = \`
+    <div class="data-wrap">
+      <div class="endpoint-sidebar">
+        \${Object.entries(GROUPS).map(([key, group]) => \`
+          <div class="endpoint-group">
+            <div class="endpoint-group-title">
+              <span>\${group.name}</span>
+              <span class="count">\${ENDPOINTS.filter(e => e.group === key).length}</span>
+            </div>
+            <ul class="endpoint-list">
+              \${ENDPOINTS.filter(e => e.group === key).map(e => {
+                const id = e.action + (e.type ? '-' + e.type : '');
+                return \`
+                  <li class="endpoint-item \${STATE.selectedEndpoint === id ? 'active' : ''} \${e.method === 'POST' ? 'post' : ''}" data-endpoint="\${id}">
+                    <span class="method">\${e.method}</span>
+                    <span>\${e.name}</span>
+                  </li>\`;
+              }).join('')}
+            </ul>
+          </div>\`).join('')}
+      </div>
+
+      <div class="endpoint-detail">
+        <div class="endpoint-detail-header">
+          <div class="endpoint-detail-title">\${ep.method} \${ep.action}\${ep.type ? '?type=' + ep.type : ''}</div>
+          <div class="endpoint-detail-desc">\${ep.desc}</div>
+        </div>
+        <div class="endpoint-params" id="endpoint-params">
+          \${ep.params.length ? ep.params.map(p => \`
+            <span class="param">
+              <span class="param-label">\${p.label}\${p.required ? ' *' : ''}</span>
+              \${p.type === 'select' ? \`
+                <select data-param="\${p.key}">
+                  \${p.options.map(o => \`<option value="\${o}" \${o === p.default ? 'selected' : ''}>\${o || '(empty)'}</option>\`).join('')}
+                </select>\` : p.type === 'number' ? \`
+                <input type="number" data-param="\${p.key}" value="\${p.default || ''}" min="\${p.min || ''}" max="\${p.max || ''}" placeholder="\${p.placeholder || ''}" />\` : \`
+                <input type="text" data-param="\${p.key}" value="\${p.default || ''}" placeholder="\${p.placeholder || ''}" />\`}
+            </span>\`).join('') : '<span style="color: var(--text-3); font-size: 12px;">无参数</span>'}
+          <div class="endpoint-actions">
+            <button class="btn small" id="btn-copy-curl">复制 cURL</button>
+            <button class="btn primary small" id="btn-run">\${ep.method === 'POST' ? 'POST' : 'GET'} ↵</button>
+          </div>
+        </div>
+        <div class="endpoint-response" id="endpoint-response">
+          <div class="state" style="padding: 40px 20px;">
+            <div class="state-title">点击 ↵ 按钮或按 ⌘ Enter 调用</div>
+            <div class="state-desc">Token 自动附加为 <code>Authorization: Bearer</code></div>
+          </div>
+        </div>
+        <div class="endpoint-response-meta" id="endpoint-response-meta"></div>
+      </div>
+    </div>\`;
+
+  document.querySelectorAll('.endpoint-item').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.selectedEndpoint = el.dataset.endpoint;
+      STATE.endpointResponse = null;
+      STATE.endpointError = null;
+      renderData();
+    });
+  });
+  document.getElementById('btn-run').addEventListener('click', runEndpoint);
+  document.getElementById('btn-copy-curl').addEventListener('click', copyCurl);
+  document.getElementById('endpoint-params').addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); runEndpoint(); }
+  });
+
+  if (STATE.endpointError) renderEndpointError(STATE.endpointError);
+  else if (STATE.endpointResponse) renderEndpointSuccess(STATE.endpointResponse, STATE.endpointElapsed);
+}
+
+async function runEndpoint() {
+  if (!isConfigured()) { openSettings(); return; }
+  const ep = ENDPOINTS.find(e => e.action + (e.type ? '-' + e.type : '') === STATE.selectedEndpoint)
+    || ENDPOINTS.find(e => e.action === STATE.selectedEndpoint);
+  if (!ep) return;
+  const params = {};
+  document.querySelectorAll('#endpoint-params [data-param]').forEach(el => {
+    const v = el.value.trim();
+    if (v !== '') params[el.dataset.param] = v;
+  });
+  params.action = ep.action;
+  if (ep.type) params.type = ep.type;
+
+  STATE.endpointLoading = true;
+  STATE.endpointError = null;
+  STATE.endpointResponse = null;
+  document.getElementById('endpoint-response').innerHTML = '<div class="state" style="padding: 40px 20px;"><div class="state-title">加载中…</div></div>';
+  document.getElementById('endpoint-response-meta').innerHTML = '';
+
+  try {
+    const t0 = performance.now();
+    const data = await apiGet('/', params);
+    const elapsed = Math.round(performance.now() - t0);
+    STATE.endpointResponse = data;
+    STATE.endpointElapsed = elapsed;
+    renderEndpointSuccess(data, elapsed);
+  } catch (e) {
+    STATE.endpointError = { message: e.message || String(e) };
+    renderEndpointError(STATE.endpointError);
+  } finally {
+    STATE.endpointLoading = false;
+  }
+}
+
+function renderEndpointSuccess(data, elapsed) {
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('endpoint-response').innerHTML = \`<div class="json-view">\${highlightJson(json)}</div>\`;
+  const ms = elapsed || 0;
+  const msColor = ms < 200 ? 'var(--text-2)' : ms < 500 ? 'var(--warning)' : 'var(--danger)';
+  document.getElementById('endpoint-response-meta').innerHTML = \`
+    <span>状态 <strong style="color: var(--success);">200 OK</strong></span>
+    <span class="sep">·</span>
+    <span>耗时 <strong style="color: \${msColor};">\${ms}ms</strong></span>
+    <span class="sep">·</span>
+    <span>\${json.length.toLocaleString()} bytes</span>
+  \`;
+}
+
+function renderEndpointError(err) {
+  document.getElementById('endpoint-response').innerHTML = \`
+    <div class="error-banner" style="margin: 0;">
+      <div class="error-banner-title">⚠ 调用失败</div>
+      <div class="error-banner-body">\${escapeHtml(err.message || String(err))}</div>
+    </div>\`;
+  document.getElementById('endpoint-response-meta').innerHTML = \`<span>状态 <strong style="color: var(--danger);">ERROR</strong></span>\`;
+}
+
+function copyCurl() {
+  const ep = ENDPOINTS.find(e => e.action + (e.type ? '-' + e.type : '') === STATE.selectedEndpoint)
+    || ENDPOINTS.find(e => e.action === STATE.selectedEndpoint);
+  const params = { action: ep.action };
+  if (ep.type) params.type = ep.type;
+  document.querySelectorAll('#endpoint-params [data-param]').forEach(el => {
+    const v = el.value.trim();
+    if (v !== '') params[el.dataset.param] = v;
+  });
+  const url = baseUrl() + '/?' + new URLSearchParams(params).toString();
+  const cfg = getConfig();
+  const masked = cfg.token.length > 6 ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6) : '***';
+  const curl = \`curl -s "\${url}" \\\\\\n -H "Authorization: Bearer \${masked}"\`;
+  navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
+}
+
+async function renderLogs() {
+  const c = document.getElementById('pane-logs');
+  c.innerHTML = \`
+    <div class="logs-controls">
+      <div class="field">
+        <label class="field-label">Date</label>
+        <input type="text" id="logs-date" value="\${escapeHtml(STATE.logsDate)}" placeholder="today / YYYY-MM-DD" />
+      </div>
+      <div class="field">
+        <label class="field-label">Hour</label>
+        <input type="number" id="logs-hour" value="\${escapeHtml(STATE.logsHour)}" placeholder="0-23" min="0" max="23" />
+      </div>
+      <div class="field">
+        <label class="field-label">Limit</label>
+        <input type="number" id="logs-limit" value="\${STATE.logsLimit}" min="1" max="500" />
+      </div>
+      <button class="btn primary" id="logs-refresh">查询</button>
+      <span style="color: var(--text-3); font-size: 11px; margin-left: auto;">共 \${STATE.logs.length} 条</span>
+    </div>
+    <div id="logs-table-wrap">
+      \${STATE.logs.length ? renderLogsTable() : '<div class="state"><div class="state-title">暂无日志</div><div class="state-desc">调整 date / hour 试试</div></div>'}
+    </div>\`;
+  document.getElementById('logs-refresh').addEventListener('click', loadLogs);
+  ['logs-date', 'logs-hour', 'logs-limit'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') loadLogs(); });
+  });
+}
+
+function renderLogsTable() {
+  return \`
+    <table class="logs-table">
+      <thead><tr><th>Level</th><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
+      <tbody>
+        \${STATE.logs.slice(0, 200).map(l => \`
+          <tr>
+            <td><span class="level \${l.level || 'info'}">\${escapeHtml(l.level || 'info')}</span></td>
+            <td>\${escapeHtml(l.ts || l.created_at || '—')}</td>
+            <td>\${escapeHtml(l.event || l.message || '—')}</td>
+            <td>\${escapeHtml(typeof l.detail === 'object' ? JSON.stringify(l.detail) : (l.detail || ''))}</td>
+          </tr>\`).join('')}
+      </tbody>
+    </table>\`;
+}
+
+async function loadLogs() {
+  if (!isConfigured()) { openSettings(); return; }
+  STATE.logsDate = document.getElementById('logs-date').value.trim() || 'today';
+  STATE.logsHour = document.getElementById('logs-hour').value.trim();
+  STATE.logsLimit = parseInt(document.getElementById('logs-limit').value, 10) || 100;
+  try {
+    const data = await fetchLogs(STATE.logsDate, STATE.logsHour, STATE.logsLimit);
+    STATE.logs = Array.isArray(data) ? data : (data.items || data.logs || []);
+    STATE.logsErr = null;
+    renderLogs();
+    toast(\`已加载 \${STATE.logs.length} 条日志\`, 'success');
+  } catch (e) {
+    STATE.logsErr = { message: e.message || String(e) };
+    STATE.logs = [];
+    renderLogs();
+    toast(\`查询失败: \${e.message}\`, 'error');
+  }
+}
+
+function renderHealth() {
+  const c = document.getElementById('pane-health');
+  if (!STATE.health) {
+    c.innerHTML = \`<div class="state"><div class="state-title">未拉取 health 数据</div><div class="state-desc">回到 Overview 拉取</div></div>\`;
+    return;
+  }
+  const h = STATE.health;
+  const checks = h.checks || {};
+  c.innerHTML = \`
+    <div class="health-section">
+      <div class="health-section-title">9 维度健康检查</div>
+      <div class="health-grid">
+        \${Object.entries(checks).map(([name, c]) => {
+          // v0.37.16: added 'info' status (blue) for cold-archive / by-design
+          // signals. unknown stays soft-yellow (cold start). down stays red.
+          // info must NOT render as down — that's what caused the "R2 broken"
+          // false alarm in the first place.
+          const cls = c.status === 'ok' ? 'ok' : c.status === 'info' ? 'info' : c.status === 'warn' ? 'warn' : c.status === 'unknown' ? 'unknown' : 'down';
+          const badge = c.status === 'ok' ? 'badge-ok' : c.status === 'info' ? 'badge-info' : c.status === 'warn' ? 'badge-warn' : c.status === 'unknown' ? 'badge-unknown' : 'badge-down';
+          return \`
+          <div class="check-card \${cls}">
+            <div class="check-card-header">
+              <div class="check-card-name">\${escapeHtml(name)}</div>
+              <span class="badge \${badge}">\${c.status}</span>
+            </div>
+            <div class="check-card-detail">\${escapeHtml(c.detail || '—')}</div>
+          </div>\`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="health-section">
+      <div class="health-section-title">Supabase</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Table</th><th style="text-align:right">Rows</th></tr></thead>
+            <tbody>\${Object.entries(h.supabase_counts || {}).map(([k, v]) => \`
+              <tr><td>\${escapeHtml(k)}</td><td class="num \${v === 0 ? 'zero' : ''}">\${fmtNumber(v)}</td></tr>
+            \`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="health-section">
+      <div class="health-section-title">R2 Bucket</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <thead><tr><th>Prefix</th><th style="text-align:right">Objects</th></tr></thead>
+            <tbody>\${Object.entries(h.r2_prefix_counts || {}).map(([k, v]) => \`
+              <tr><td>\${escapeHtml(k)}</td><td class="num \${v === 0 ? 'zero' : ''}">\${fmtNumber(v)}</td></tr>
+            \`).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="health-section">
+      <div class="health-section-title">AI Budget (今日)</div>
+      <div class="panel">
+        <div class="panel-body">
+          <table class="stat-table">
+            <tbody>
+              <tr><td>tier</td><td style="text-align:right;"><span class="badge badge-tier-\${h.ai_budget_today?.tier || 'normal'}">\${(h.ai_budget_today?.tier || 'normal').toUpperCase()}</span></td></tr>
+              <tr><td>used</td><td class="num">\${fmtNumber(h.ai_budget_today?.used || 0)}</td></tr>
+              <tr><td>quota</td><td class="num">\${fmtNumber(h.ai_budget_today?.quota || 0)}</td></tr>
+              <tr><td>remaining</td><td class="num">\${fmtNumber(h.ai_budget_today?.remaining || 0)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>\`;
+}
+
+/* ============================================================
+ * ENTITY REVIEW module
+ * ============================================================ */
+async function fetchEntityReviewCandidates() {
+  return apiGet('/', { action: 'entity', type: 'candidates' });
+}
+async function fetchEntityReviewNoiseAnchors() {
+  return apiGet('/', { action: 'entity', type: 'noise-anchors' });
+}
+
+async function doEntityAction(type, name) {
+  if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
+  STATE.entityReviewLoading = STATE.entityReviewLoading || new Set();
+  STATE.entityReviewLoading.add(name);
+  renderEntityReview();
+  try {
+    // worker 端 ?action=entity&type=... 期望 ?name=xxx 参数 (R2 entity-candidates.json 是 name-keyed, 没有 uuid 字段)
+    const result = await apiGet('/', { action: 'entity', type, ...(name ? { name } : {}) });
+    toast(\`\${type} 成功\`, 'success');
+    return result;
+  } catch (e) {
+    toast(\`\${type} 失败: \${e.message}\`, 'error');
+    return null;
+  } finally {
+    STATE.entityReviewLoading.delete(name);
+    STATE.entityReviewLoading = new Set(STATE.entityReviewLoading);
+    // Refresh data after action
+    try {
+      STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+      STATE.entityReviewCandidatesErr = null;
+    } catch (e) { STATE.entityReviewCandidatesErr = { message: e.message }; }
+    try {
+      STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+      STATE.entityReviewNoiseAnchorsErr = null;
+    } catch (e) { STATE.entityReviewNoiseAnchorsErr = { message: e.message }; }
+    renderEntityReview();
+  }
+}
+
+function isEntityLoading(id) {
+  return STATE.entityReviewLoading && STATE.entityReviewLoading.has(id);
+}
+
+function renderEntityReview() {
+  const c = document.getElementById('pane-entity-review');
+  if (!c) return;
+
+  const candidates = STATE.entityReviewCandidates;
+  const noiseAnchorsData = STATE.entityReviewNoiseAnchors;
+  const candidatesErr = STATE.entityReviewCandidatesErr;
+  const noiseAnchorsErr = STATE.entityReviewNoiseAnchorsErr;
+
+  const candidatesList = candidates?.candidates || [];
+  const noiseList = candidates?.noise || [];
+  const anchorsList = noiseAnchorsData?.anchors || [];
+  const loadingCandidates = candidates == null && !candidatesErr;
+  const loadingAnchors = noiseAnchorsData == null && !noiseAnchorsErr;
+
+  let html = \`<div class="entity-review-wrap">\`;
+
+  // Header
+  html += \`
+  <div class="entity-review-header">
+    <div class="entity-review-title">🧠 实体审核</div>
+    <div class="entity-review-meta">
+      \${candidatesList.length} 候选 · \${noiseList.length} 待噪音 · \${anchorsList.length} 噪音词
+    </div>
+  </div>\`;
+
+  // Error banners
+  if (candidatesErr) {
+    html += \`<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 候选实体加载失败</div>
+      <div class="error-banner-body">\${escapeHtml(candidatesErr.message)}</div>
+    </div>\`;
+  }
+  if (noiseAnchorsErr) {
+    html += \`<div class="error-banner" style="margin-bottom:14px;">
+      <div class="error-banner-title">⚠ 噪音词加载失败</div>
+      <div class="error-banner-body">\${escapeHtml(noiseAnchorsErr.message)}</div>
+    </div>\`;
+  }
+
+  // Candidates section
+  html += \`
+  <div class="entity-section">
+    <div class="entity-section-title">
+      候选实体
+      <span class="count">\${candidatesList.length}</span>
+    </div>\`;
+
+  if (loadingCandidates) {
+    html += \`<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>\`;
+  } else if (!candidatesList.length && !noiseList.length) {
+    html += \`<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无候选实体</div>\`;
+  } else {
+    // Render candidates
+    const allEntities = [...candidatesList, ...noiseList.map(n => ({ ...n, _fromNoise: true }))];
+    for (const entity of allEntities) {
+      const isNoise = entity._fromNoise;
+      const loading = isEntityLoading(entity.name);
+      const conf = entity.confidence != null ? \`\${(entity.confidence * 100).toFixed(0)}%\` : '—';
+      const freq = entity.frequency != null ? entity.frequency : '—';
+      const firstSeen = entity.first_seen ? fmtTime(entity.first_seen) : '—';
+      html += \`
+      <div class="entity-card">
+        <div class="entity-card-header">
+          <div class="entity-card-name">\${escapeHtml(entity.name)}</div>
+          \${isNoise ? '<span class="entity-card-badge">噪音</span>' : ''}
+          <span class="entity-card-badge">\${escapeHtml(entity.type || 'unknown')}</span>
+        </div>
+        <div class="entity-card-meta">
+          <span>conf: \${conf}</span>
+          <span>freq: \${freq}</span>
+          <span>source: \${escapeHtml(entity.source || '—')}</span>
+          <span>first_seen: \${firstSeen}</span>
+        </div>
+        <div class="entity-card-actions">
+          <button class="btn success-btn" data-action="approve" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="采纳：接受这个实体，以后优先匹配">
+            ✅ 采纳
+          </button>
+          <button class="btn danger-btn" data-action="reject" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="拒绝：删除这个候选，不再出现">
+            ❌ 拒绝
+          </button>
+          <button class="btn warning-btn" data-action="noise-add" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="加噪音词：标记为噪音词，以后遇到相似词自动过滤">
+            ➕ 加噪音词
+          </button>
+          <button class="btn info-btn" data-action="noise-remove" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="删噪音词：移除噪音标记，恢复为正常候选">
+            ➖ 删噪音词
+          </button>
+        </div>
+      </div>\`;
+    }
+  }
+  html += \`</div>\`;
+
+  // Noise Anchors section
+  html += \`
+  <div class="entity-section">
+    <div class="entity-section-title">
+      噪音词 Anchors
+      <span class="count">\${anchorsList.length}</span>
+    </div>\`;
+  if (loadingAnchors) {
+    html += \`<div style="color:var(--text-3);font-size:12px;padding:12px 0;">加载中…</div>\`;
+  } else if (!anchorsList.length) {
+    html += \`<div style="color:var(--text-3);font-size:12px;padding:12px 0;">暂无噪音词</div>\`;
+  } else {
+    html += \`<div class="entity-anchors-wrap">\`;
+    for (const anchor of anchorsList) {
+      const loading = isEntityLoading(anchor);
+      html += \`
+      <div class="noise-anchor-chip">
+        <span>\${escapeHtml(anchor)}</span>
+        <button class="remove-btn" data-action="noise-remove" data-id="\${escapeHtml(anchor)}" title="删除噪音词" \${loading ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>✕</button>
+      </div>\`;
+    }
+    html += \`</div>\`;
+  }
+  html += \`</div>\`;
+
+  html += \`</div>\`; // end entity-review-wrap
+  c.innerHTML = html;
+
+  // Bind action buttons
+  c.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const action = btn.dataset.action;
+      const name = btn.dataset.id;  // data-id 持有 entity name (worker API 期望 name 参数)
+      await doEntityAction(action, name);
+    });
+  });
+}
+
+async function refreshEntityReview() {
+  try {
+    STATE.entityReviewCandidates = await fetchEntityReviewCandidates();
+    STATE.entityReviewCandidatesErr = null;
+  } catch (e) {
+    STATE.entityReviewCandidatesErr = { message: e.message || String(e) };
+  }
+  try {
+    STATE.entityReviewNoiseAnchors = await fetchEntityReviewNoiseAnchors();
+    STATE.entityReviewNoiseAnchorsErr = null;
+  } catch (e) {
+    STATE.entityReviewNoiseAnchorsErr = { message: e.message || String(e) };
+  }
+  renderEntityReview();
+}
+
+function renderDashTab() {
+  document.querySelectorAll('.dash-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === STATE.dashTab));
+  document.querySelectorAll('.dash-pane-inner').forEach(el => el.classList.toggle('active', el.id === 'pane-' + STATE.dashTab));
+  if (STATE.dashTab === 'overview') renderOverview();
+  else if (STATE.dashTab === 'data') renderData();
+  else if (STATE.dashTab === 'logs') renderLogs();
+  else if (STATE.dashTab === 'health') renderHealth();
+  else if (STATE.dashTab === 'entity-review') renderEntityReview();
+}
+
+document.querySelectorAll('.dash-tab').forEach(el => {
+  el.addEventListener('click', () => {
+    STATE.dashTab = el.dataset.tab;
+    renderDashTab();
+    if (STATE.dashTab === 'entity-review' && !STATE.entityReviewCandidates && !STATE.entityReviewCandidatesErr) {
+      refreshEntityReview();
+    }
+  });
+});
+
+async function refreshDashboard() {
+  if (!isConfigured()) { openSettings(); return; }
+  STATE.loading = true;
+  STATE.healthErr = null; STATE.news7dErr = null;
+  STATE.entityErr = null; STATE.eventErr = null;
+  if (STATE.dashTab === 'overview') renderOverview();
+  updateStatus();
+  try {
+    STATE.health = await fetchHealth();
+    document.getElementById('dash-count').textContent = STATE.health.worker_version || '✓';
+  } catch (e) {
+    STATE.healthErr = { message: e.message || String(e) };
+    document.getElementById('dash-count').textContent = '!';
+  }
+  try { STATE.news7d = await fetchNews7d(); }
+  catch (e) { STATE.news7dErr = { message: e.message || String(e) }; STATE.news7d = []; console.error('[fix 4-2] fetchNews7d 失败:', e.message); }
+  try { STATE.entity = await fetchEntity(); }
+  catch (e) { STATE.entityErr = { message: e.message || String(e) }; STATE.entity = null; }
+  try { STATE.event = await fetchEvent(); }
+  catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
+  // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
+  // 切 tab 不刷新走马灯 (用户反馈)
+  if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
+    try { updateTicker(await fetchTickerNews()); }
+    catch (e) { console.error('[fix 4-3] fetchTickerNews 失败:', e.message); }
+  }
+  STATE.loading = false;
+  updateStatus();
+  renderDashTab();
+  toast('已刷新', 'success');
+}
+
+/* ============================================================
+ * READER module
+ * ============================================================ */
+async function fetchReaderNews() {
+  // v0.36.10.3: 全量循环分页 (Worker pull 上限 200/次, offset 翻页)
+  // 进度回调: onProgress(currentCount, batchCount) → refreshReader 实时更新"X 条 · 拉取中..." 文本
+  const cfg = getConfig();
+  const start = performance.now();
+  const pageSize = Math.min(STATE.filters.limit, 200); // Worker hard cap 200
+  const allItems = [];
+  let offset = 0;
+  let total = 0;
+  let pageCount = 0;
+  let truncated = false;
+  while (true) {
+    const params = new URLSearchParams({
+      action: 'pull', type: 'news', format: 'full',
+      limit: String(pageSize),
+      offset: String(offset),
+      order: STATE.filters.sort === 'hot' ? 'desc' : STATE.filters.sort,
+      order_by: STATE.filters.sort === 'hot' ? 'hot_score' : 'created_at'
+    });
+    // fix 6-8: 不传 level/category filter 给 API · 拉全量 (134 条) 存 STATE.allItems
+    // 客户端按 filter 过滤 (点 important → feed 显示 32 条 · sidebar 数字仍基于全量 134)
+    // 用户 21:23 反馈 "点 important 后 全部 134 变成 32" 真根因
+    if (STATE.filters.since) params.set('since', STATE.filters.since);
+    const url = \`\${cfg.baseUrl.replace(/\\/+$/, '')}/?\${params.toString()}\`;
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || \`HTTP \${res.status}\`);
+    const items = data.items || [];
+    allItems.push(...items);
+    total = data.total || allItems.length;
+    truncated = data.truncated || false;
+    pageCount++;
+    // 进度回调 (UI 实时显示)
+    if (typeof STATE._fetchProgress === 'function') {
+      STATE._fetchProgress(allItems.length, total, pageCount);
+    }
+    // 终止条件: 本批 < pageSize (没更多) 或 全量已拿
+    if (items.length < pageSize || allItems.length >= total) break;
+    offset += pageSize;
+    // 安全护栏: 最多拉 50 页 (10000 条), 防无限循环
+    if (pageCount >= 50) break;
+  }
+  const elapsed = Math.round(performance.now() - start);
+  return { items: allItems, total, truncated, elapsed, pageCount };
+}
+
+async function fetchReaderContent(id) {
+  // 优先复用内存缓存
+  if (STATE.contentCache.has(id)) return STATE.contentCache.get(id);
+
+  // 优先从已加载的 STATE.items 取 summary（来自 pull endpoint format=full，Reader 初始化时已全量拉取）
+  // 比调 content 端点更可靠（不依赖额外 token，不跨域，不走 R2 读路径）
+  const item = STATE.items.find(it => it.id === id);
+  if (item) {
+    const lines = [];
+    lines.push(\`来源: \${item.source || '?'} · \${item.category || '未知分类'}\`);
+    lines.push(\`热度: hot_score=\${item.hot_score ?? '?'} · score=\${item.score ?? '?'} · level=\${item.level ?? '?'}\`);
+    if (item.topic_id) lines.push(\`话题: \${item.topic_id}\`);
+    lines.push(\`入库时间: \${item.published_at || item.created_at || '?'}\`);
+    if (item.url) lines.push(\`原文链接: \${item.url}\`);
+    if (item.summary) {
+      lines.push('');
+      lines.push('— 摘要 —');
+      lines.push(item.summary);
+    } else {
+      lines.push('');
+      lines.push('⚠️ 该新闻暂无摘要。如需全文请访问上方原文链接。');
+    }
+    const text = lines.join('\\n');
+    STATE.contentCache.set(id, text);
+    return text;
+  }
+
+  // 兜底: 调 content 端点（需要 Bearer Token；R2 不存正文，仅返元数据 + notice）
+  const cfg = getConfig();
+  const url = \`\${cfg.baseUrl.replace(/\\/+$/, '')}/?action=content&id=\${encodeURIComponent(id)}&format=json\`;
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(\`Worker 返回非 JSON 响应 (HTTP \${res.status})，请确认 Token 正确且后端正常\`);
+  }
+  if (!res.ok) throw new Error(data.error || \`HTTP \${res.status}\`);
+
+  // 渲染内容: r2 元数据 (key/title/category/score/level/topic_id/fission/created_at/content_length) + notice (如果 R2 缺失)
+  const lines = [];
+  lines.push(\`来源: \${data.source || '?'} · \${data.category || '未知分类'}\`);
+  lines.push(\`热度: hot_score=\${data.hot_score ?? '?'} · score=\${data.score ?? '?'} · level=\${data.level ?? '?'}\`);
+  if (data.topic_id) lines.push(\`话题: \${data.topic_id}\`);
+  lines.push(\`入库时间: \${data.created_at || '?'}\`);
+  if (data.url) lines.push(\`原文链接: \${data.url}\`);
+  if (data.r2) {
+    lines.push('');
+    lines.push(\`R2 摘要 (key=\${data.r2.key}):\`);
+    lines.push(JSON.stringify(data.r2, null, 2));
+  }
+  if (data.notice) {
+    lines.push('');
+    lines.push(\`⚠️ \${data.notice}\`);
+  } else if (!data.r2) {
+    lines.push('');
+    lines.push('⚠️ 该新闻 R2 摘要缺失。如需全文请访问上方原文链接。');
+  }
+  const text = lines.join('\\n');
+  STATE.contentCache.set(id, text);
+  return text;
+}
+
+function renderCategoryList(items) {
+  // fix 6-9: 分类 sidebar 按当前所选等级过滤 (用户 21:30 反馈"分类栏没根据等级变化")
+  // 等级 sidebar 永远全量 · 分类 sidebar 基于"全量 ∩ 当前 level filter"
+  // 例: 点 important → 分类 sidebar 显示 4 条 important 的分类分布 (法律 2 / 体育 1 / 综合 1)
+  const scopedItems = STATE.filters.level
+    ? items.filter(it => it.level === STATE.filters.level)
+    : items;
+  const catCount = {};
+  scopedItems.forEach(it => {
+    const c = it.category || '未分类';
+    catCount[c] = (catCount[c] || 0) + 1;
+  });
+  const sorted = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
+  const list = document.getElementById('category-list');
+  list.innerHTML = \`
+    <li class="sidebar-item \${STATE.filters.category === '' ? 'active' : ''}" data-category="">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      <span>\${STATE.filters.level ? '该等级全部分类' : '全部分类'}</span>
+      <span class="count">\${scopedItems.length}</span>
+    </li>
+  \` + sorted.map(([c, n]) => \`
+    <li class="sidebar-item \${STATE.filters.category === c ? 'active' : ''}" data-category="\${escapeHtml(c)}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
+      <span>\${escapeHtml(c)}</span>
+      <span class="count">\${n}</span>
+    </li>\`).join('');
+  list.querySelectorAll('.sidebar-item').forEach(el => {
+    el.addEventListener('click', () => {
+      STATE.filters.category = el.dataset.category || '';
+      renderCategoryList(STATE.items);
+      refreshReader();
+    });
+  });
+}
+
+function renderLevelCounts(items) {
+  const total = items.length;
+  const c = { explosive: 0, important: 0, follow: 0 };
+  items.forEach(it => { if (it.level && c[it.level] !== undefined) c[it.level]++; });
+  document.getElementById('level-all-count').textContent = total;
+  document.getElementById('level-explosive-count').textContent = c.explosive;
+  document.getElementById('level-important-count').textContent = c.important;
+  document.getElementById('level-follow-count').textContent = c.follow;
+}
+
+// fix 6-8: 客户端 filter 函数 (基于 STATE.allItems 全量)
+// 用户 21:23 反馈 "sidebar 数字应该基于全量统计, filter 只影响 feed 列表"
+function applyClientFilters(items) {
+  return items.filter(it => {
+    if (STATE.filters.level && it.level !== STATE.filters.level) return false;
+    if (STATE.filters.category && it.category !== STATE.filters.category) return false;
+    return true;
+  });
+}
+
+function renderFeedSkeleton() {
+  document.getElementById('feed').innerHTML = Array(4).fill(0).map(() => \`
+    <div class="skeleton-card">
+      <div class="skeleton sk-meta">
+        <div class="skeleton sk-tag"></div>
+        <div class="skeleton sk-dot"></div>
+      </div>
+      <div class="skeleton sk-line sk-title"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line" style="width: 60%;"></div>
+    </div>\`).join('');
+}
+
+function renderFeed() {
+  const feed = document.getElementById('feed');
+  const items = STATE.items;
+  // fix 6-13 (): 错误时 result-meta 显示 "最后抓取于 X 分钟前 · 共 N 条 · 错误" (保持 lastFetchedAt 提示, 加错误标记)
+  if (STATE.readerLastError) {
+    const ago = fmtLastFetchedAgo();
+    const agoStr = ago ? \`最后抓取于 \${ago} · \` : '';
+    document.getElementById('result-meta').textContent = \`\${agoStr}共 \${items.length} 条 · 错误\`;
+  } else {
+    updateResultMeta();
+  }
+  if (STATE.readerLastError) {
+    feed.innerHTML = \`
+      <div class="error-banner">
+        <div class="error-banner-title">⚠ 拉取失败</div>
+        <div class="error-banner-body">\${escapeHtml(STATE.readerLastError.message || String(STATE.readerLastError))}</div>
+      </div>\` + (items.length ? renderCardList(items) : \`
+      <div class="state">
+        <div class="state-title">暂时拉不到数据</div>
+        <div class="state-desc">检查网络 / Token / Worker 状态,按 <code>⌘R</code> 重试</div>
+      </div>\`);
+    bindCardClicks();
+    return;
+  }
+  if (!items.length) {
+    feed.innerHTML = \`
+      <div class="state">
+        <svg class="state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        <div class="state-title">没有匹配的新闻</div>
+        <div class="state-desc">换个等级或分类试试,或者按 <code>⌘R</code> 重新拉取</div>
+      </div>\`;
+    return;
+  }
+  feed.innerHTML = renderCardList(items);
+  bindCardClicks();
+}
+
+function renderCardList(items) {
+  return items.map((it, idx) => {
+    const level = it.level || 'follow';
+    const levelLabel = { explosive: '爆炸', important: '重要', follow: '关注' }[level] || level;
+    const isExpanded = STATE.expandedId === it.id;
+    const hot = it.hot_score != null ? Number(it.hot_score).toFixed(1) : null;
+    const title = escapeHtml(it.title);
+    const summary = escapeHtml(it.summary || '');
+    const category = escapeHtml(it.category || '');
+    const source = escapeHtml(it.source || '');
+    const url = escapeHtml(it.url || '');
+    const published = fmtTimeZh(it.published_at || it.created_at);
+    return \`
+      <article class="card \${isExpanded ? 'expanded' : ''}" data-idx="\${idx}" data-id="\${escapeHtml(it.id)}">
+        <div class="card-body">
+          <div class="card-meta">
+            <span class="meta-source">\${source}</span>
+            <span class="badge badge-\${level}">\${levelLabel}</span>
+            \${category ? \`<span class="badge badge-category">\${category}</span>\` : ''}
+            <span class="meta-dot"></span>
+            <span class="meta-time">\${published}</span>
+          </div>
+          <h2 class="card-title">\${title}</h2>
+          \${summary ? \`<div class="card-summary">\${summary}</div>\` : ''}
+          <div class="card-footer">
+            \${hot ? \`<span class="card-hot \${Number(it.hot_score) < 3 ? 'cool' : ''}">🔥 \${hot}</span>\` : ''}
+            <span class="card-action">\${isExpanded ? '收起' : '展开 →'}</span>
+          </div>
+        </div>
+        <div class="card-popup">
+          <div class="popup-content" data-content-for="\${escapeHtml(it.id)}">加载全文中…</div>
+          <div class="popup-actions">
+            \${url ? \`<a class="btn" href="\${url}" target="_blank" rel="noopener noreferrer">原文 ↗</a>\` : ''}
+            <button class="btn ghost" data-copy-curl="\${escapeHtml(it.id)}">复制 cURL</button>
+          </div>
+        </div>
+      </article>\`;
+  }).join('');
+}
+
+function bindCardClicks() {
+  document.querySelectorAll('.card').forEach(card => {
+    const id = card.dataset.id;
+    const body = card.querySelector('.card-body');
+    body.addEventListener('click', () => toggleExpand(id));
+    body.addEventListener('dblclick', () => {
+      const item = STATE.items.find(x => x.id === id);
+      if (item && item.url) window.open(item.url, '_blank', 'noopener,noreferrer');
+    });
+    // v0.37: Reader Float Modal — 点标题抓取原文并浮窗显示
+    const titleEl = card.querySelector('.card-title');
+    if (titleEl) {
+      titleEl.addEventListener('click', e => {
+        e.stopPropagation();
+        const item = STATE.items.find(x => x.id === id);
+        if (item && item.url) openReaderFloat(id, item.url, item.title);
+      });
+    }
+  });
+  // v0.36.12 ("World Engine" (user)微交互): 滚动 reveal — IntersectionObserver 触发 .revealed class
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('revealed');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.feed > .card:not(.revealed)').forEach(el => io.observe(el));
+  } else {
+    // 不支持 IO 直接显示
+    document.querySelectorAll('.feed > .card').forEach(el => el.classList.add('revealed'));
+  }
+  document.querySelectorAll('[data-copy-curl]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.copyCurl;
+      const item = STATE.items.find(x => x.id === id);
+      if (!item) return;
+      const cfg = getConfig();
+      const masked = cfg.token.length > 6 ? cfg.token.slice(0, 4) + '…' + cfg.token.slice(-6) : '***';
+      const curl = \`curl -s "\${cfg.baseUrl}/?action=pull&type=news&format=full&limit=1" \\\\\\n -H "Authorization: Bearer \${masked}"\`;
+      navigator.clipboard.writeText(curl).then(() => toast('cURL 已复制', 'success'));
+    });
+  });
+}
+
+async function toggleExpand(id) {
+  if (STATE.expandedId === id) { STATE.expandedId = null; renderFeed(); return; }
+  STATE.expandedId = id;
+  renderFeed();
+  const el = document.querySelector(\`[data-content-for="\${CSS.escape(id)}"]\`);
+  if (!el) return;
+  if (STATE.contentCache.has(id)) { el.innerHTML = formatContent(STATE.contentCache.get(id)); return; }
+  try {
+    const text = await fetchReaderContent(id);
+    el.innerHTML = formatContent(text);
+  } catch (e) {
+    el.innerHTML = \`<span style="color: var(--danger);">全文加载失败: \${escapeHtml(e.message || String(e))}</span>\`;
+  }
+}
+
+function formatContent(text) {
+  if (!text) return '<span style="color: var(--text-3);">暂无全文</span>';
+  const paras = text.split(/\\n\\n+/).map(p => \`<p>\${escapeHtml(p).replace(/\\n/g, '<br>')}</p>\`);
+  return paras.join('');
+}
+
+/* ============================================================
+ * READER FLOAT MODAL — Readability 浮窗 (v0.37)
+ * 点击标题 → fetch ?action=proxy&url= → 浮窗显示原文
+ * 规范: oklch(11%) + gold border + fade+slide-down 150ms + 关闭按钮 + ESC
+ * ============================================================ */
+
+async function fetchReaderArticle(url) {
+  const cfg = getConfig();
+  const proxyUrl = \`\${cfg.baseUrl.replace(/\\/+$/, '')}/?action=proxy&url=\${encodeURIComponent(url)}\`;
+  const res = await fetch(proxyUrl, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.reason || data.error || \`HTTP \${res.status}\`);
+  }
+  const text = await res.text();
+  return text;
+}
+
+async function openReaderFloat(id, url, title) {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const titleEl = document.getElementById('rfloat-title');
+  const loadingEl = document.getElementById('rfloat-loading');
+  const errorEl = document.getElementById('rfloat-error');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  const sourceEl = document.getElementById('rfloat-source');
+  const sourceLinkEl = document.getElementById('rfloat-source-link');
+  if (!backdrop) return;
+
+  // 显示浮窗
+  backdrop.style.display = 'flex';
+  titleEl.textContent = title ? title.slice(0, 80) : '正文中…';
+  loadingEl.style.display = 'flex';
+  errorEl.style.display = 'none';
+  iframeEl.style.display = 'none';
+  sourceEl.style.display = 'none';
+  backdrop.classList.remove('closing');
+
+  try {
+    const html = await fetchReaderArticle(url);
+    loadingEl.style.display = 'none';
+    iframeEl.style.display = 'block';
+    iframeEl.srcdoc = html;
+    sourceLinkEl.href = url;
+    sourceLinkEl.textContent = url;
+    sourceEl.style.display = 'flex';
+  } catch (e) {
+    loadingEl.style.display = 'none';
+    errorEl.textContent = \`抓取失败: \${e.message || String(e)}\`;
+    errorEl.style.display = 'block';
+  }
+}
+
+function closeReaderFloat() {
+  const backdrop = document.getElementById('reader-float-backdrop');
+  const iframeEl = document.getElementById('rfloat-iframe');
+  if (!backdrop) return;
+
+  // fade-out 动画后再隐藏
+  backdrop.classList.add('closing');
+  backdrop.addEventListener('animationend', () => {
+    backdrop.style.display = 'none';
+    backdrop.classList.remove('closing');
+    iframeEl.srcdoc = '';
+  }, { once: true });
+}
+
+// reader popup dismiss handlers 移到了 trailing <script> 末尾（DOM 渲染完成后才绑）。
+
+async function refreshReader() {
+  if (!isConfigured()) { openSettings(); return; }
+  STATE.readerLoading = true;
+  STATE.readerLastError = null;
+  // fix 6-7: 加载时清 sidebar counts · 避免 race condition 残留旧值 (用户 21:05 反馈"点击分类/等级数字不对")
+  document.getElementById('level-all-count').textContent = '…';
+  document.getElementById('level-explosive-count').textContent = '…';
+  document.getElementById('level-important-count').textContent = '…';
+  document.getElementById('level-follow-count').textContent = '…';
+  renderFeedSkeleton();
+  updateStatus();
+  // 进度回调: 实时显示拉取进度
+  STATE._fetchProgress = (current, total, pageCount) => {
+    document.getElementById('result-meta').textContent =
+      \`拉取中... \${current} / \${total} 条 (第 \${pageCount} 页)\`;
+  };
+  try {
+    const { items, total, truncated, elapsed, pageCount } = await fetchReaderNews();
+    // 截图反馈 4 次同 url 重复: 内存去重按 url + 保留最新 created_at
+    // 历史数据问题 (5-29 之前 ZAKER fetch 没去重), 修法: viewer 端内存去重, 不改 supabase / Worker
+    const deduped = [];
+    const urlMap = new Map();
+    for (const it of items) {
+      const url = it.url || it.id;
+      if (!urlMap.has(url)) {
+        urlMap.set(url, it);
+        deduped.push(it);
+      } else {
+        const existing = urlMap.get(url);
+        const eTs = Date.parse(existing.created_at || '') || 0;
+        const nTs = Date.parse(it.created_at || '') || 0;
+        if (nTs > eTs) {
+          urlMap.set(url, it);
+          const idx = deduped.indexOf(existing);
+          if (idx >= 0) deduped[idx] = it;
+        }
+      }
+    }
+    // fix 6-8: 存全量到 STATE.allItems · 客户端 filter
+    STATE.allItems = deduped;
+    STATE.items = applyClientFilters(deduped);
+    const dupCount = items.length - deduped.length;
+    // fix 6-13 (): 抓取时间戳 + 顶部小字"最后抓取于 X 分钟前 · 共 N 条"
+    STATE.lastFetchedAt = new Date();
+    updateResultMeta();
+    // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
+    renderLevelCounts(STATE.allItems);
+    renderCategoryList(STATE.allItems);
+    renderFeed();
+    toast(dupCount > 0 ? \`已刷新 \${STATE.items.length} 条 (去重 \${dupCount} 条)\` : \`已刷新 \${STATE.items.length} 条\`, 'success');
+  } catch (e) {
+    STATE.readerLastError = { message: e.message || String(e) };
+    renderFeed();
+    toast(\`拉取失败: \${e.message}\`, 'error');
+  } finally {
+    STATE.readerLoading = false;
+    STATE._fetchProgress = null;
+    updateStatus();
+  }
+}
+
+/* ============================================================
+ * Reader bindings
+ * ============================================================ */
+// fix 6-8: sidebar 等级/分类点击 → 客户端 filter (不重拉 API · 数字基于全量)
+// fix 6-9: 切 level 时同步重渲染 category sidebar (按 level 过滤) (用户 21:30 反馈)
+function applyFilterAndRender() {
+  STATE.items = applyClientFilters(STATE.allItems);
+  // 高亮 active class (level)
+  document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
+    x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
+  });
+  // fix 6-13 (): filter 切时同步顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
+  updateResultMeta();
+  // 切 level 时重渲染 category sidebar (按新 level 过滤)
+  renderCategoryList(STATE.allItems);
+  renderFeed();
+}
+document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
+    el.classList.add('active');
+    STATE.filters.level = el.dataset.level || '';
+    applyFilterAndRender(); // 客户端 filter · 不重拉 API
+  });
+});
+document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
+document.getElementById('since-select').addEventListener('change', e => { STATE.filters.since = e.target.value; refreshReader(); });
+// fix 6-1: sidebar 自动响应式 (大屏自动显示/小屏自动折叠 + 手动 toggle 按钮)
+function applySidebarResponsive() {
+  const body = document.querySelector('.reader-body');
+  if (!body) return;
+  if (window.innerWidth >= 1280) {
+    body.classList.add('sidebar-shown');
+  } else {
+    body.classList.remove('sidebar-shown');
+  }
+}
+window.addEventListener('resize', applySidebarResponsive);
+applySidebarResponsive();
+document.getElementById('sidebar-toggle').addEventListener('click', () => {
+  document.querySelector('.reader-body').classList.toggle('sidebar-shown');
+});
+
+/* ============================================================
+ * Settings modal (shared)
+ * ============================================================ */
+function openSettings() {
+  const cfg = getConfig();
+  document.getElementById('cfg-url').value = cfg.baseUrl || '';
+  document.getElementById('cfg-token').value = cfg.token || '';
+  document.getElementById('settings-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('cfg-url').focus(), 50);
+}
+function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+function saveSettings() {
+  try {
+    const baseUrl = document.getElementById('cfg-url').value.trim().replace(/\\/+$/, '');
+    const token = document.getElementById('cfg-token').value.trim();
+    if (!baseUrl) { toast('Worker URL 必填', 'error'); return; }
+    if (!token) { toast('Bearer Token 必填', 'error'); return; }
+    STATE.config = { baseUrl, token };
+    STORAGE.set('config', STATE.config);
+    closeSettings();
+    toast('已保存', 'success');
+    if (STATE.view === 'dashboard') refreshDashboard();
+    else if (STATE.view === 'reader') { refreshReader(); scheduleHourlySync(); }
+  } catch(e) {
+    console.error('saveSettings error:', e);
+    toast('保存失败：' + e.message, 'error');
+    closeSettings();
+  }
+}
+
+/* ============================================================
+ * Help modal
+ * ============================================================ */
+const HELP_GROUPS = [
+  { title: '视图', items: [
+    { keys: ['Dashboard'], desc: 'Overview / Data / Logs / Health 子 tab 验收后端' },
+    { keys: ['Reader'], desc: '新闻时间线 + 全文展开 (sidebar 按等级/分类过滤)' },
+  ]},
+  { title: '导航', items: [
+    { keys: ['⌘', 'R'], desc: '刷新当前视图' },
+    { keys: ['⌘', 'K'], desc: '打开 / 关闭快捷键帮助' },
+    { keys: ['⌘', '?'], desc: '同上 (Windows 友好)' },
+    { keys: ['⌘', ','], desc: '打开设置' },
+    { keys: ['Esc'], desc: '关闭弹窗 / 收起展开卡片 / 关闭浮窗' },
+    { keys: ['1'], desc: '切换到 Dashboard' },
+    { keys: ['2'], desc: '切换到 Reader (新闻时间线)' },
+  ]},
+  { title: 'Dashboard', items: [
+    { keys: ['Overview'], desc: '4 KPI 卡 + 趋势图 + 最近活动,一眼看出后端跑得好不好' },
+    { keys: ['Data'], desc: '22 个 endpoint 可直接调用,填参数 → ↵ 触发' },
+    { keys: ['Logs'], desc: '按 date/hour 查 R2 持久化日志' },
+    { keys: ['Health'], desc: '9 维度健康检查 + Supabase + R2 + AI Budget 详细' },
+  ]},
+  { title: 'Reader', items: [
+    { keys: ['Click'], desc: '展开 / 收起卡片全文' },
+    { keys: ['Double'], desc: '在原文链接打开' },
+    { keys: ['Sidebar'], desc: '点击等级 / 分类切换过滤' },
+  ]},
+];
+
+function openHelp() {
+  const body = document.getElementById('help-body');
+  body.innerHTML = \`
+    <div style="color: var(--text-2); font-size: 12.5px; margin-bottom: 14px;">
+      本工具 <code style="font-family: var(--font-mono); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">100% 本地</code>,Token 不离开浏览器。
+    </div>
+    \${HELP_GROUPS.map(g => \`
+      <div class="help-section-title">\${g.title}</div>
+      \${g.items.map(it => \`
+        <div class="help-row">
+          <div class="help-keys">\${it.keys.map(k => \`<span class="kbd">\${k}</span>\`).join('<span style="color:var(--text-3); font-size:11px;">+</span>')}</div>
+          <div class="help-desc">\${it.desc}</div>
+        </div>\`).join('')}
+    \`).join('')}\`;
+  document.getElementById('help-modal').style.display = 'flex';
+}
+function closeHelp() { document.getElementById('help-modal').style.display = 'none'; }
+
+/* ============================================================
+ * Bindings
+ * ============================================================ */
+// Modal-related bindings (settings / help) are attached at the bottom of <body>
+// AFTER the modal HTML exists — see trailing <script> at the end of this file.
+// (Earlier inline bindings threw TypeError because the modal markup loaded after
+// this script ran, leaving every settings-* / help-* button dead.)
+
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '?')) {
+    e.preventDefault();
+    const hm = document.getElementById('help-modal');
+    hm.style.display === 'flex' ? closeHelp() : openHelp();
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+    e.preventDefault();
+    if (STATE.view === 'dashboard') refreshDashboard();
+    else refreshReader();
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); return; }
+  // 1/2 — Dashboard / Reader view switch (when not in input)
+  if (!(e.metaKey || e.ctrlKey || e.altKey) && !['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
+    if (e.key === '1') switchView('dashboard');
+    else if (e.key === '2') switchView('reader');
+  }
+  if (e.key === 'Escape') {
+    const hm = document.getElementById('help-modal');
+    const sm = document.getElementById('settings-modal');
+    if (hm.style.display === 'flex') { closeHelp(); return; }
+    if (sm.style.display === 'flex') { closeSettings(); return; }
+    if (STATE.view === 'reader' && STATE.expandedId) { STATE.expandedId = null; renderFeed(); }
+  }
+});
+
+/* ============================================================
+ * Boot
+ * ============================================================ */
+updateStatus();
+if (isConfigured()) {
+  refreshDashboard();
+} else {
+  setTimeout(openSettings, 400);
+}
+</script>
+
+<!-- ============ SETTINGS MODAL ============ -->
+<div class="modal-backdrop" id="settings-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="设置">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ 设置</span>
+      <button class="btn ghost" id="settings-close" title="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <div class="field-label">Worker URL</div>
+        <input class="field-input" id="cfg-url" type="url" placeholder="https://your-worker.workers.dev/api/v1" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <div class="field-label">Bearer Token</div>
+        <input class="field-input" id="cfg-token" type="password" placeholder="你的 Bearer Token" autocomplete="off">
+      </div>
+      <p style="margin-top:10px;font-size:11px;color:var(--text-3);line-height:1.5;">
+        Token 仅存在浏览器 localStorage，不上传任何服务器。
+      </p>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" id="settings-cancel">取消</button>
+      <button class="btn primary" id="settings-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HELP MODAL ============ -->
+<div class="modal-backdrop" id="help-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="帮助">
+  <div class="modal" style="width:520px;">
+    <div class="modal-header">
+      <span class="modal-title">⌨️ 快捷键</span>
+      <button class="btn ghost" id="help-close" title="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="help-body"></div>
+  </div>
+</div>
+
+<!-- ============ READER FLOAT MODAL ============ -->
+<div class="reader-float-backdrop" id="reader-float-backdrop" style="display:none;" role="dialog" aria-modal="true" aria-label="新闻全文">
+  <div class="reader-float">
+    <div class="reader-float-header">
+      <div class="reader-float-title" id="rfloat-title">正文中…</div>
+      <button class="reader-float-close" id="rfloat-close" title="关闭 (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="reader-float-body">
+      <div class="reader-float-loading" id="rfloat-loading">
+        <div class="reader-float-loading-spinner"></div>
+        <span>加载全文中…</span>
+      </div>
+      <div class="reader-float-error" id="rfloat-error" style="display:none;"></div>
+      <div class="reader-float-content">
+        <iframe id="rfloat-iframe" style="display:none;" sandbox="allow-scripts allow-same-origin allow-forms" title="新闻全文"></iframe>
+      </div>
+    </div>
+    <div class="reader-float-source" id="rfloat-source" style="display:none;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span>来源:</span>
+      <a id="rfloat-source-link" href="#" target="_blank" rel="noopener noreferrer">—</a>
+    </div>
+    <div class="reader-float-footer">
+      <span>按</span><span class="kbd">Esc</span><span>或点击背景关闭</span>
+    </div>
+  </div>
+</div>
+</body>
+<script>
+// Re-attach event listeners (settings/help modal HTML is loaded after inline JS executes;
+// bind at end of body to ensure elements exist when listeners are wired).
+// Note: the inline <script> block above contains the function definitions used by these
+// listeners, so it must remain before this trailing <script> tag.
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-close').addEventListener('click', closeSettings);
+document.getElementById('settings-cancel').addEventListener('click', closeSettings);
+document.getElementById('settings-save').addEventListener('click', saveSettings);
+document.getElementById('help-btn').addEventListener('click', openHelp);
+document.getElementById('help-close').addEventListener('click', closeHelp);
+document.getElementById('refresh-btn').addEventListener('click', () => {
+  if (STATE.view === 'dashboard') refreshDashboard();
+  else if (STATE.view === 'reader') refreshReader();
+});
+['settings-modal', 'help-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target.id === id) document.getElementById(id).style.display = 'none';
+  });
+});
+
+// reader popup dismiss handlers —
+// rfloat-close / reader-float-backdrop 元素定义在 reader-float modal HTML 里，
+// 在第一个内联 <script> 之后才出现在 DOM，绑定必须放在 trailing script 里（DOM ready）。
+document.getElementById('rfloat-close')?.addEventListener('click', closeReaderFloat);
+document.getElementById('reader-float-backdrop')?.addEventListener('click', e => {
+  if (e.target.id === 'reader-float-backdrop') closeReaderFloat();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('reader-float-backdrop')?.style.display === 'flex') {
+    closeReaderFloat();
+  }
+});
+</script>
+</html>
+`;
