@@ -74,6 +74,14 @@ export async function loadNoiseAnchors(env: Env): Promise<NoiseAnchorsData> {
 }
 
 /**
+ * 写 R2 noise anchors (review 增删入口 · 2026-07-03 entity review UX 修复)
+ * 对称 loadNoiseAnchors: noise-add / noise-remove 都需要 persist
+ */
+export async function saveNoiseAnchors(env: Env, data: NoiseAnchorsData): Promise<void> {
+  await env.csnews_raw.put(ENTITY_NOISE_ANCHORS_R2_KEY, JSON.stringify(data, null, 2));
+}
+
+/**
  * 计算 candidate vs anchors 的最大 cosine similarity
  * 返回 0-1, 越大越像 noise
  */

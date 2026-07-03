@@ -15,7 +15,7 @@ import { Env, jsonResponse } from './shared';
 import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 import { logEvent } from './log';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
-import { loadNoiseAnchors } from './entity-noise-filter';
+import { loadNoiseAnchors, saveNoiseAnchors } from './entity-noise-filter';
 import { runEventProcess, EVENT_CLUSTERS_R2_KEY } from './event-process';
 import { recordReview, loadThresholdHistory } from './event-threshold';
 import { runEventClustering, type EventCluster } from './event-cluster';
@@ -320,23 +320,25 @@ export async function handleEntityAction(
       mutate: (json) => {
         const inNoise = json.noise.findIndex((e: any) => e.name === entityName);
         const inCandidates = json.candidates.findIndex((e: any) => e.name === entityName);
-        const src = inNoise >= 0 ? json.noise[inNoise] : json.candidates[inCandidates];
-        const approvedEntity = {
-          name: entityName,
-          type: src.type,
-          confidence: 0.9,
-          source: 'review' as const,
-          first_seen: src.first_seen,
-          last_seen: new Date().toISOString(),
-          mention_count: src.mention_count || 1,
-        };
+        // 2026-07-03 UX fix: approve 后 从 candidates/noise 移除 (user 不 再 想看)
+        // 之前 buggy 行为: map 跟 push,  保留 在 candidates 列表 · user 采纳后 仍 显示 同 名字
+        // 现在 改: inNoise < 0 (典型 candidate case) → filter 移除; inNoise >= 0 (noise case) → 推回 candidates (作为 approved 实体)
         return {
           candidates:
             inNoise >= 0
-              ? [...json.candidates, approvedEntity]
-              : json.candidates.map((e: any) =>
-                  e.name === entityName ? { ...e, source: 'review' as const, confidence: 0.9 } : e
-                ),
+              ? [
+                  ...json.candidates.filter((_: any, i: number) => i !== inCandidates),
+                  {
+                    name: entityName,
+                    type: json.noise[inNoise].type,
+                    confidence: 0.9,
+                    source: 'review' as const,
+                    first_seen: json.noise[inNoise].first_seen,
+                    last_seen: new Date().toISOString(),
+                    mention_count: json.noise[inNoise].mention_count || 1,
+                  },
+                ]
+              : json.candidates.filter((_: any, i: number) => i !== inCandidates),
           noise:
             inNoise >= 0 ? json.noise.filter((_: any, i: number) => i !== inNoise) : json.noise,
         };
@@ -378,20 +380,33 @@ export async function handleEntityAction(
         cors,
         { status: 409 }
       );
-    const noiseEntity = {
-      ...json.candidates[inCandidates],
-      first_seen: json.candidates[inCandidates].first_seen || new Date().toISOString(),
-    };
+    // 2026-07-03 UX fix: noise-add 同步 写入 entity-noise-anchors.json.anchors
+    // 之前 buggy 行为: 只 写 candidates.noise 数组,  但 viewer 底部 "噪音词 Anchors" panel 是 从 entity-noise-anchors.json 读
+    // → user 添加 noise 后 底部 看不 到新增 · 跟 Bug 2 一致
+    // 现在 改: 从 candidates 移除 + 写 entity-noise-anchors.json (底部 panel 看到) + 保留 candidates.noise 旧 行为 (算法 用)
     await writeCandidatesJson(env, {
       ...json,
       candidates: json.candidates.filter((_: any, i: number) => i !== inCandidates),
-      noise: [...(json.noise || []), noiseEntity],
+      noise: [
+        ...(json.noise || []),
+        {
+          ...json.candidates[inCandidates],
+          first_seen: json.candidates[inCandidates].first_seen || new Date().toISOString(),
+        },
+      ],
     });
+    // 同步 写入 entity-noise-anchors.json.anchors (user 看到 底部 panel 新增)
+    const anchorsData = await loadNoiseAnchors(env);
+    if (!anchorsData.anchors.includes(entityName)) {
+      anchorsData.anchors.push(entityName);
+      anchorsData.updated_at = new Date().toISOString();
+      await saveNoiseAnchors(env, anchorsData);
+    }
     triggerEventRecluster(env);
     return jsonResponse(
       {
         type: 'noise-add',
-        description: 'review 标记 entity 为 noise → 触发 event re-clustering',
+        description: 'review 标记 entity 为 noise → 触发 event re-clustering + 同步 写入 anchors',
         entity: entityName,
         reclustering: 'triggered',
       },
@@ -400,8 +415,54 @@ export async function handleEntityAction(
   }
 
   if (type === 'noise-remove') {
+    // 2026-07-03 UX fix: 先 check entity-noise-anchors.json.anchors (底部 ✕ 按钮 entry point)
+    // 之前 buggy 行为: 只 check candidates.noise 数组,  user 点 底部 ✕ 报 NOT_FOUND (Bug 3)
+    // 现在 改:
+    //   1. 先 check entity-noise-anchors.json.anchors (底部 panel 来源) → 找到 则 从 anchors 移除 + 加回 candidates
+    //   2. fall back check candidates.noise (旧 路径) → 找到 则 恢复 candidates
+    //   3. 都没 找到 → 404
+
+    // 1. check entity-noise-anchors.json.anchors
+    const anchorsData = await loadNoiseAnchors(env);
+    const inAnchors = anchorsData.anchors.indexOf(entityName);
+    if (inAnchors >= 0) {
+      anchorsData.anchors = anchorsData.anchors.filter((_, i) => i !== inAnchors);
+      anchorsData.updated_at = new Date().toISOString();
+      await saveNoiseAnchors(env, anchorsData);
+      // 同步 恢复 到 candidates (user 可 重新 审核)
+      const json = await readCandidatesJson(env);
+      const inCandidates = json.candidates?.findIndex((e: any) => e.name === entityName) ?? -1;
+      if (inCandidates === -1) {
+        // candidates 还没 该 实体 · 重新 加入 minimal entry (selflearn 重 run 时会 补充 full data)
+        await writeCandidatesJson(env, {
+          ...json,
+          candidates: [
+            ...(json.candidates || []),
+            {
+              name: entityName,
+              type: 'unknown',
+              confidence: 0.5,
+              source: 'selflearn',
+              first_seen: new Date().toISOString(),
+            },
+          ],
+        });
+      }
+      triggerEventRecluster(env);
+      return jsonResponse(
+        {
+          type: 'noise-remove',
+          description: 'review 取消 noise 标记 (from anchors) → 触发 event re-clustering',
+          entity: entityName,
+          reclustering: 'triggered',
+        },
+        cors
+      );
+    }
+
+    // 2. fall back: check candidates.noise (auto-detected noise)
     const json = await readCandidatesJson(env);
-    const inNoise = json.noise.findIndex((e: any) => e.name === entityName);
+    const inNoise = json.noise?.findIndex((e: any) => e.name === entityName) ?? -1;
     if (inNoise === -1)
       return jsonResponse(
         { error: 'not_found', reason: `noise 列表中没有 "${entityName}"` },
@@ -418,7 +479,7 @@ export async function handleEntityAction(
     return jsonResponse(
       {
         type: 'noise-remove',
-        description: 'review 取消 noise 标记 → 触发 event re-clustering',
+        description: 'review 取消 noise 标记 (from candidates.noise) → 触发 event re-clustering',
         entity: entityName,
         reclustering: 'triggered',
       },
