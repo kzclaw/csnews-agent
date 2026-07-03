@@ -21,6 +21,10 @@ import { handleHealthAction } from './health-main';
 import { handleLogsAction } from './logs';
 import { handleAiUsageAction } from './ai-usage';
 import { runTavilyPipeline } from './tavily';
+// v0.37.36 (董事长 2026-07-04 拍板): Score 自适应 + Fission 接力赛 触发
+import { getCurrentScoreThreshold } from './score-threshold';
+import { triggerFissionFromTopics } from './fission-trigger';
+import { logEvent } from './log';
 export { handleHealthAction, handleLogsAction, handleAiUsageAction };
 
 export async function handleProcessAction(
@@ -149,6 +153,41 @@ export async function handleProcessAction(
           : `${r2Writes}/${results.length} items wrote to R2 (new angles). ${r2Skipped} skipped (repeats / lightweight) — normal.`,
     };
 
+    // v0.37.36 (董事长 2026-07-04 拍板): 决策 1+3 实施 — process 完后 立即 触发 fission (sync · 等 fission 跑完 返)
+    // 触发 条件: level='explosive' AND score >= current_score_threshold (从 R2 score-threshold-history.json 读 · 自适应 默认 9)
+    // 失败 fallback: 6h cron 兜底 (决策 2)
+    let fissionTriggerResult: { ok: boolean; status?: number; reason?: string; topic_count?: number } = {
+      ok: false,
+      reason: 'no_triggerable_topic',
+    };
+    try {
+      const currentThreshold = await getCurrentScoreThreshold(env);
+      const triggerableTopics = results
+        .filter((r: any) => r.level === 'explosive' && (r.score ?? 0) >= currentThreshold)
+        .map((r: any) => ({ name: r.title, title: r.title, score: r.score }));
+      if (triggerableTopics.length > 0 && env.FISSION) {
+        const r = await triggerFissionFromTopics(env, triggerableTopics, 'post-process-immediate');
+        fissionTriggerResult = {
+          ok: r.ok,
+          status: r.status,
+          reason: r.ok ? 'triggered' : (r.error || r.reason || 'unknown'),
+          topic_count: triggerableTopics.length,
+        };
+      } else if (triggerableTopics.length === 0) {
+        fissionTriggerResult = { ok: true, reason: 'no_explosive_topics', topic_count: 0 };
+      } else {
+        fissionTriggerResult = { ok: false, reason: 'FISSION_binding_missing', topic_count: triggerableTopics.length };
+      }
+    } catch (e: any) {
+      // 决策 2: 失败 fallback → 6h cron 兜底 (不 propagate error to user)
+      fissionTriggerResult = { ok: false, reason: e?.message || String(e) };
+      try {
+        await logEvent(env, 'error', `[fission-trigger] post-process failed: ${e?.message || e}`, undefined, 'process');
+      } catch {
+        // ignore logging error
+      }
+    }
+
     return jsonResponse(
       {
         // v0.37.17 (v0.37.17 board decision): worker_version 由 ?action=health 端点从 PROCESS_STATE KV 读,
@@ -164,6 +203,8 @@ export async function handleProcessAction(
         // whether the R2 skip pattern is "all duplicates" (normal) vs
         // "0% writes" (suspicious — would need investigation).
         last_process_stored_reason: lastProcessStoredReason,
+        // v0.37.36: Fission Service Bindings 接力赛 触发 结果
+        fission_trigger: fissionTriggerResult,
       },
       cors
     );

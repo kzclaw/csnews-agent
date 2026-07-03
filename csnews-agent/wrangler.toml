@@ -27,14 +27,14 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.35"
+WORKER_VERSION = "v0.37.36"
 # v0.37.18 (方案 4 拍板): WORKER_VERSION 由顶层 .husky/pre-commit hook 自动 bump tag (v0.37.x+1).
 # 跟 v0.37.17 KV 注入方案说再见 (那条路 token 权限不够, 走不通). tag 在 post-commit hook 立刻 git tag 绑回.
 # 起点 = v0.37.18 (因为 changelog 上次更新到 v0.37.17). (拍板时间 in changelog v0.37.18 row.)
 
 [triggers]
 # 4/5 cron 槽位（CF 账户上限 5 · csnews-fission 用 1 + csnews-agent 用 4）
-# 董事长 2026-07-02 00:17 push back: "CSNEWS-fission 1 cron + CSNEWS-agent 4 cron = 5 满了"
+# 董事长 2026-07-02 00:17 push back: "CSNEWS-fission 1 cron + CSnews-agent 4 cron = 5 满了"
 # 14 天来 0 1 1 * * archive cron 部署永远失败 (schedules API 5/5 满)
 # 删 archive · 4/5 留 1 空位给 csnews-fission 扩展或未来新功能
 # 0 * * * *          → scheduledProcess: ZAKER + Tavily + knowledge（每小时 00 分 UTC）
@@ -47,6 +47,15 @@ crons = [
   "0 4 * * *",
   "0 0 * * *",
 ]
+
+# v0.37.36 (董事长 2026-07-04 拍板): Service Binding · 接力赛 模式
+# 限制: CF Free Plan cron 5/账号 已 满, 不能 加 cron 立即 触发 fission
+# 解法: 加 [[services]] binding FISSION → csnews-fission
+#       主 worker 跑完 process 立即 env.FISSION.fetch(url) sync 触发
+#       失败 不 propagate (logEvent + 6h cron 兜底)
+[[services]]
+binding = "FISSION"
+service = "csnews-fission"
 
 # v0.37.13 (a5a31b0 deployment failed): 加 observability 暴露 console.error
 # 之前 14 天 R2 写入 broken · saveToR2 console.error 看不到是因为 wrangler.toml 缺 [observability] 块

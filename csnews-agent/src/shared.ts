@@ -56,6 +56,21 @@ export interface Env {
   AI_BUDGET_WARNING_THRESHOLD?: number;
   AI_BUDGET_CRITICAL_THRESHOLD?: number;
   AI_BUDGET_SHUTDOWN_THRESHOLD?: number;
+
+  /**
+   * Service Binding · Fission Worker (v0.37.36)
+   *
+   * 接力赛 模式 (v0.37.36 拍板):
+   *   - 主 worker 跑完 process 立即 触发 fission (不 等 整点)
+   *   - Service Bindings 走 account-level 资源 · 不 占 CF Free Plan 5 cron 限制
+   *   - env.FISSION.fetch(url) sync 调用 · 主 worker 等 fission 跑完 再 返回
+   *   - 失败 不 propagate · 6h cron 兜底
+   *
+   * 类型 用 Fetcher (跟 Cloudflare Workers Service Bindings 标准)
+   * wrangler.toml 配 [[services]] binding = "FISSION" service = "csnews-fission"
+   * (Cron Trigger 5/5 已 满,  不能 加 cron,  Service Bindings 是 唯一 不需 cron 的 触发 方式)
+   */
+  FISSION?: Fetcher;
 }
 
 export function getSupabaseHost(env: Env): string {
