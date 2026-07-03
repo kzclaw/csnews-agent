@@ -18,6 +18,7 @@ export function supabaseHeaders(env: Env): Record<string, string> {
 }
 import { AI_ROUTE_R_THRESHOLD } from './score';
 import { ENTITY_FINALIZED_R2_KEY } from './entity-process';
+import { ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 import { EVENT_CLUSTERS_R2_KEY } from './event-process';
 import type { LlamaAIResponse } from './types';
 
@@ -169,13 +170,17 @@ export async function incrementHitCounter(
 /**
  * 读 entity-candidates.json (含 candidates + noise 数组)
  * 失败 throw，供 caller 的 try/catch 处理
+ *
+ * 2026-07-03 bug fix: 改用 ENTITY_CANDIDATES_R2_KEY const (跟 entity-selflearn writer / endpoints-entity reader / entity-process reader 一致),
+ * 移除 hard-coded 'entity/entity-candidates.json' (多了 'entity/' prefix, R2 实际 key 是 'entity-candidates.json' 无 prefix,
+ * 导致 4 个 mutation handler 全部 throw "not found" → HTTP 500).
  */
 export async function readCandidatesJson(env: Env): Promise<{
   candidates: any[];
   noise: any[];
   generated_at: string;
 }> {
-  const obj = await env.csnews_raw.get('entity/entity-candidates.json');
+  const obj = await env.csnews_raw.get(ENTITY_CANDIDATES_R2_KEY);
   if (!obj) throw new Error('entity-candidates.json not found');
   return obj.json<{ candidates: any[]; noise: any[]; generated_at: string }>();
 }
@@ -188,7 +193,7 @@ export async function writeCandidatesJson(
   json: { candidates: any[]; noise: any[]; generated_at: string }
 ): Promise<void> {
   await env.csnews_raw.put(
-    'entity/entity-candidates.json',
+    ENTITY_CANDIDATES_R2_KEY,
     JSON.stringify({ ...json, generated_at: new Date().toISOString() }, null, 2)
   );
 }
