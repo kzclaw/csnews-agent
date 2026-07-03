@@ -2721,20 +2721,21 @@ async function fetchEntityReviewNoiseAnchors() {
   return apiGet('/', { action: 'entity', type: 'noise-anchors' });
 }
 
-async function doEntityAction(type, id) {
+async function doEntityAction(type, name) {
   if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
   STATE.entityReviewLoading = STATE.entityReviewLoading || new Set();
-  STATE.entityReviewLoading.add(id);
+  STATE.entityReviewLoading.add(name);
   renderEntityReview();
   try {
-    const result = await apiGet('/', { action: 'entity', type, ...(id ? { id } : {}) });
+    // worker 端 ?action=entity&type=... 期望 ?name=xxx 参数 (R2 entity-candidates.json 是 name-keyed, 没有 uuid 字段)
+    const result = await apiGet('/', { action: 'entity', type, ...(name ? { name } : {}) });
     toast(`${type} 成功`, 'success');
     return result;
   } catch (e) {
     toast(`${type} 失败: ${e.message}`, 'error');
     return null;
   } finally {
-    STATE.entityReviewLoading.delete(id);
+    STATE.entityReviewLoading.delete(name);
     STATE.entityReviewLoading = new Set(STATE.entityReviewLoading);
     // Refresh data after action
     try {
@@ -2810,7 +2811,7 @@ function renderEntityReview() {
     const allEntities = [...candidatesList, ...noiseList.map(n => ({ ...n, _fromNoise: true }))];
     for (const entity of allEntities) {
       const isNoise = entity._fromNoise;
-      const loading = isEntityLoading(entity.uuid);
+      const loading = isEntityLoading(entity.name);
       const conf = entity.confidence != null ? `${(entity.confidence * 100).toFixed(0)}%` : '—';
       const freq = entity.frequency != null ? entity.frequency : '—';
       const firstSeen = entity.first_seen ? fmtTime(entity.first_seen) : '—';
@@ -2828,13 +2829,13 @@ function renderEntityReview() {
           <span>first_seen: ${firstSeen}</span>
         </div>
         <div class="entity-card-actions">
-          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="采纳：接受这个实体，以后优先匹配">
+          <button class="btn success-btn" data-action="approve" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''} title="采纳：接受这个实体，以后优先匹配">
             ✅ 采纳
           </button>
-          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="拒绝：删除这个候选，不再出现">
+          <button class="btn danger-btn" data-action="reject" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''} title="拒绝：删除这个候选，不再出现">
             ❌ 拒绝
           </button>
-          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.uuid)}" ${loading ? 'disabled' : ''} title="加噪音词：标记为噪音词，以后遇到相似词自动过滤">
+          <button class="btn warning-btn" data-action="noise-add" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''} title="加噪音词：标记为噪音词，以后遇到相似词自动过滤">
             ➕ 加噪音词
           </button>
           <button class="btn info-btn" data-action="noise-remove" data-id="${escapeHtml(entity.name)}" ${loading ? 'disabled' : ''} title="删噪音词：移除噪音标记，恢复为正常候选">
@@ -2878,8 +2879,8 @@ function renderEntityReview() {
   c.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
-      const id = btn.dataset.id;
-      await doEntityAction(action, id);
+      const name = btn.dataset.id;  // data-id 持有 entity name (worker API 期望 name 参数)
+      await doEntityAction(action, name);
     });
   });
 }
