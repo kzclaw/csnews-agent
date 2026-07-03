@@ -1441,7 +1441,9 @@ body { word-wrap: break-word; overflow-wrap: anywhere; }
   .sidebar { display: none; }
   .filter-bar { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
   .filter-bar input, .filter-bar select, .filter-bar .btn { font-size: 12.5px; height: 28px; }
-  .feed { padding: 10px 12px 28px; }
+  .feed { padding: 10px 12px 28px; grid-template-columns: 1fr; max-width: 100%; }
+  .feed > .card:first-child { grid-column: 1; }
+  .feed > .card:first-child .card-image { aspect-ratio: 16/9; }
   .card-body { padding: 12px 14px; }
   .card-title { font-size: 15px; line-height: 1.35; }
   .card-meta { font-size: 10.5px; gap: 6px; }
