@@ -189,6 +189,45 @@ export async function handleProcessAction(
       }
     }
 
+    // v0.37.39 (拍板 A): 启用 tavily · process 完后 立即 触发 (跟 fission 同 范式)
+    // 跟 fission trigger 不同: tavily 总是 跑 (不 需要 topic 触发 条件) · 有 key 就 fetch, 没 key 就 graceful guard 返 空
+    // 失败 fallback: 现有 hourly cron 兜底 (manual ?action=tavily endpoint 仍 可用)
+    let tavilyTriggerResult: {
+      ok: boolean;
+      fetched: number;
+      inserted: number;
+      skipped_duplicates: number;
+      errors: string[];
+      elapsed_ms: number;
+      reason: string;
+    } = {
+      ok: false, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: [], elapsed_ms: 0, reason: 'not_called',
+    };
+    try {
+      const tavUrl = new URL('https://internal/?max=5');
+      const tavResp = await runTavilyPipeline(env, tavUrl, cors);
+      const tavBody = (await tavResp.json()) as any;
+      tavilyTriggerResult = {
+        ok: tavResp.ok,
+        fetched: tavBody.fetched ?? 0,
+        inserted: tavBody.inserted ?? 0,
+        skipped_duplicates: tavBody.skipped_duplicates ?? 0,
+        errors: tavBody.errors ?? [],
+        elapsed_ms: tavBody.elapsed_ms ?? 0,
+        reason: tavResp.ok ? 'triggered' : 'http_error',
+      };
+    } catch (e: any) {
+      tavilyTriggerResult = {
+        ok: false, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: [], elapsed_ms: 0,
+        reason: e?.message || String(e),
+      };
+      try {
+        await logEvent(env, 'error', `[tavily-trigger] post-process failed: ${e?.message || e}`, undefined, 'process');
+      } catch {
+        // ignore logging error
+      }
+    }
+
     return jsonResponse(
       {
         // v0.37.17 (v0.37.17 board decision): worker_version 由 ?action=health 端点从 PROCESS_STATE KV 读,
@@ -206,6 +245,8 @@ export async function handleProcessAction(
         last_process_stored_reason: lastProcessStoredReason,
         // v0.37.36: Fission Service Bindings 接力赛 触发 结果
         fission_trigger: fissionTriggerResult,
+        // v0.37.39: Tavily pipeline 接力赛 触发 结果 (跟 fission 同 范式)
+        tavily_trigger: tavilyTriggerResult,
       },
       cors
     );
