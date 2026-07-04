@@ -27,7 +27,7 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.40"
+WORKER_VERSION = "v0.37.41"
 # v0.37.18 (方案 4 拍板): WORKER_VERSION 由顶层 .husky/pre-commit hook 自动 bump tag (v0.37.x+1).
 # 跟 v0.37.17 KV 注入方案说再见 (那条路 token 权限不够, 走不通). tag 在 post-commit hook 立刻 git tag 绑回.
 # 起点 = v0.37.18 (因为 changelog 上次更新到 v0.37.17). (拍板时间 in changelog v0.37.18 row.)

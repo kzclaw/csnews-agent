@@ -451,7 +451,7 @@ body {
 }
 
 /* activity list */
-.activity-list { list-style: none; max-height: 320px; overflow-y: auto; }
+.activity-list { list-style: none; max-height: 600px; overflow-y: auto; }
 .activity-item {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 10px 0; border-bottom: 1px solid var(--hairline);
@@ -2172,8 +2172,8 @@ function updateTicker(items) {
   const html = spans + spans; // 2 次重复 · 配合 CSS translateX(-50%) 无缝
   tracks.forEach(track => track.innerHTML = html);
 }
-async function fetchEntity() { return apiGet('/?action=entity&type=finalized'); }
-async function fetchEvent() { return apiGet('/?action=event&text=__latest__'); }
+async function fetchEntity() { return apiGet('/?action=entity&type=finalized&limit=200'); }
+async function fetchEvent() { return apiGet('/?action=event&text=__latest__&limit=200'); }
 async function fetchLogs(date, hour, limit) {
   const params = { action: 'logs', limit: String(limit) };
   if (date) params.date = date;
@@ -2664,7 +2664,7 @@ function renderOverview() {
         </div>
         <div class="panel-body">
           <ul class="activity-list">
-            \${STATE.entity && STATE.entity.candidates ? (STATE.entity.candidates.slice(0, 5).map(c => \`
+            \${STATE.entity && STATE.entity.candidates ? (STATE.entity.candidates.map(c => \`
               <li class="activity-item">
                 <span class="activity-dot ok"></span>
                 <div class="activity-content">
@@ -2676,7 +2676,7 @@ function renderOverview() {
                   </div>
                 </div>
               </li>\`).join('') || '<li class="activity-item"><div class="activity-content"><div class="activity-title" style="color:var(--text-3);">暂无 entity 数据</div></div></li>') : ''}
-            \${STATE.event && STATE.event.clusters ? (STATE.event.clusters.slice(0, 3).map(c => \`
+            \${STATE.event && STATE.event.clusters ? (STATE.event.clusters.map(c => \`
               <li class="activity-item">
                 <span class="activity-dot warn"></span>
                 <div class="activity-content">
