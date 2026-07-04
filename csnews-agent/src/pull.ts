@@ -90,7 +90,7 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     defaultOrderBy: 'triggered_at',
     allowedOrderBy: ['triggered_at', 'completed_at', 'fission_type', 'status'],
     defaultSelect:
-      'id, topic_id, r2_key, fission_type, status, triggered_at, completed_at, report_content, topics!fission_reports_topic_id_fkey(title)',
+      'id, topic_id, r2_key, fission_type, status, triggered_at, completed_at, report_content',
     allowedFilters: ['status', 'topic_id', 'fission_type'],
     timeField: 'triggered_at',
   },
@@ -509,12 +509,15 @@ async function queryFissionPending(
   return { items: filtered, total: filtered.length };
 }
 
-// ====== v0.37.40 fission-reports 特殊处理 (JOIN topics 取 title) ======
+// ====== v0.37.40 fission-reports 特殊处理 (2 phase query) ======
 
 /**
- * fission-reports 实际是 fission_reports 表 + topics JOIN
- * PostgREST embedded select: `select=...,topics(title)` (FK relationship)
+ * fission-reports 实际是 fission_reports 表 + topics table lookup (Phase 2 batch)
  * 跟 fission-pending 同 范式: 衍生视图,走专用查询
+ * v0.37.43: 删 embed (PostgREST FK alias 冲 突 'topics_1.title' 400) · 改 2 phase query
+ *   Phase 1: select=* from fission_reports (no JOIN, 拿 topic_id list)
+ *   Phase 2: batch select id,title from topics?id=in.(...) (无 FK discovery 依 赖)
+ *   Flatten: item.title = titleMap[item.topic_id] || '(no title)'
  */
 async function queryFissionReports(
   env: Env,
@@ -547,6 +550,8 @@ async function queryFissionReports(
   }
 
   const query = params.join('&');
+
+  // Phase 1: fetch fission_reports rows (no embed, all columns from fission_reports only)
   const res = await supabaseFetch(env, `/rest/v1/fission_reports?${query}`);
   if (!res.ok) {
     const errText = await res.text();
@@ -554,12 +559,25 @@ async function queryFissionReports(
   }
   const rawItems = ((await safeJson(res)) as any[]) || [];
 
-  // postgREST embedded format: items[0].topics = {title: '...'} (single object, NOT array)
-  // 拍平: item.topics?.title -> item.title (viewer 期望 flat structure)
+  // Phase 2: batch fetch topic titles for unique topic_ids (v0.37.43 fallback: no FK dependency)
+  const topicIds = [...new Set(rawItems.map((it: any) => it.topic_id).filter(Boolean))];
+  let titleMap: Record<string, string> = {};
+  if (topicIds.length > 0) {
+    const titlesRes = await supabaseFetch(
+      env,
+      `/rest/v1/topics?select=id,title&id=in.(${topicIds.join(',')})`
+    );
+    if (titlesRes.ok) {
+      const titlesRows = ((await safeJson(titlesRes)) as any[]) || [];
+      titleMap = Object.fromEntries(titlesRows.map((r: any) => [r.id, r.title]));
+    }
+  }
+
+  // 拍平 (跟 v0.37.40 embed 版 本 同 输 出 shape, viewer 不 需 改)
   const items = rawItems.map((it: any) => ({
     id: it.id,
     topic_id: it.topic_id,
-    title: it.topics?.title || '(no title)',
+    title: titleMap[it.topic_id] || '(no title)',
     r2_key: it.r2_key,
     fission_type: it.fission_type,
     status: it.status,
