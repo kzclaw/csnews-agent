@@ -127,7 +127,14 @@ async function searchTavily(apiKey: string, query: string): Promise<SearchResult
   try {
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // v0.37.52: Tavily requires bearer auth; without this header the
+        // fallback ran against the keyless anonymous tier and returned
+        // an empty results array. Same shape as the main worker fix that
+        // closed the 0-return loop there.
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         query,
         search_depth: 'basic',
