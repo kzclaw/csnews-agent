@@ -142,8 +142,9 @@ export async function fetchTavilyNews(
         query,
         search_depth: 'advanced',
         max_results: maxResults,
-        topic: 'news',
+        topic: 'general',
         time_range: 'day',
+        country: 'china',
       }),
       signal: AbortSignal.timeout(15_000),
     });
