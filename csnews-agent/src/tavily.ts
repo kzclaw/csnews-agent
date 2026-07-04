@@ -10,11 +10,13 @@ import { logEvent } from './log';
 import { embedTitle, findSimilarForEmbedding } from './process-vector';
 import {
   createTopicForTitle,
-  updateTopicScoreById,
+  updateTopicScoreByIdWithDelta,
   insertNewsBatch,
   dualWriteVectors,
   recordTrendForNews,
 } from './process-db';
+import { scoreTitle } from './process-ai';
+import { mapNewsScoreToDelta } from './topic-delta';
 
 /**
  * Normalized article shape shared by all data sources.
@@ -281,7 +283,10 @@ export async function runTavilyPipeline(
         if (similar.length > 0 && similar[0].topic_id) {
           const top = similar[0];
           topicId = top.topic_id;
-          const updated = await updateTopicScoreById(env, top.topic_id);
+          // v0.37.37: hot_score → delta 5 档 映射 · 跟 endpoints-process 同 范式
+          const rule = scoreTitle(title);
+          const delta = mapNewsScoreToDelta(rule.score);
+          const updated = await updateTopicScoreByIdWithDelta(env, top.topic_id, delta);
           newsScore = updated.new_score || 0;
           newsLevel = updated.new_level || 'follow';
           matchedSimilarity = top.similarity || null;

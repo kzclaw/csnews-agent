@@ -3,12 +3,13 @@
 // ============================================================
 
 import { Env, jsonResponse } from './shared';
-import { resetCacheMetrics } from './cache';
-import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
-import { scoreTitle, classifyTitle } from './process-ai';
+  import { resetCacheMetrics } from './cache';
+  import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
+  import { scoreTitle, classifyTitle } from './process-ai';
+  import { mapNewsScoreToDelta } from './topic-delta';
 import {
   createTopicForTitle,
-  updateTopicScoreById,
+  updateTopicScoreByIdWithDelta,
   insertNewsBatch,
   dualWriteVectors,
   recordTrendForNews,
@@ -277,7 +278,9 @@ async function processZakerItem(
       if (similar.length > 0 && similar[0].topic_id) {
         const top = similar[0];
         topicId = top.topic_id;
-        const updated = await updateTopicScoreById(env, top.topic_id);
+        // v0.37.37: hot_score → delta 5 档 映射 · 卡 8 explosive 加速
+        const delta = mapNewsScoreToDelta(rule.score);
+        const updated = await updateTopicScoreByIdWithDelta(env, top.topic_id, delta);
         newsScore = updated.new_score || 0;
         newsLevel = updated.new_level || 'follow';
         fission = updated.fission_triggered || false;

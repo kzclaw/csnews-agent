@@ -50,12 +50,29 @@ export async function createTopicForTitle(
   return created?.id ? created : null;
 }
 
-/** Increment topic score by 1. Returns the updated score result. */
+/**
+ * v0.37.37 (拍板 B): rename 跟 backward-compat wrapper
+ *
+ * - updateTopicScoreByIdWithDelta: 新 函数, 显式 接受 delta 参数 · 跟 RPC update_topic_score 对应
+ * - updateTopicScoreById: backward-compat wrapper, 默认 delta=1 (跟 v0.37.36 行为 一致)
+ *
+ * 业务 目的: 卡 8 explosive 话题 加速 (详见 topic-delta.ts)
+ * 不 改 RPC · 不 改 schema · 只 改 caller 传 delta
+ */
+export async function updateTopicScoreByIdWithDelta(
+  env: Env,
+  topicId: string,
+  delta: number
+): Promise<UpdateTopicScoreResult> {
+  return (await updateTopicScore(env, topicId, delta)) as UpdateTopicScoreResult;
+}
+
+/** v0.37.36 backward-compat: delta=1 跟 现 行为 一致 */
 export async function updateTopicScoreById(
   env: Env,
   topicId: string
 ): Promise<UpdateTopicScoreResult> {
-  return (await updateTopicScore(env, topicId, 1)) as UpdateTopicScoreResult;
+  return updateTopicScoreByIdWithDelta(env, topicId, 1);
 }
 
 /**
