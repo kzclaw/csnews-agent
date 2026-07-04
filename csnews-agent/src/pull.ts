@@ -83,6 +83,17 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     allowedFilters: [],
     timeField: 'created_at',
   },
+  // v0.37.40 (拍板 A): fission reports 列表
+  // 从 fission_reports 表拉 (跟 topics JOIN 取 title) · 包含 report_content 跟 r2_key
+  'fission-reports': {
+    table: 'fission_reports',
+    defaultOrderBy: 'triggered_at',
+    allowedOrderBy: ['triggered_at', 'completed_at', 'fission_type', 'status'],
+    defaultSelect:
+      'id, topic_id, r2_key, fission_type, status, triggered_at, completed_at, report_content, topics(title)',
+    allowedFilters: ['status', 'topic_id', 'fission_type'],
+    timeField: 'triggered_at',
+  },
   // trends: 趋势快照查询 trend_snapshots 表,用于 get_trending_velocity 和 get_topic_acceleration
   trends: {
     table: 'trend_snapshots',
@@ -498,6 +509,69 @@ async function queryFissionPending(
   return { items: filtered, total: filtered.length };
 }
 
+// ====== v0.37.40 fission-reports 特殊处理 (JOIN topics 取 title) ======
+
+/**
+ * fission-reports 实际是 fission_reports 表 + topics JOIN
+ * PostgREST embedded select: `select=...,topics(title)` (FK relationship)
+ * 跟 fission-pending 同 范式: 衍生视图,走专用查询
+ */
+async function queryFissionReports(
+  env: Env,
+  filters: ParsedFilters
+): Promise<{ items: any[]; total: number }> {
+  const config = TYPE_CONFIG['fission-reports'];
+
+  const params: string[] = [];
+  const select = filters.select || config.defaultSelect;
+  params.push(`select=${encodeURIComponent(select)}`);
+  params.push(`order=${encodeURIComponent(filters.orderBy + '.' + filters.order)}`);
+  params.push(`limit=${filters.limit}`);
+
+  // 通用 filter (白名单 only)
+  const safeFilters: Record<string, string> = {};
+  for (const k of config.allowedFilters) {
+    const v = (filters as any)[k];
+    if (v) safeFilters[k] = String(v);
+  }
+  for (const [k, v] of Object.entries(safeFilters)) {
+    params.push(`${k}=eq.${encodeURIComponent(v)}`);
+  }
+
+  // time window
+  if (filters.since) {
+    params.push(`${config.timeField}=gte.${encodeURIComponent(filters.since)}`);
+  }
+  if (filters.until) {
+    params.push(`${config.timeField}=lte.${encodeURIComponent(filters.until)}`);
+  }
+
+  const query = params.join('&');
+  const res = await supabaseFetch(env, `/rest/v1/fission_reports?${query}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Supabase query failed: HTTP ${res.status} ${errText.slice(0, 200)}`);
+  }
+  const rawItems = ((await safeJson(res)) as any[]) || [];
+
+  // postgREST embedded format: items[0].topics = {title: '...'} (single object, NOT array)
+  // 拍平: item.topics?.title -> item.title (viewer 期望 flat structure)
+  const items = rawItems.map((it: any) => ({
+    id: it.id,
+    topic_id: it.topic_id,
+    title: it.topics?.title || '(no title)',
+    r2_key: it.r2_key,
+    fission_type: it.fission_type,
+    status: it.status,
+    triggered_at: it.triggered_at,
+    completed_at: it.completed_at,
+    // v0.37.40: include report_content for direct modal display (避免 二次 R2 fetch)
+    report_content: it.report_content || '',
+  }));
+
+  return { items, total: items.length };
+}
+
 // ====== entity 查询(R2) ======
 
 const ENTITY_R2_KEY = 'entity-finalized.json';
@@ -699,6 +773,11 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
     if (filters.type === 'fission-pending') {
       // 衍生视图,走专用查询
       const result = await queryFissionPending(env, filters);
+      items = result.items;
+      total = result.total;
+    } else if (filters.type === 'fission-reports') {
+      // v0.37.40: fission reports 列表 + topics JOIN
+      const result = await queryFissionReports(env, filters);
       items = result.items;
       total = result.total;
     } else if (filters.type === 'entity') {

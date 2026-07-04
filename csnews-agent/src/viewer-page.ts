@@ -773,32 +773,45 @@ body {
  * ============================================================ */
 
 
-.sidebar {
-  background: var(--bg);
-  border-right: 1px solid var(--hairline);
-  overflow-y: auto;
-  padding: 20px 0 28px;
-  transition: transform 0.3s ease, width 0.3s ease;
-}
-.sidebar-toggle {
-  position: absolute; left: 12px; top: 12px;
-  background: var(--bg-2); border: 1px solid var(--hairline);
-  border-radius: 4px; padding: 6px 8px; cursor: pointer;
-  color: var(--text-2); z-index: 10;
-  display: flex; align-items: center; justify-content: center;
-}
-.sidebar-toggle:hover { color: var(--gold); border-color: var(--gold); }
-.sidebar-toggle .icon { width: 16px; height: 16px; }
-/* fix 6-1: sidebar 自动隐藏 (响应式) · 默认折叠 · viewport > 1280 自动展开 */
-.sidebar { display: none; }
-@media (min-width: 1280px) {
-  .sidebar { display: block; }
-}
-/* 小屏时手动 toggle 用 (小屏手动 toggle) */
-.sidebar-toggle { display: none; }
-@media (max-width: 1279px) {
-  .sidebar-toggle { display: flex; }
-  .reader-body.sidebar-shown .sidebar { display: block; }
+/* v0.37.40 (拍板 B): 删 .sidebar CSS 完 整 段 (替 换 为 filter-bar dropdown) */
+
+/* v0.37.40 (拍板 A): Fission view + modal */
+.fission-container { padding: 24px 16px; max-width: 960px; margin: 0 auto; }
+.fission-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 0 4px; }
+.fission-toolbar-title { font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.08em; }
+.fission-toolbar-hint { font-size: 11px; color: var(--text-3); }
+.fission-list { display: flex; flex-direction: column; gap: 10px; }
+.fission-card { background: var(--bg-2); border: 1px solid var(--hairline); border-radius: 6px; padding: 14px 16px; cursor: pointer; transition: all 0.15s ease; }
+.fission-card:hover { border-color: var(--gold); background: var(--bg-1); }
+.fission-card-row { display: flex; align-items: center; gap: 10px; }
+.fission-card-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fission-card-status { font-size: 10px; padding: 2px 8px; border-radius: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.fission-card-status.completed { background: var(--gold-bg); color: var(--gold); }
+.fission-card-status.failed { background: rgba(220,38,38,0.1); color: #dc2626; }
+.fission-card-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-3); }
+.fission-card-meta-item { display: flex; align-items: center; gap: 4px; }
+.fission-card-meta-item .icon { width: 12px; height: 12px; }
+.fission-empty { text-align: center; padding: 80px 20px; color: var(--text-3); }
+.fission-empty .state-icon { font-size: 36px; margin-bottom: 12px; }
+
+/* Fission modal */
+.fission-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.fission-modal[hidden] { display: none; }
+.fission-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
+.fission-modal-content { position: relative; background: var(--bg-1); border: 1px solid var(--hairline); border-radius: 8px; max-width: 720px; width: 92%; max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; }
+.fission-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--hairline); }
+.fission-modal-title { font-size: 14px; font-weight: 600; color: var(--text-1); flex: 1; }
+.fission-modal-close { background: none; border: none; color: var(--text-3); font-size: 22px; cursor: pointer; padding: 0 4px; line-height: 1; }
+.fission-modal-close:hover { color: var(--text-1); }
+.fission-modal-meta { display: flex; gap: 12px; padding: 10px 20px; background: var(--bg-2); font-size: 11px; color: var(--text-3); border-bottom: 1px solid var(--hairline); }
+.fission-modal-body { padding: 18px 20px; overflow-y: auto; font-size: 12.5px; line-height: 1.65; color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+
+/* Fission iPhone 适配 */
+@media (max-width: 768px) {
+  .fission-container { padding: 16px 12px; }
+  .fission-modal-content { width: 96%; max-height: 90vh; }
+  .fission-modal-header { padding: 12px 14px; }
+  .fission-modal-body { padding: 14px; font-size: 12px; }
 }
 .sidebar-section { margin-bottom: 24px; }
 
@@ -1627,6 +1640,11 @@ body { word-wrap: break-word; overflow-wrap: anywhere; }
         <span>Reader</span>
         <span class="count" id="reader-count">—</span>
       </button>
+      <button class="view-tab" data-view="fission">
+        <span class="dot"></span>
+        <span>Fission</span>
+        <span class="count" id="fission-count">—</span>
+      </button>
     </nav>
     <div class="header-actions">
       <div class="status" id="status">
@@ -1687,71 +1705,71 @@ body { word-wrap: break-word; overflow-wrap: anywhere; }
     <!-- ============ READER VIEW ============ -->
     <section class="view" id="view-reader">
       <div class="reader-body">
-        <!-- sidebar toggle (moved out of <aside> so it stays visible when .sidebar { display:none } hides the rest) -->
-        <button class="sidebar-toggle" id="sidebar-toggle" title="切换侧栏">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-        <!-- sidebar -->
-        <aside class="sidebar" id="sidebar">
-          <div class="sidebar-section">
-            <div class="sidebar-title">热度等级</div>
-            <ul class="sidebar-list" id="level-list">
-              <li class="sidebar-item active" data-level="">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-                <span>全部</span>
-                <span class="count" id="level-all-count">—</span>
-              </li>
-              <li class="sidebar-item" data-level="explosive">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                <span>爆炸</span>
-                <span class="count" id="level-explosive-count">—</span>
-              </li>
-              <li class="sidebar-item" data-level="important">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                <span>重要</span>
-                <span class="count" id="level-important-count">—</span>
-              </li>
-              <li class="sidebar-item" data-level="follow">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                <span>关注</span>
-                <span class="count" id="level-follow-count">—</span>
-              </li>
-            </ul>
-          </div>
-          <div class="sidebar-divider"></div>
-          <div class="sidebar-section">
-            <div class="sidebar-title">分类</div>
-            <ul class="sidebar-list" id="category-list"></ul>
-          </div>
-          <div class="sidebar-footer">
-            按 <kbd>1</kbd>/<kbd>2</kbd> 切换视图<br/>
-            <code>⌘R</code> 刷新 · <code>Esc</code> 收起卡片
-          </div>
-        </aside>
+         <!-- v0.37.40 (拍板 B): 删 sidebar + sidebar-toggle 整 段 (替 换 为 filter-bar dropdown) -->
 
-        <!-- filter bar -->
-        <div class="filter-bar">
-          <select class="select" id="sort-select">
-            <option value="desc">最新优先</option>
-            <option value="hot">热度优先</option>
-            <option value="asc">最旧优先</option>
-          </select>
-          <select class="select" id="since-select">
-            <option value="24h">24 小时内</option>
-            <option value="7d" selected>7 天</option>
-            <option value="30d">30 天</option>
-            <option value="all">全部</option>
-          </select>
-          <div class="filter-spacer"></div>
-          <span class="filter-meta" id="result-meta">—</span>
-        </div>
+         <!-- filter bar -->
+         <div class="filter-bar">
+           <!-- v0.37.40 (拍板 B): dropdown filter menu (level + category) 替 换 sidebar -->
+           <select class="select" id="level-select">
+             <option value="">全部等级</option>
+             <option value="explosive">爆炸</option>
+             <option value="important">重要</option>
+             <option value="follow">关注</option>
+           </select>
+           <select class="select" id="category-select">
+             <option value="">全部分类</option>
+             <!-- 动态填 (跟 renderCategoryList 同 源 数 据) -->
+           </select>
+           <select class="select" id="sort-select">
+             <option value="desc">最新优先</option>
+             <option value="hot">热度优先</option>
+             <option value="asc">最旧优先</option>
+           </select>
+           <select class="select" id="since-select">
+             <option value="24h">24 小时内</option>
+             <option value="7d" selected>7 天</option>
+             <option value="30d">30 天</option>
+             <option value="all">全部</option>
+           </select>
+           <div class="filter-spacer"></div>
+           <span class="filter-meta" id="result-meta">—</span>
+         </div>
 
         <!-- feed -->
         <div class="feed" id="feed">
           <div class="state">
             <div class="state-title">点击「Reader」刷新</div>
             <div class="state-desc">或按 <code>⌘R</code> 加载新闻列表</div>
+           </div>
+         </div>
+       </div>
+     </section>
+
+    <!-- ============ FISSION VIEW (v0.37.40) ============ -->
+    <section class="view" id="view-fission">
+      <div class="fission-container">
+        <div class="fission-toolbar">
+          <span class="fission-toolbar-title">裂变报告</span>
+          <span class="fission-toolbar-hint">点击查看报告全文</span>
+        </div>
+        <div class="fission-list" id="fission-list">
+          <div class="fission-empty">
+            <div class="state-icon">⚡</div>
+            <div class="state-title">加载裂变报告中…</div>
           </div>
+        </div>
+      </div>
+
+      <!-- fission report modal -->
+      <div class="fission-modal" id="fission-modal" hidden>
+        <div class="fission-modal-backdrop" id="fission-modal-backdrop"></div>
+        <div class="fission-modal-content">
+          <div class="fission-modal-header">
+            <div class="fission-modal-title" id="fission-modal-title">裂变报告</div>
+            <button class="fission-modal-close" id="fission-modal-close" aria-label="关闭">×</button>
+          </div>
+          <div class="fission-modal-meta" id="fission-modal-meta"></div>
+          <div class="fission-modal-body" id="fission-modal-body"></div>
         </div>
       </div>
     </section>
@@ -1797,6 +1815,8 @@ const STATE = {
   // fix 6-14 (): Reader 整点过 60s 自动刷新 · 离开 reader 停
   hourlySyncTimer: null, // setInterval handle (60min 周期)
   hourlySyncInitialTimer: null, // setTimeout handle (next hour:01:00 首次)
+  // v0.37.40: Fission tab 裂变报告列表 (跟 reader items 一样 缓存 在 STATE)
+  fissionReports: [],
 };
 
 function getConfig() { return STATE.config; }
@@ -1966,7 +1986,95 @@ function switchView(view) {
   updateStatus();
   if (view === 'dashboard') refreshDashboard();
   else if (view === 'reader') { refreshReader(); scheduleHourlySync(); }
+  else if (view === 'fission') refreshFission();
 }
+
+// v0.37.40 (拍板 A): fission reports 列表 + 详情 modal
+async function refreshFission() {
+  if (!isConfigured()) { openSettings(); return; }
+  const cfg = getCfg();
+  const list = document.getElementById('fission-list');
+  if (list) list.innerHTML = '<div class="fission-empty"><div class="state-icon">⏳</div><div class="state-title">加载裂变报告中…</div></div>';
+
+  try {
+    const params = new URLSearchParams({
+      action: 'pull', type: 'fission-reports', format: 'full',
+      limit: '30', order: 'desc', order_by: 'triggered_at',
+    });
+    const url = \`\${cfg.baseUrl.replace(/\\/+$/, '')}/?\${params.toString()}\`;
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + cfg.token } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || \`HTTP \${res.status}\`);
+    STATE.fissionReports = data.items || [];
+    renderFissionList();
+    // update tab badge
+    const fc = document.getElementById('fission-count');
+    if (fc) fc.textContent = STATE.fissionReports.length;
+  } catch (e) {
+    if (list) list.innerHTML = \`<div class="fission-empty"><div class="state-icon">❌</div><div class="state-title">\${escapeHtml(String(e.message || e))}</div><div class="state-desc">刷新重试</div></div>\`;
+  }
+}
+
+function renderFissionList() {
+  const list = document.getElementById('fission-list');
+  if (!list) return;
+  const items = STATE.fissionReports || [];
+  if (items.length === 0) {
+    list.innerHTML = '<div class="fission-empty"><div class="state-icon">📭</div><div class="state-title">暂无裂变报告</div><div class="state-desc">当 explosive topic score >= 9 时自动生成</div></div>';
+    return;
+  }
+  list.innerHTML = items.map((it, i) => {
+    const status = it.status || 'unknown';
+    const trigAt = it.triggered_at ? fmtTime(it.triggered_at) : '—';
+    const compAt = it.completed_at ? fmtTime(it.completed_at) : '';
+    return \`<div class="fission-card" data-fission-idx="\${i}">
+      <div class="fission-card-row">
+        <div class="fission-card-title">\${escapeHtml(it.title || '(no title)')}</div>
+        <div class="fission-card-status \${escapeHtml(status)}">\${escapeHtml(status)}</div>
+      </div>
+      <div class="fission-card-meta">
+        <span class="fission-card-meta-item">⏱ 触发: \${escapeHtml(trigAt)}</span>
+        \${compAt ? \`<span class="fission-card-meta-item">✓ 完成: \${escapeHtml(compAt)}</span>\` : ''}
+        \${it.fission_type ? \`<span class="fission-card-meta-item">📑 \${escapeHtml(it.fission_type)}</span>\` : ''}
+      </div>
+    </div>\`;
+  }).join('');
+  // bind click
+  list.querySelectorAll('.fission-card').forEach(el => {
+    el.addEventListener('click', () => {
+      const idx = parseInt(el.getAttribute('data-fission-idx') || '0', 10);
+      showFissionModal(STATE.fissionReports[idx]);
+    });
+  });
+}
+
+function showFissionModal(item) {
+  if (!item) return;
+  const modal = document.getElementById('fission-modal');
+  const title = document.getElementById('fission-modal-title');
+  const meta = document.getElementById('fission-modal-meta');
+  const body = document.getElementById('fission-modal-body');
+  if (title) title.textContent = item.title || '(no title)';
+  if (meta) {
+    const parts = [];
+    if (item.status) parts.push(\`<span>状态: <strong>\${escapeHtml(item.status)}</strong></span>\`);
+    if (item.fission_type) parts.push(\`<span>类型: \${escapeHtml(item.fission_type)}</span>\`);
+    if (item.triggered_at) parts.push(\`<span>触发: \${escapeHtml(fmtTime(item.triggered_at))}</span>\`);
+    if (item.r2_key) parts.push(\`<span>R2: \${escapeHtml(item.r2_key)}</span>\`);
+    meta.innerHTML = parts.join(' · ');
+  }
+  if (body) body.textContent = item.report_content || '(no content)';
+  if (modal) modal.removeAttribute('hidden');
+}
+
+function hideFissionModal() {
+  const modal = document.getElementById('fission-modal');
+  if (modal) modal.setAttribute('hidden', '');
+}
+
+// v0.37.40: bind modal close
+document.getElementById('fission-modal-close')?.addEventListener('click', hideFissionModal);
+document.getElementById('fission-modal-backdrop')?.addEventListener('click', hideFissionModal);
 
 document.querySelectorAll('.view-tab').forEach(el => {
   el.addEventListener('click', () => switchView(el.dataset.view));
@@ -3238,10 +3346,9 @@ async function fetchReaderContent(id) {
   return text;
 }
 
-function renderCategoryList(items) {
-  // fix 6-9: 分类 sidebar 按当前所选等级过滤 (用户 21:30 反馈"分类栏没根据等级变化")
-  // 等级 sidebar 永远全量 · 分类 sidebar 基于"全量 ∩ 当前 level filter"
-  // 例: 点 important → 分类 sidebar 显示 4 条 important 的分类分布 (法律 2 / 体育 1 / 综合 1)
+// v0.37.40 (拍板 B): 替 换 renderCategoryList (原 sidebar 删) · 改 populate #category-select dropdown
+// 跟 renderCategoryList 同 源 数据 (STATE.items 全量 ∩ level filter)
+function populateCategorySelect(items) {
   const scopedItems = STATE.filters.level
     ? items.filter(it => it.level === STATE.filters.level)
     : items;
@@ -3251,36 +3358,13 @@ function renderCategoryList(items) {
     catCount[c] = (catCount[c] || 0) + 1;
   });
   const sorted = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
-  const list = document.getElementById('category-list');
-  list.innerHTML = \`
-    <li class="sidebar-item \${STATE.filters.category === '' ? 'active' : ''}" data-category="">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-      <span>\${STATE.filters.level ? '该等级全部分类' : '全部分类'}</span>
-      <span class="count">\${scopedItems.length}</span>
-    </li>
-  \` + sorted.map(([c, n]) => \`
-    <li class="sidebar-item \${STATE.filters.category === c ? 'active' : ''}" data-category="\${escapeHtml(c)}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>
-      <span>\${escapeHtml(c)}</span>
-      <span class="count">\${n}</span>
-    </li>\`).join('');
-  list.querySelectorAll('.sidebar-item').forEach(el => {
-    el.addEventListener('click', () => {
-      STATE.filters.category = el.dataset.category || '';
-      renderCategoryList(STATE.items);
-      refreshReader();
-    });
-  });
-}
-
-function renderLevelCounts(items) {
-  const total = items.length;
-  const c = { explosive: 0, important: 0, follow: 0 };
-  items.forEach(it => { if (it.level && c[it.level] !== undefined) c[it.level]++; });
-  document.getElementById('level-all-count').textContent = total;
-  document.getElementById('level-explosive-count').textContent = c.explosive;
-  document.getElementById('level-important-count').textContent = c.important;
-  document.getElementById('level-follow-count').textContent = c.follow;
+  const select = document.getElementById('category-select');
+  if (!select) return;
+  select.innerHTML = '<option value="">全部分类</option>' + sorted.map(([c, n]) =>
+    \`<option value="\${escapeHtml(c)}">\${escapeHtml(c)} (\${n})</option>\`
+  ).join('');
+  // 保留 当前 STATE.filters.category (user 切回 等级 时 不 应 清空)
+  if (STATE.filters.category) select.value = STATE.filters.category;
 }
 
 // fix 6-8: 客户端 filter 函数 (基于 STATE.allItems 全量)
@@ -3524,11 +3608,6 @@ async function refreshReader() {
   if (!isConfigured()) { openSettings(); return; }
   STATE.readerLoading = true;
   STATE.readerLastError = null;
-  // fix 6-7: 加载时清 sidebar counts · 避免 race condition 残留旧值 (用户 21:05 反馈"点击分类/等级数字不对")
-  document.getElementById('level-all-count').textContent = '…';
-  document.getElementById('level-explosive-count').textContent = '…';
-  document.getElementById('level-important-count').textContent = '…';
-  document.getElementById('level-follow-count').textContent = '…';
   renderFeedSkeleton();
   updateStatus();
   // 进度回调: 实时显示拉取进度
@@ -3565,9 +3644,8 @@ async function refreshReader() {
     // fix 6-13 (): 抓取时间戳 + 顶部小字"最后抓取于 X 分钟前 · 共 N 条"
     STATE.lastFetchedAt = new Date();
     updateResultMeta();
-    // renderLevelCounts/renderCategoryList 永远用全量 (sidebar 数字永远不变)
-    renderLevelCounts(STATE.allItems);
-    renderCategoryList(STATE.allItems);
+    // v0.37.40 (拍板 B): 替 换 为 populateCategorySelect (原 renderCategoryList + renderLevelCounts 删)
+    populateCategorySelect(STATE.allItems);
     renderFeed();
     toast(dupCount > 0 ? \`已刷新 \${STATE.items.length} 条 (去重 \${dupCount} 条)\` : \`已刷新 \${STATE.items.length} 条\`, 'success');
   } catch (e) {
@@ -3589,40 +3667,28 @@ async function refreshReader() {
 function applyFilterAndRender() {
   STATE.items = applyClientFilters(STATE.allItems);
   // 高亮 active class (level)
-  document.querySelectorAll('#level-list .sidebar-item').forEach(x => {
-    x.classList.toggle('active', (x.dataset.level || '') === STATE.filters.level);
-  });
+  // v0.37.40 (拍板 B): dropdown 替 换 sidebar, 删 旧 #level-list 同步 逻辑
+  // sync level-select dropdown 跟 STATE.filters.level
+  const levelSelect = document.getElementById('level-select');
+  if (levelSelect && levelSelect.value !== STATE.filters.level) levelSelect.value = STATE.filters.level;
   // fix 6-13 (): filter 切时同步顶部小字 "最后抓取于 X 分钟前 · 共 N 条"
   updateResultMeta();
-  // 切 level 时重渲染 category sidebar (按新 level 过滤)
-  renderCategoryList(STATE.allItems);
+  // 切 level 时重渲染 category dropdown (按新 level 过滤)
+  populateCategorySelect(STATE.allItems);
   renderFeed();
 }
-document.querySelectorAll('#level-list .sidebar-item').forEach(el => {
-  el.addEventListener('click', () => {
-    document.querySelectorAll('#level-list .sidebar-item').forEach(x => x.classList.remove('active'));
-    el.classList.add('active');
-    STATE.filters.level = el.dataset.level || '';
-    applyFilterAndRender(); // 客户端 filter · 不重拉 API
-  });
+// v0.37.40 (拍板 B): dropdown 替 换 sidebar · level-select change 同步 STATE + 重渲染
+document.getElementById('level-select').addEventListener('change', e => {
+  STATE.filters.level = e.target.value;
+  applyFilterAndRender();
+});
+// category-select change 同步 STATE + 重渲染
+document.getElementById('category-select').addEventListener('change', e => {
+  STATE.filters.category = e.target.value;
+  applyFilterAndRender();
 });
 document.getElementById('sort-select').addEventListener('change', e => { STATE.filters.sort = e.target.value; refreshReader(); });
 document.getElementById('since-select').addEventListener('change', e => { STATE.filters.since = e.target.value; refreshReader(); });
-// fix 6-1: sidebar 自动响应式 (大屏自动显示/小屏自动折叠 + 手动 toggle 按钮)
-function applySidebarResponsive() {
-  const body = document.querySelector('.reader-body');
-  if (!body) return;
-  if (window.innerWidth >= 1280) {
-    body.classList.add('sidebar-shown');
-  } else {
-    body.classList.remove('sidebar-shown');
-  }
-}
-window.addEventListener('resize', applySidebarResponsive);
-applySidebarResponsive();
-document.getElementById('sidebar-toggle').addEventListener('click', () => {
-  document.querySelector('.reader-body').classList.toggle('sidebar-shown');
-});
 
 /* ============================================================
  * Settings modal (shared)
