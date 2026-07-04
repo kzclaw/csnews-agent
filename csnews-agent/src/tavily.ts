@@ -193,7 +193,7 @@ export async function fetchTavilyNews(
 
 // ---- cron query list (dynamic · 替换 v0.37.39 硬 编 码 英 文 常 量) ----
 // Primary: Supabase topics top 5 explosive/important (跟 ZAKER / news_hotspots 同 源 · 中文)
-// Fallback 1: news_hotspots 24h top 10 → Workers AI llama-3.1-8b 抽 5 中 文 搜 索 词
+// Fallback 1: news_hotspots 24h top 5 titles (v0.37.50: 直 接 用 短 词 title · 不 LLM 拼 接)
 // Fallback 2: R2 latest daily snapshot 拉 最 近 几 条 news title 直 接 当 query
 
 async function getDynamicQueriesFromTopics(env: Env): Promise<string[]> {
@@ -215,27 +215,20 @@ async function getDynamicQueriesFromTopics(env: Env): Promise<string[]> {
 async function getDynamicQueriesFromNewsHotspots(env: Env): Promise<string[]> {
   try {
     const sinceIso = new Date(Date.now() - 24 * 3600_000).toISOString();
+    // v0.37.50 (Q.3): drop LLM phrase-stitching. Tavily's index is built around
+    // short single / two-word topics — a single real headline from news_hotspots
+    // beats a synthesized 4-5 word phrase every time. Take top 5 titles directly
+    // so the queries match the same shape the manual test endpoint just validated
+    // (3/4 keys in with the keyed Bearer auth, all short titles).
     const res = await supabaseFetch(
       env,
-      `/rest/v1/news_hotspots?select=title&published_at=gte.${encodeURIComponent(sinceIso)}&order=published_at.desc&limit=10`
+      `/rest/v1/news_hotspots?select=title&published_at=gte.${encodeURIComponent(sinceIso)}&order=published_at.desc&limit=5`
     );
     if (!res.ok) return [];
     const rows = ((await safeJson(res)) as any[]) || [];
-    const titles = rows
+    return rows
       .map((r: any) => r.title)
-      .filter((t: unknown): t is string => typeof t === 'string' && t.length > 0);
-    if (titles.length === 0) return [];
-
-    const prompt = `基于以下最近 24 小时新闻标题,生成 5 个简洁的中文搜索关键词(每行一个,不带数字序号或符号),用于 tavily API 检索更多相关结果:\n\n${titles.slice(0, 10).join('\n')}`;
-    const aiResp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 200,
-    })) as { response?: string };
-    const text = aiResp?.response || '';
-    return text
-      .split('\n')
-      .map((l: string) => l.trim().replace(/^[-*\d.\s)]+/, ''))
-      .filter((l: string) => l.length >= 2 && l.length < 60)
+      .filter((t: unknown): t is string => typeof t === 'string' && t.length > 0)
       .slice(0, 5);
   } catch {
     return [];
@@ -271,13 +264,13 @@ async function getDynamicQueries(env: Env): Promise<string[]> {
     return queries;
   }
 
-  // Fallback 1: news_hotspots 24h + Workers AI
+  // Fallback 1: news_hotspots 24h titles (v0.37.50 dropped LLM stitching)
   queries = await getDynamicQueriesFromNewsHotspots(env);
   if (queries.length > 0) {
     await logEvent(
       env,
       'info',
-      `[Tavily] dynamic queries from LLM (news_hotspots): ${queries.length}`,
+      `[Tavily] dynamic queries from news_hotspots titles: ${queries.length}`,
       undefined,
       'tavily'
     );
