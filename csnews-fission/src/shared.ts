@@ -15,6 +15,17 @@ export interface Env {
    * 复用主 Worker AI_USAGE_KV，同一账户级别资源
    */
   AI_USAGE_KV?: KVNamespace;
+  /**
+   * v0.37.51: 复用主 Worker 的 PROCESS_STATE KV, 读 tavily_pending flag
+   * (主 worker ?action=process 写, csnews-fission 6H cron 读 + 删除)
+   */
+  PROCESS_STATE?: KVNamespace;
+  /**
+   * v0.37.51: 双向 Service Binding -> 主 worker (csnews-agent)
+   * 让 csnews-fission 6H cron 触发 env.CSNEWS_AGENT.fetch('?action=tavily&max=1')
+   * 异 步 Tavily pipeline · 不 受 主 worker 50 subrequest limit 限 制
+   */
+  CSNEWS_AGENT?: Fetcher;
 }
 
 export function getSupabaseHost(env: Env): string {

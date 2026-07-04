@@ -203,29 +203,58 @@ export async function handleProcessAction(
     } = {
       ok: false, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: [], elapsed_ms: 0, reason: 'not_called',
     };
-    try {
-      const tavUrl = new URL('https://internal/?max=5');
-      const tavResp = await runTavilyPipeline(env, tavUrl, cors);
-      const tavBody = (await tavResp.json()) as any;
-      tavilyTriggerResult = {
-        ok: tavResp.ok,
-        fetched: tavBody.fetched ?? 0,
-        inserted: tavBody.inserted ?? 0,
-        skipped_duplicates: tavBody.skipped_duplicates ?? 0,
-        errors: tavBody.errors ?? [],
-        elapsed_ms: tavBody.elapsed_ms ?? 0,
-        reason: tavResp.ok ? 'triggered' : 'http_error',
-      };
-    } catch (e: any) {
-      tavilyTriggerResult = {
-        ok: false, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: [], elapsed_ms: 0,
-        reason: e?.message || String(e),
-      };
+    // v0.37.51: Tavily inline trigger broken against 50-subrequest budget once
+    // pipeline started returning real results (Bearer auth fix unlocked it).
+    // Drop the inline run and instead flag PROCESS_STATE['tavily_pending']=1;
+    // csnews-fission's 6H scheduled handler picks the flag up, calls the
+    // main worker via Service Binding ?action=tavily&max=1, then deletes it.
+    // Async trigger avoids burning the calling invocation's budget on a
+    // 25-article cluster; csnews-fission gets its own 50 subrequests.
+    if (env.PROCESS_STATE) {
       try {
-        await logEvent(env, 'error', `[tavily-trigger] post-process failed: ${e?.message || e}`, undefined, 'process');
-      } catch {
-        // ignore logging error
+        await env.PROCESS_STATE.put(
+          'tavily_pending',
+          JSON.stringify({
+            requested_at: new Date().toISOString(),
+            topics_count: results.length,
+          }),
+          { expirationTtl: 86400 * 2 }
+        );
+        tavilyTriggerResult = {
+          ok: true,
+          fetched: 0,
+          inserted: 0,
+          skipped_duplicates: 0,
+          errors: [],
+          elapsed_ms: 0,
+          reason: 'scheduled_async',
+        };
+      } catch (e: any) {
+        tavilyTriggerResult = {
+          ok: false,
+          fetched: 0,
+          inserted: 0,
+          skipped_duplicates: 0,
+          errors: [],
+          elapsed_ms: 0,
+          reason: `kv_put_failed: ${e?.message || String(e)}`,
+        };
+        try {
+          await logEvent(env, 'error', `[tavily-trigger] KV flag put failed: ${e?.message || e}`, undefined, 'process');
+        } catch {
+          // ignore logging error
+        }
       }
+    } else {
+      tavilyTriggerResult = {
+        ok: false,
+        fetched: 0,
+        inserted: 0,
+        skipped_duplicates: 0,
+        errors: [],
+        elapsed_ms: 0,
+        reason: 'no_process_state_kv',
+      };
     }
 
     return jsonResponse(

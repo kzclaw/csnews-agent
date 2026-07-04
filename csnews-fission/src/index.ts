@@ -79,11 +79,59 @@ async function handleScheduled(env: Env, controller: ScheduledController): Promi
   const cron = controller?.cron || 'unknown';
   console.log(`[cron] csnews-fission triggered at ${ts} cron=${cron}`);
 
+  // v0.37.51: Pre-step — pick up tavily_pending flag left by main worker's
+  // ?action=process handler. Asking the main worker through the Service
+  // Binding gives its Tavily pipeline a fresh 50-subrequest budget instead
+  // of fighting over the calling process invocation's exhausted budget.
+  await runPendingTavilyTrigger(env);
+
   try {
     await runFissionTrigger(env);
     console.log(`[cron] csnews-fission completed at ${new Date().toISOString()}`);
   } catch (err) {
     console.error('[cron] csnews-fission error:', err);
+  }
+}
+
+/**
+ * v0.37.51: drain the tavily_pending flag the main worker writes when its
+ * process pipeline sees data worth Tavily ingest. Uses Service Binding so
+ * the call lands in the main worker's own invocation, with its own budget.
+ */
+async function runPendingTavilyTrigger(env: Env): Promise<void> {
+  if (!env.PROCESS_STATE || !env.CSNEWS_AGENT) {
+    console.log('[cron] tavily-async skip: bindings missing (PROCESS_STATE or CSNEWS_AGENT)');
+    return;
+  }
+  let raw: string | null = null;
+  try {
+    raw = await env.PROCESS_STATE.get('tavily_pending');
+  } catch (e) {
+    console.error('[cron] tavily-async KV get failed:', e);
+    return;
+  }
+  if (!raw) return;
+
+  console.log('[cron] tavily-async: flag set, calling CSNEWS_AGENT ?action=tavily&max=1');
+  let body = '';
+  let status = 0;
+  try {
+    const resp = await env.CSNEWS_AGENT.fetch(
+      'https://internal/?action=tavily&max=1'
+    );
+    status = resp.status;
+    body = await resp.text();
+    console.log(`[cron] tavily-async: status=${status} body=${body.slice(0, 200)}`);
+  } catch (e) {
+    console.error('[cron] tavily-async fetch failed:', e);
+  }
+
+  // Delete the flag regardless of fetch outcome so a transient error
+  // doesn't keep retriggering every 6 hours.
+  try {
+    await env.PROCESS_STATE.delete('tavily_pending');
+  } catch (e) {
+    console.error('[cron] tavily-async KV delete failed:', e);
   }
 }
 
