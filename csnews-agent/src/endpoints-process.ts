@@ -21,7 +21,7 @@ import type { CleanupStaleTopicsResult, ZakerArticle } from './types';
 import { handleHealthAction } from './health-main';
 import { handleLogsAction } from './logs';
 import { handleAiUsageAction } from './ai-usage';
-import { runTavilyPipeline } from './tavily';
+import { runTavilyPipeline, fetchTavilyNews } from './tavily';
 // v0.37.36 (董事长 2026-07-04 拍板): Score 自适应 + Fission 接力赛 触发
 import { getCurrentScoreThreshold } from './score-threshold';
 import { triggerFissionFromTopics } from './fission-trigger';
@@ -285,6 +285,27 @@ export async function handleTavilyAction(
   url: URL,
   cors: Record<string, string>
 ): Promise<Response> {
+  // Direct test mode: ?query=<string> bypasses the dynamic-query chain and
+  // hits the upstream search API one time for the literal query, useful
+  // for verifying whether a given keyword actually surfaces results.
+  const directQuery = url.searchParams.get('query');
+  if (directQuery) {
+    const apiKey = env.TAVILY_API_KEY;
+    const max = Math.max(
+      1,
+      Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
+    );
+    const results = await fetchTavilyNews(env, apiKey, directQuery, max);
+    return jsonResponse(
+      {
+        source: 'tavily-direct',
+        query: directQuery,
+        fetched: results.length,
+        items: results.map((r) => ({ title: r.title, url: r.url })),
+      },
+      cors
+    );
+  }
   return runTavilyPipeline(env, url, cors);
 }
 
