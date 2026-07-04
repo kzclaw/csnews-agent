@@ -137,7 +137,12 @@ export async function fetchTavilyNews(
   try {
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // v0.37.49 (派活 T.2): Tavily 用 Authorization: Bearer <key> 鉴 权,
+        // 不 接 受 body api_key. 以 前 没 头 部 → 隐 式 匿 名 tier → 全 0
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         query,
         search_depth: 'advanced',
