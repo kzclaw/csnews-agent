@@ -2664,7 +2664,7 @@ function renderOverview() {
         </div>
         <div class="panel-body">
           <ul class="activity-list">
-            \${STATE.entity && STATE.entity.candidates ? (STATE.entity.candidates.map(c => \`
+            \${STATE.entity && STATE.entity.entities ? (STATE.entity.entities.map(c => \`
               <li class="activity-item">
                 <span class="activity-dot ok"></span>
                 <div class="activity-content">

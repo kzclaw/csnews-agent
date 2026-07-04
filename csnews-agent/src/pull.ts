@@ -90,7 +90,7 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     defaultOrderBy: 'triggered_at',
     allowedOrderBy: ['triggered_at', 'completed_at', 'fission_type', 'status'],
     defaultSelect:
-      'id, topic_id, r2_key, fission_type, status, triggered_at, completed_at, report_content, topics(title)',
+      'id, topic_id, r2_key, fission_type, status, triggered_at, completed_at, report_content, topics!fission_reports_topic_id_fkey(title)',
     allowedFilters: ['status', 'topic_id', 'fission_type'],
     timeField: 'triggered_at',
   },
