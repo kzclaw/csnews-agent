@@ -5,7 +5,7 @@
 // Cross-source dedup: each article is checked against Vectorize
 // before insertion (similarity > 0.88 → skip).
 
-import { Env, jsonResponse } from './shared';
+import { Env, jsonResponse, supabaseFetch, safeJson } from './shared';
 import { logEvent } from './log';
 import { embedTitle, findSimilarForEmbedding } from './process-vector';
 import {
@@ -142,6 +142,8 @@ export async function fetchTavilyNews(
         query,
         search_depth: 'advanced',
         max_results: maxResults,
+        topic: 'news',
+        time_range: 'day',
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -183,11 +185,121 @@ export async function fetchTavilyNews(
 // dual-writes to Vectorize.
 // ============================================================
 
-// ---- cron query list ----
-const TAVILY_QUERIES = [
-  'top trending news today worldwide',
-  'breaking technology business science news',
-];
+// ---- cron query list (dynamic · 替换 v0.37.39 硬 编 码 英 文 常 量) ----
+// Primary: Supabase topics top 5 explosive/important (跟 ZAKER / news_hotspots 同 源 · 中文)
+// Fallback 1: news_hotspots 24h top 10 → Workers AI llama-3.1-8b 抽 5 中 文 搜 索 词
+// Fallback 2: R2 latest daily snapshot 拉 最 近 几 条 news title 直 接 当 query
+
+async function getDynamicQueriesFromTopics(env: Env): Promise<string[]> {
+  try {
+    const res = await supabaseFetch(
+      env,
+      `/rest/v1/topics?select=title&level=in.(explosive,important)&order=score.desc&limit=5`
+    );
+    if (!res.ok) return [];
+    const rows = ((await safeJson(res)) as any[]) || [];
+    return rows
+      .map((r: any) => r.title)
+      .filter((t: unknown): t is string => typeof t === 'string' && t.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function getDynamicQueriesFromNewsHotspots(env: Env): Promise<string[]> {
+  try {
+    const sinceIso = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const res = await supabaseFetch(
+      env,
+      `/rest/v1/news_hotspots?select=title&published_at=gte.${encodeURIComponent(sinceIso)}&order=published_at.desc&limit=10`
+    );
+    if (!res.ok) return [];
+    const rows = ((await safeJson(res)) as any[]) || [];
+    const titles = rows
+      .map((r: any) => r.title)
+      .filter((t: unknown): t is string => typeof t === 'string' && t.length > 0);
+    if (titles.length === 0) return [];
+
+    const prompt = `基于以下最近 24 小时新闻标题,生成 5 个简洁的中文搜索关键词(每行一个,不带数字序号或符号),用于 tavily API 检索更多相关结果:\n\n${titles.slice(0, 10).join('\n')}`;
+    const aiResp = (await env.AI.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 200,
+    })) as { response?: string };
+    const text = aiResp?.response || '';
+    return text
+      .split('\n')
+      .map((l: string) => l.trim().replace(/^[-*\d.\s)]+/, ''))
+      .filter((l: string) => l.length >= 2 && l.length < 60)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+async function getDynamicQueriesFromR2(env: Env, limit = 5): Promise<string[]> {
+  try {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const obj = await env.csnews_raw.get(`news/${dateStr}/latest.json`);
+    if (!obj) return [];
+    const data = JSON.parse(await obj.text()) as { items?: { title: string }[] };
+    return (data.items || [])
+      .map((i) => i.title)
+      .filter((t): t is string => typeof t === 'string' && t.length > 0)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+async function getDynamicQueries(env: Env): Promise<string[]> {
+  // Primary: trending topics
+  let queries = await getDynamicQueriesFromTopics(env);
+  if (queries.length > 0) {
+    await logEvent(
+      env,
+      'info',
+      `[Tavily] dynamic queries from topics: ${queries.length}`,
+      undefined,
+      'tavily'
+    );
+    return queries;
+  }
+
+  // Fallback 1: news_hotspots 24h + Workers AI
+  queries = await getDynamicQueriesFromNewsHotspots(env);
+  if (queries.length > 0) {
+    await logEvent(
+      env,
+      'info',
+      `[Tavily] dynamic queries from LLM (news_hotspots): ${queries.length}`,
+      undefined,
+      'tavily'
+    );
+    return queries;
+  }
+
+  // Fallback 2: R2 daily snapshot latest titles
+  queries = await getDynamicQueriesFromR2(env, 5);
+  if (queries.length > 0) {
+    await logEvent(
+      env,
+      'info',
+      `[Tavily] dynamic queries from R2: ${queries.length}`,
+      undefined,
+      'tavily'
+    );
+    return queries;
+  }
+
+  await logEvent(
+    env,
+    'warn',
+    '[Tavily] no dynamic queries available (topics/news_hotspots/R2 all empty)',
+    undefined,
+    'tavily'
+  );
+  return [];
+}
 
 // ---- shared result shape ----
 interface TavilyResultItem {
@@ -228,7 +340,23 @@ export async function runTavilyPipeline(
   const allArticles: NormalizedArticle[] = [];
   const fetchErrors: string[] = [];
 
-  for (const query of TAVILY_QUERIES) {
+  // (替 换 v0.37.39 硬 编 码 TAVILY_QUERIES → dynamic queries)
+  const queries = await getDynamicQueries(env);
+  if (queries.length === 0) {
+    return jsonResponse(
+      {
+        source: 'tavily',
+        fetched: 0,
+        inserted: 0,
+        skipped_duplicates: 0,
+        errors: ['no dynamic queries available (topics/news_hotspots/R2 all empty)'],
+        elapsed_ms: Date.now() - start,
+      },
+      cors
+    );
+  }
+
+  for (const query of queries) {
     const articles = await fetchTavilyNews(env, apiKey, query, maxPerQuery);
     if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
       fetchErrors.push(`query="${query}" returned 0 results`);
