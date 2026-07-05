@@ -454,6 +454,16 @@ body {
 
 /* activity list */
 .activity-list { list-style: none; max-height: 600px; overflow-y: auto; }
+/* log timeline 子 区 域 */
+.timeline-header { display: flex; align-items: center; gap: 6px; padding: 10px 0 6px; color: var(--text-2); font-size: 11px; font-family: var(--font-mono); border-top: 1px solid var(--hairline); margin-top: 8px; }
+.timeline-header .icon { width: 12px; height: 12px; }
+.timeline-empty { color: var(--text-3); font-size: 11px; padding: 8px 0; font-style: italic; }
+.timeline-list { list-style: none; max-height: 200px; overflow-y: auto; padding: 4px 0 0; margin: 0; }
+.timeline-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; font-family: var(--font-mono); border-bottom: 1px solid var(--hairline); }
+.timeline-item:last-child { border-bottom: none; }
+.timeline-time { color: var(--text-3); min-width: 60px; }
+.timeline-source { color: var(--gold); min-width: 80px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-msg { color: var(--text-1); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-item {
   display: flex; align-items: flex-start; gap: 10px;
   padding: 10px 0; border-bottom: 1px solid var(--hairline);
@@ -2189,6 +2199,12 @@ async function fetchLogs(date, hour, limit) {
   if (hour !== '' && hour != null) params.hour = String(hour);
   return apiGet('/', params);
 }
+// viewer overview '最近活动' panel 的 Log Timeline 子 区 域: 调 ?action=logs&date=today&limit=10
+// 拿 今 日 最 近 10 条 log 倒 序 渲 染 时 间 线 (HH:MM:SS + level + source + msg 前 80)
+async function fetchTimeline() {
+  const r = await apiGet('/', { action: 'logs', date: 'today', limit: '10' });
+  return Array.isArray(r) ? r : (r.items || r.logs || []);
+}
 
 // --- Endpoints catalog (22) ---
 const ENDPOINTS = [
@@ -2709,6 +2725,7 @@ function renderOverview() {
               </div>
             </li>
           </ul>
+          \${renderOverviewTimeline()}
         </div>
       </div>
 
@@ -2759,6 +2776,34 @@ function renderOverviewSkeleton() {
       <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
       <div class="panel"><div class="panel-body"><div class="skeleton chart-skeleton"></div></div></div>
     </div>\`;
+}
+
+// "最近活动" panel 末 尾 加 Log Timeline 子 区 域 · 渲 染 STATE.timeline (10 条)
+function renderOverviewTimeline() {
+  const items = STATE.timeline || [];
+  const header = \`
+    <div class="timeline-header">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Log Timeline · \${items.length} 条</span>
+    </div>\`;
+  if (!items.length) {
+    return header + '<div class="timeline-empty">暂无今日 log · 等 1H cron tick</div>';
+  }
+  const rows = items.map(l => {
+    const ts = l.timestamp || l.created_at || l.ts || '';
+    const hh = ts ? ts.slice(11, 19) : '—';
+    const lvl = (l.level || l.severity || 'info').toLowerCase();
+    const lvlClass = lvl === 'error' || lvl === 'err' ? 'fail' : (lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok');
+    const src = l.source || l.logger || l.name || '—';
+    const msg = String(l.message || l.msg || l.text || '').slice(0, 80);
+    return \`<li class="timeline-item">
+      <span class="timeline-time">\${escapeHtml(hh)}</span>
+      <span class="activity-dot \${lvlClass}" style="flex-shrink:0;"></span>
+      <span class="timeline-source">\${escapeHtml(src)}</span>
+      <span class="timeline-msg">\${escapeHtml(msg)}</span>
+    </li>\`;
+  }).join('');
+  return header + \`<ul class="timeline-list">\${rows}</ul>\`;
 }
 
 function renderData() {
@@ -3282,6 +3327,9 @@ async function refreshDashboard() {
   // v0.37.53: 拉 fission-pending 候选池, 用于 KPI 卡片 "Score ≥ 9 待裂变"
   try { STATE.fissionPending = await fetchFissionPending(); }
   catch (e) { STATE.fissionPendingErr = { message: e.message || String(e) }; STATE.fissionPending = []; }
+  // v0.37.55: 拉 今 日 最 近 10 条 log, 用于 '最近活动' panel Log Timeline 子 区 域
+  try { STATE.timeline = await fetchTimeline(); }
+  catch (e) { STATE.timelineErr = { message: e.message || String(e) }; STATE.timeline = []; }
   // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
   // 切 tab 不刷新走马灯 (用户反馈)
   if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
