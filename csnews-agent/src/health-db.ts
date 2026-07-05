@@ -64,6 +64,9 @@ export async function checkSupabaseCounts(env: Env): Promise<{
       }
       const cr = r.headers.get('Content-Range') || '';
       const total = cr.split('/').pop();
+      // v0.37.62: drain response body to avoid CF "stalled HTTP response was canceled" warning.
+      // 成功路径只读 Content-Range header, 不读 body → CF runtime 报 stalled. 用 r.text() drain 一下.
+      await r.text();
       return { name: tbl.name, total: total && total !== '*' ? parseInt(total, 10) : 0 };
     })
   );
