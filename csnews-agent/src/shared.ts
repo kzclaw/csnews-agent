@@ -8,6 +8,8 @@
 export interface Env {
   AI: Ai;
   csnews_raw: R2Bucket;
+  // v0.37.60: dispatcher log diagnostic mode (string "1" = on)
+  DEBUG_LOG_BUFFER?: string;
   BEARER_TOKEN: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_KEY: string;

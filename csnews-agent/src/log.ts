@@ -17,6 +17,31 @@
  */
 import { Env } from './shared';
 
+// v0.37.60: in-memory ring buffer (最 近 100 条 log) · diagnostic fallback
+// 不 替 代 R2 · R2 写 成 功 / 失 败 都 push 到 ring buffer (alway-on)
+// 让 ?action=logs-diag 端 点 能 返 回 真 实 log (即 使 R2 写 失 败)
+const DIAG_BUFFER_MAX = 100;
+const diagBuffer: LogEntry[] = [];
+function pushToDiagBuffer(entry: LogEntry) {
+  diagBuffer.push(entry);
+  if (diagBuffer.length > DIAG_BUFFER_MAX) {
+    diagBuffer.shift(); // FIFO, 保 持 最 新 100 条
+  }
+}
+/**
+ * 读 ring buffer (diagnostic endpoint 用)
+ * 返 回 新 -> 旧 排 序 拷 贝, 不 暴 露 内 部 引 用
+ */
+export function getDiagBuffer(): LogEntry[] {
+  return [...diagBuffer].reverse();
+}
+/**
+ * 清 ring buffer (admin 用, 不 暴 露 给 dashboard)
+ */
+export function clearDiagBuffer() {
+  diagBuffer.length = 0;
+}
+
 export type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 export interface LogEntry {
@@ -98,6 +123,8 @@ export async function logEvent(
       ctx: ctx || undefined,
       source,
     };
+    // v0.37.60: alway-on push to ring buffer (R2 写 成 功 / 失 败 都 push), diagnostic fallback
+    pushToDiagBuffer(entry);
     const key = getLogKey(now, source);
     await putWithRetry(key, formatLogLine(entry));
   } catch (e: any) {
@@ -105,4 +132,37 @@ export async function logEvent(
     console.error('[log] logEvent failed after retries', e?.message || e);
     throw e;
   }
+}
+
+
+/**
+ * v0.37.60: ?action=logs-diag endpoint handler
+ * 返 回 in-memory ring buffer (最 近 100 条 log) · diagnostic 用
+ * 不 走 R2, 不 鉴 权 (跟 1H cron 一 致 — internal tool)
+ * 用 头 表 头 X-Buffer-Size / X-Buffer-Enabled 告 知 caller ring buffer 是 否 启 用
+ */
+export function handleLogsDiagAction(
+  _request: Request,
+  env: Env,
+  _url: URL,
+  cors: Record<string, string>
+): Response {
+  const enabled = env.DEBUG_LOG_BUFFER === '1';
+  const buf = enabled ? getDiagBuffer() : [];
+  const body = JSON.stringify({
+    diag: true,
+    enabled,
+    buffer_size: buf.length,
+    max: DIAG_BUFFER_MAX,
+    items: buf,
+  });
+  return new Response(body, {
+    status: 200,
+    headers: {
+      ...cors,
+      'Content-Type': 'application/json',
+      'X-Buffer-Size': String(buf.length),
+      'X-Buffer-Enabled': enabled ? '1' : '0',
+    },
+  });
 }
