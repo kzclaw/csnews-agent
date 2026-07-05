@@ -102,20 +102,22 @@ export async function dispatchAction(
   const origin = request.headers.get('Origin');
   const cors = corsHeaders(origin);
 
-  // 写一条 endpoint-level log (fire-and-forget with ctx.waitUntil so R2 put completes)
-  // logEvent 现 在 retry 1-2 次 (200ms / 500ms backoff) · 3 次 仍 失 败 抛 给 我 们 catch
-  // catch 不 再 静 默 吞 - console.error 带 详 细 错 误 让 worker live logs / 外 部 监 控 能 抓 到
-  ctx.waitUntil(
-    logEvent(
-      env,
-      'info',
-      `endpoint called: ${action} ${request.method}`,
-      { endpoint: action, method: request.method },
-      'dispatcher'
-    ).catch((err) => {
-      console.error(`[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`);
-    })
-  );
+  // 写一条 endpoint-level log
+  // v0.37.61: 不 再 ctx.waitUntil (fire-and-forget 旧 范 式), 改 直 await logEvent.
+  // 真 因: CF worker 应 答 客 户 端 后, ctx.waitUntil task 拿 不 到 await, 触 发
+  // 'A stalled HTTP response was canceled to prevent deadlock' warning, R2 put 返 回 Response body
+  // 没 cancel/drain, 整 个 调 用 被 CF 强 制 cancel → R2 看 似 写 但 实 际 没 真 落 盘.
+  // 修 法: 直 await logEvent (R2 put 1-10ms), 客 户 端 等 待 log 写 完, 真 正 落 盘 再 返 应.
+  // 之 前 ctx.waitUntil 12h+ 没 真 写 R2 (跟 v0.37.36+ fire-and-forget 老 bug 一 致)
+  await logEvent(
+    env,
+    'info',
+    `endpoint called: ${action} ${request.method}`,
+    { endpoint: action, method: request.method },
+    'dispatcher'
+  ).catch((err) => {
+    console.error(`[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`);
+  });
 
   // 20 action dispatch
   if (action === 'pull') return await handlePullAction(request, env, url, cors, ctx);

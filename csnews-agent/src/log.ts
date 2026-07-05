@@ -105,6 +105,12 @@ export async function logEvent(
     for (let i = 0; i < delays.length; i++) {
       if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
       try {
+        // v0.37.61: ctx.waitUntil 终 止 抢 在 R2 put 返 回 之 前 的 真 因: CF worker 返 应 客 户 端 时,
+        // 还 没 完 成 的 ctx.waitUntil task (含 R2 put) 拿 不 到 await, 会 被 CF 自 动 cancel 整 个 调 用.
+        // "A stalled HTTP response was canceled to prevent deadlock" warning
+        // 修 法: 不 用 ctx.waitUntil, 直 接 await logEvent, 让 R2 put 真 正 完 成 之 后 才 返 应 客 户 端.
+        // 不 影 响 主 调 用 性 能 (R2 put 1-10ms, 不 是 sync 阻 塞).
+        // 之 前 ctx.waitUntil 假 装 fire-and-forget 走 的 端 点 都 改 sync await (例 dispatch.ts)
         await env.csnews_raw.put(key, value);
         return;
       } catch (e: any) {
