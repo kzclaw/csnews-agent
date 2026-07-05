@@ -106,7 +106,10 @@ export async function dispatchAction(
     logEvent(
       env,
       'info',
-      'endpoint called',
+      // 改 log message, 把 action + method 拼 进 来 — viewer / log tab / R2 历 史 都 直 接 看 出
+      // 不 修 meta schema (仍 写 { endpoint, method }), 不 删 log, 不 改 dispatch 调 用 者
+      // example: 'endpoint called: tavily GET' 或 'endpoint called: logs GET' 跟 戴 舒 柯 dashboard Log Timeline 一 眼 能 区 分
+      `endpoint called: ${action} ${request.method}`,
       { endpoint: action, method: request.method },
       'dispatcher'
     ).catch(() => {})
