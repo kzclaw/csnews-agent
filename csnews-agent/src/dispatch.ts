@@ -102,17 +102,18 @@ export async function dispatchAction(
   const cors = corsHeaders(origin);
 
   // 写一条 endpoint-level log (fire-and-forget with ctx.waitUntil so R2 put completes)
+  // logEvent 现 在 retry 1-2 次 (200ms / 500ms backoff) · 3 次 仍 失 败 抛 给 我 们 catch
+  // catch 不 再 静 默 吞 - console.error 带 详 细 错 误 让 worker live logs / 外 部 监 控 能 抓 到
   ctx.waitUntil(
     logEvent(
       env,
       'info',
-      // 改 log message, 把 action + method 拼 进 来 — viewer / log tab / R2 历 史 都 直 接 看 出
-      // 不 修 meta schema (仍 写 { endpoint, method }), 不 删 log, 不 改 dispatch 调 用 者
-      // example: 'endpoint called: tavily GET' 或 'endpoint called: logs GET' 跟 戴 舒 柯 dashboard Log Timeline 一 眼 能 区 分
       `endpoint called: ${action} ${request.method}`,
       { endpoint: action, method: request.method },
       'dispatcher'
-    ).catch(() => {})
+    ).catch((err) => {
+      console.error(`[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`);
+    })
   );
 
   // 20 action dispatch

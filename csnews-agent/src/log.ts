@@ -71,6 +71,24 @@ export async function logEvent(
     console.error('[log] csnews_raw binding missing');
     return;
   }
+  // log retry helper: 单 R2 put 失 败 后 1-2 retry, 200ms / 500ms backoff
+  // 原 因: R2 偶 发 限 流 / 网 络 闪 断 / CF internal 抖 动 → 单 次 失 败 不 必 立 刻 放 弃
+  // 失 败 后 3 次 仍 抛 出 (让 调 用 方 catch 显 错 误, 不 静 默 吞)
+  const putWithRetry = async (key: string, value: string, retries = 2): Promise<void> => {
+    const delays = [0, 200, 500];
+    let lastErr: unknown;
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+      try {
+        await env.csnews_raw.put(key, value);
+        return;
+      } catch (e: any) {
+        lastErr = e;
+        console.error(`[log] put attempt ${i+1} failed: ${e?.message || e}`);
+      }
+    }
+    throw lastErr;
+  };
   try {
     const now = new Date();
     const entry: LogEntry = {
@@ -81,9 +99,10 @@ export async function logEvent(
       source,
     };
     const key = getLogKey(now, source);
-    await env.csnews_raw.put(key, formatLogLine(entry));
+    await putWithRetry(key, formatLogLine(entry));
   } catch (e: any) {
-    console.error('[log] logEvent failed', e?.message || e);
-    // 降级: 不抛
+    // 不 静 默 吞, 抛 给 调 用 方 (dispatch.ts catch 显 console.error)
+    console.error('[log] logEvent failed after retries', e?.message || e);
+    throw e;
   }
 }
