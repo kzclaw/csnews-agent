@@ -433,7 +433,7 @@ body {
 .panel-body { padding: 18px 20px; }
 
 /* SVG charts */
-.chart-svg { width: 100%; height: 180px; display: block; }
+.chart-svg { width: 100%; height: 220px; display: block; } /* 0.5 step bins (20) 高 220px ~每 bin 11px */
 .chart-svg .axis { stroke: var(--hairline); stroke-width: 1; }
 .chart-svg .axis-label { fill: var(--text-3); font-size: 10px; font-family: var(--font-mono); }
 /* viewer score 直方图最右 bin "≥ 9" axis label 高亮: 红色加粗, user 一眼看到 9 阈 值区 */
@@ -2382,7 +2382,7 @@ function svgDonut(segments) {
 
 function svgHistogram(bins) {
   if (!bins.length || bins.every(b => b === 0)) return '<div class="chart-empty">暂无数据</div>';
-  const w = 600, h = 180, padL = 36, padR = 12, padT = 12, padB = 36;
+  const w = 600, h = 220, padL = 36, padR = 12, padT = 12, padB = 40;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const max = Math.max(1, ...bins);
   const barW = innerW / bins.length;
@@ -2392,13 +2392,20 @@ function svgHistogram(bins) {
     const y = padT + innerH - bh;
     const w2 = barW - 4;
     let cls = 'bar';
-    if (i >= 7 && i < bins.length - 1) cls = 'bar warn';
-    // v0.37.53: 最右 bin 是 "≥ 9" (clamp 含 ≥10), 用 danger 红高亮 fission 阈 值 bin
+    // warn 区: 中高段 (i >= 14 ≈ score 7+)
+    if (i >= 14 && i < bins.length - 1) cls = 'bar warn';
+    // v0.37.53/54: 最右 bin 是 "≥ 9.5" (含 9.5-10 · clamp ≥10), 用 danger 红高亮 fission 阈 值 bin
     if (i === bins.length - 1) cls = 'bar danger';
     return \`<rect class="\${cls}" x="\${x}" y="\${y}" width="\${w2}" height="\${bh}" rx="1"/>\`;
   }).join('');
-  // bin label 改区间: 0→0-1, 1→1-2, ..., 8→8-9, 9(L)=≥ 9 (含 clamp ≥10) — 这样 user 一眼看出 bin 8 ≠ 9
-  const labels = bins.map((_, i) => i < bins.length - 1 ? \`\${i}-\${i + 1}\` : '≥ 9');
+  // bin label 按 0.5 一档 细 化: 0→0-0.5, 1→0.5-1, ..., 17→8.5-9, 18→9-9.5, 19(L)=≥ 9.5
+  // 这样 8.5 / 9 / 9.5 都 能 区 分, user 不 再 把 8.99 误 判 成 9
+  const labels = bins.map((_, i) => {
+    if (i === bins.length - 1) return '≥ 9.5';
+    const lo = (i / 2).toFixed(1);
+    const hi = ((i + 1) / 2).toFixed(1);
+    return \`\${lo}-\${hi}\`;
+  });
   return \`
     <svg class="chart-svg" viewBox="0 0 \${w} \${h}" preserveAspectRatio="xMidYMid meet">
       <line class="axis" x1="\${padL}" y1="\${padT + innerH}" x2="\${w - padR}" y2="\${padT + innerH}"/>
@@ -2462,10 +2469,15 @@ function renderOverview() {
   STATE.news7d.forEach(it => { if (it.level && levelDist[it.level] != null) levelDist[it.level]++; });
   const levelTotal = levelDist.follow + levelDist.important + levelDist.explosive;
 
-  const scoreBins = new Array(10).fill(0);
+  // 20 bins · 0.5 step · 0..9.5+10 = clamp
+  // bin i 对应 score 区间 [i*0.5, (i+1)*0.5) (除最后 bin 含 ≥ 9.5)
+  const scoreBins = new Array(20).fill(0);
   STATE.news7d.forEach(it => {
     const s = Number(it.score) || 0;
-    if (s >= 0 && s <= 10) scoreBins[Math.min(9, Math.floor(s))]++;
+    if (s >= 0 && s <= 10) {
+      const bin = Math.min(19, Math.floor(s * 2));
+      scoreBins[bin]++;
+    }
   });
 
   // v0.37.53: KPI 卡片 "Score ≥ 9 待裂变" 数据源 — topics 表 level=explosive AND score>=9.
