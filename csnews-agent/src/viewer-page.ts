@@ -2725,7 +2725,7 @@ function renderOverview() {
               </div>
             </li>
           </ul>
-          \${renderOverviewTimeline()}
+          \${(() => { try { return renderOverviewTimeline(); } catch (e) { console.warn('timeline', e); return '<div class="timeline-empty">log timeline 暂 不 可 用</div>'; } })()}
         </div>
       </div>
 
@@ -2779,31 +2779,42 @@ function renderOverviewSkeleton() {
 }
 
 // "最近活动" panel 末 尾 加 Log Timeline 子 区 域 · 渲 染 STATE.timeline (10 条)
+// v0.37.56: 整 个 函 数 body wrap try/catch — 任 一 子 throw (例 如 STS / parse / 空 data shape) 返 回 graceful fallback,
+// 不 致 整 个 renderOverview() 报 错 导 致 dashboard 空 渲 染.
 function renderOverviewTimeline() {
-  const items = STATE.timeline || [];
-  const header = \`
-    <div class="timeline-header">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      <span>Log Timeline · \${items.length} 条</span>
-    </div>\`;
-  if (!items.length) {
-    return header + '<div class="timeline-empty">暂无今日 log · 等 1H cron tick</div>';
+  try {
+    const items = STATE.timeline || [];
+    const header = \`
+      <div class="timeline-header">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Log Timeline · \${items.length} 条</span>
+      </div>\`;
+    if (!items.length) {
+      // 0 条 时 显 示 渐 灰 提 示 (fetch 失 败 / 还 没 跑 / 数 据 为 空 都 一 样)
+      const errMsg = STATE.timelineErr ? \` (\${escapeHtml(STATE.timelineErr.message || 'fetch failed')})\` : ' · 等 1H cron tick';
+      return header + \`<div class="timeline-empty">暂无今日 log\${errMsg}</div>\`;
+    }
+    const rows = items.map(l => {
+      const ts = l.timestamp || l.created_at || l.ts || '';
+      const hh = typeof ts === 'string' && ts.length >= 19 ? ts.slice(11, 19) : '—';
+      const lvl = String(l.level || l.severity || 'info').toLowerCase();
+      const lvlClass = lvl === 'error' || lvl === 'err' ? 'fail' : (lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok');
+      const src = l.source || l.logger || l.name || '—';
+      const msg = String(l.message || l.msg || l.text || '').slice(0, 80);
+      return \`<li class="timeline-item">
+        <span class="timeline-time">\${escapeHtml(hh)}</span>
+        <span class="activity-dot \${lvlClass}" style="flex-shrink:0;"></span>
+        <span class="timeline-source">\${escapeHtml(src)}</span>
+        <span class="timeline-msg">\${escapeHtml(msg)}</span>
+      </li>\`;
+    }).join('');
+    return header + \`<ul class="timeline-list">\${rows}</ul>\`;
+  } catch (e) {
+    // 渲 染 函 数 抛 错 时 返 回 极 小 fallback — 不 让 outer template literal eval 抛 错 拖 死 整 个 dashboard
+    console.warn('[renderOverviewTimeline]', e && e.message ? e.message : e);
+    return \`<div class="timeline-header"><span>Log Timeline · 渲 染 失 败</span></div>
+      <div class="timeline-empty">暂 不 可 用 · 请 看 console</div>\`;
   }
-  const rows = items.map(l => {
-    const ts = l.timestamp || l.created_at || l.ts || '';
-    const hh = ts ? ts.slice(11, 19) : '—';
-    const lvl = (l.level || l.severity || 'info').toLowerCase();
-    const lvlClass = lvl === 'error' || lvl === 'err' ? 'fail' : (lvl === 'warn' || lvl === 'warning' ? 'warn' : 'ok');
-    const src = l.source || l.logger || l.name || '—';
-    const msg = String(l.message || l.msg || l.text || '').slice(0, 80);
-    return \`<li class="timeline-item">
-      <span class="timeline-time">\${escapeHtml(hh)}</span>
-      <span class="activity-dot \${lvlClass}" style="flex-shrink:0;"></span>
-      <span class="timeline-source">\${escapeHtml(src)}</span>
-      <span class="timeline-msg">\${escapeHtml(msg)}</span>
-    </li>\`;
-  }).join('');
-  return header + \`<ul class="timeline-list">\${rows}</ul>\`;
 }
 
 function renderData() {
@@ -3328,8 +3339,15 @@ async function refreshDashboard() {
   try { STATE.fissionPending = await fetchFissionPending(); }
   catch (e) { STATE.fissionPendingErr = { message: e.message || String(e) }; STATE.fissionPending = []; }
   // v0.37.55: 拉 今 日 最 近 10 条 log, 用于 '最近活动' panel Log Timeline 子 区 域
-  try { STATE.timeline = await fetchTimeline(); }
-  catch (e) { STATE.timelineErr = { message: e.message || String(e) }; STATE.timeline = []; }
+  // v0.37.56: 增 log warning 让 dashboard 渲 染 fail root cause 可 追 溯
+  try {
+    STATE.timeline = await fetchTimeline();
+    STATE.timelineErr = null;
+  } catch (e) {
+    STATE.timelineErr = { message: e.message || String(e) };
+    STATE.timeline = [];
+    console.warn('[fetchTimeline] failed (graceful):', e.message || e);
+  }
   // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
   // 切 tab 不刷新走马灯 (用户反馈)
   if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
