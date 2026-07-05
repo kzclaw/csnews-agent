@@ -436,6 +436,8 @@ body {
 .chart-svg { width: 100%; height: 180px; display: block; }
 .chart-svg .axis { stroke: var(--hairline); stroke-width: 1; }
 .chart-svg .axis-label { fill: var(--text-3); font-size: 10px; font-family: var(--font-mono); }
+/* viewer score 直方图最右 bin "≥ 9" axis label 高亮: 红色加粗, user 一眼看到 9 阈 值区 */
+.chart-svg .axis-label-fission { fill: var(--danger); font-weight: 600; font-size: 11px; }
 .chart-svg .grid-line { stroke: var(--hairline); stroke-width: 0.5; stroke-dasharray: 2 4; }
 .chart-svg .line { fill: none; stroke: var(--gold); stroke-width: 1.5; }
 .chart-svg .area { fill: var(--gold); opacity: 0.10; }
@@ -2122,6 +2124,13 @@ async function fetchNews7d() {
   const r = await apiGet('/', { action: 'pull', type: 'news', since: '7d', limit: '200', format: 'full' });
   return r.items || [];
 }
+// v0.37.53: 拉 fission-pending 候选池, 用于 dashboard KPI 卡片 "Score ≥ 9 待裂变".
+// 走现成 pull endpoint, 不新增 backend 健康字段.
+async function fetchFissionPending() {
+  // limit=200 命中 Worker hard cap, 涵盖全部 pending (实际 ~13 条远小于上限).
+  const r = await apiGet('/', { action: 'pull', type: 'fission-pending', limit: '200' });
+  return r.items || [];
+}
 
 // fix 5-3: 拉 7 天 important/explosive 新闻 · 加 url 给点击跳转
 // fix 6-11: 同一 title 可能 explosive + important 同时命中 (Worker 评分时一条新闻被打了两个 level) · 用 Set 去重 · explosive 优先 (循环在前)
@@ -2373,7 +2382,7 @@ function svgDonut(segments) {
 
 function svgHistogram(bins) {
   if (!bins.length || bins.every(b => b === 0)) return '<div class="chart-empty">暂无数据</div>';
-  const w = 600, h = 180, padL = 36, padR = 12, padT = 12, padB = 28;
+  const w = 600, h = 180, padL = 36, padR = 12, padT = 12, padB = 36;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const max = Math.max(1, ...bins);
   const barW = innerW / bins.length;
@@ -2383,16 +2392,21 @@ function svgHistogram(bins) {
     const y = padT + innerH - bh;
     const w2 = barW - 4;
     let cls = 'bar';
-    if (i >= 7) cls = 'bar warn';
-    if (i === bins.length - 1) cls = 'bar alt';
+    if (i >= 7 && i < bins.length - 1) cls = 'bar warn';
+    // v0.37.53: 最右 bin 是 "≥ 9" (clamp 含 ≥10), 用 danger 红高亮 fission 阈 值 bin
+    if (i === bins.length - 1) cls = 'bar danger';
     return \`<rect class="\${cls}" x="\${x}" y="\${y}" width="\${w2}" height="\${bh}" rx="1"/>\`;
   }).join('');
+  // bin label 改区间: 0→0-1, 1→1-2, ..., 8→8-9, 9(L)=≥ 9 (含 clamp ≥10) — 这样 user 一眼看出 bin 8 ≠ 9
+  const labels = bins.map((_, i) => i < bins.length - 1 ? \`\${i}-\${i + 1}\` : '≥ 9');
   return \`
     <svg class="chart-svg" viewBox="0 0 \${w} \${h}" preserveAspectRatio="xMidYMid meet">
       <line class="axis" x1="\${padL}" y1="\${padT + innerH}" x2="\${w - padR}" y2="\${padT + innerH}"/>
-      <text class="axis-label" x="\${padL}" y="\${h - 8}" text-anchor="start">0</text>
-      <text class="axis-label" x="\${padL + innerW / 2}" y="\${h - 8}" text-anchor="middle">5</text>
-      <text class="axis-label" x="\${w - padR}" y="\${h - 8}" text-anchor="end">10</text>
+      \${labels.map((lbl, i) => {
+        const x = padL + i * barW + barW / 2;
+        const isLast = i === labels.length - 1;
+        return \`<text class="axis-label \${isLast ? 'axis-label-fission' : ''}" x="\${x}" y="\${h - 4}" text-anchor="middle">\${lbl}</text>\`;
+      }).join('')}
       \${bars}
     </svg>\`;
 }
@@ -2454,6 +2468,26 @@ function renderOverview() {
     if (s >= 0 && s <= 10) scoreBins[Math.min(9, Math.floor(s))]++;
   });
 
+  // v0.37.53: KPI 卡片 "Score ≥ 9 待裂变" 数据源 — topics 表 level=explosive AND score>=9.
+  // 与 scoreBins (7d news_hotspots) 完全分源, 不会因为 8.99 news 误判成 9 分.
+  const fp = STATE.fissionPending || [];
+  const topicsGe9Count = fp.filter(t => Number(t.score) >= 9).length;
+  const topicsGe9Total = fp.length;
+  // 候选池的 score 分布 (调试用 — user 可看 score 实际分布)
+  const scoreDistText = (() => {
+    if (!fp.length) return '候选池为空';
+    const counts = {};
+    fp.forEach(t => {
+      const s = Math.floor(Number(t.score) || 0);
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[0] - a[0]).map(([s, c]) => \`\${s}×\${c}\`).join(' · ');
+  })();
+  // KPI meta 文本 — 提到外面避免脚本 template literal 嵌套反引号让 TS 编译器误解析
+  const topicsGe9Ge9StateMeta = topicsGe9Count > 0
+    ? \`\${topicsGe9Count} 个 ≥ 9 已触发裂变队列\`
+    : (fp.length > 0 ? \`等待 8 → 9+ 突破 · 当前分布: \${scoreDistText}\` : '等待 8 → 9+ 突破');
+
   const tierBadgeClass = \`badge-tier-\${aiBudget.tier || 'normal'}\`;
   const tierLabel = (aiBudget.tier || 'normal').toUpperCase();
 
@@ -2506,6 +2540,17 @@ function renderOverview() {
         </div>
         <div class="kpi-value">\${fmtNumber(counts.news_hotspots || 0)}</div>
         <div class="kpi-meta">news · \${fmtNumber(counts.topics || 0)} topics · \${fmtNumber(counts.trend_snapshots || 0)} trends</div>
+      </div>
+
+      <!-- 新增 KPI 卡片 — Score ≥ 9 待裂变: 候选池真实 count, 不依赖 dashboard score 直方图 bin 8 误判 -->
+      <div class="kpi">
+        <div class="kpi-status \${topicsGe9Count > 0 ? 'fail' : 'ok'}"></div>
+        <div class="kpi-label">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>Score &ge; 9 待裂变</span>
+        </div>
+        <div class="kpi-value \${topicsGe9Count > 0 ? 'danger' : ''}">\${topicsGe9Count}</div>
+        <div class="kpi-meta">候选池 \${topicsGe9Total} 个 explosive &middot; \${topicsGe9Ge9StateMeta}</div>
       </div>
     </div>
 
@@ -3222,6 +3267,9 @@ async function refreshDashboard() {
   catch (e) { STATE.entityErr = { message: e.message || String(e) }; STATE.entity = null; }
   try { STATE.event = await fetchEvent(); }
   catch (e) { STATE.eventErr = { message: e.message || String(e) }; STATE.event = null; }
+  // v0.37.53: 拉 fission-pending 候选池, 用于 KPI 卡片 "Score ≥ 9 待裂变"
+  try { STATE.fissionPending = await fetchFissionPending(); }
+  catch (e) { STATE.fissionPendingErr = { message: e.message || String(e) }; STATE.fissionPending = []; }
   // fix 4-3: ticker 拉真实新闻标题 · 只在 ticker 内容为空时 fetch (避免切 tab 刷新)
   // 切 tab 不刷新走马灯 (用户反馈)
   if (!document.querySelector('#ticker-track')?.innerHTML || document.querySelector('#ticker-track').children.length < 10) {
