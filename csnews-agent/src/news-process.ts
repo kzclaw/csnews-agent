@@ -435,13 +435,28 @@ export async function recordTrendWithMember(
     });
     if (!res.ok) {
       const errText = await res.text();
-      await logEvent(
-        env,
-        'error',
-        `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
-        undefined,
-        'process'
-      );
+      // v0.37.64: known_schema_mismatch 14d+ bug (kr34-migration-20260617 SQL 函数 vs trend_snapshots 表 schema 不 一 致)
+      // 函数 用 topic_score/signal_score · 实 际 表 用 score · PostgreSQL 22P02 invalid input syntax for type uuid: "1"
+      // 降 级 为 info + 加 tag 标 记 · 不 降 error (其 他 真 错 误 仍 报 error) · 不 throw (已 知 沉 默 bug)
+      const isKnownSchemaMismatch =
+        errText.includes('22P02') || errText.includes('invalid input syntax for type uuid');
+      if (isKnownSchemaMismatch) {
+        await logEvent(
+          env,
+          'info',
+          `[known_schema_mismatch_v0.37.64] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
+          undefined,
+          'process'
+        );
+      } else {
+        await logEvent(
+          env,
+          'error',
+          `record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
+          undefined,
+          'process'
+        );
+      }
       return null;
     }
     // record_trend_with_member RPC 返回形状由 SQL 函数决定，用 RecordTrendWithMemberResult
