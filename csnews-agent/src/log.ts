@@ -111,7 +111,15 @@ export async function logEvent(
         // 修 法: 不 用 ctx.waitUntil, 直 接 await logEvent, 让 R2 put 真 正 完 成 之 后 才 返 应 客 户 端.
         // 不 影 响 主 调 用 性 能 (R2 put 1-10ms, 不 是 sync 阻 塞).
         // 之 前 ctx.waitUntil 假 装 fire-and-forget 走 的 端 点 都 改 sync await (例 dispatch.ts)
-        await env.csnews_raw.put(key, value);
+        // v0.37.63: 加 httpMetadata: { contentType: 'application/json' } 跟 saveToR2 同 步,
+        // 捕 捉 result (含 etag / version) 并 console.log on success 兜 底 验 证 (因 为 R2 静 默 失 败 难 调 查).
+        const result = await env.csnews_raw.put(key, value, {
+          httpMetadata: { contentType: 'application/json' },
+        });
+        // 成 功 路 径 也 log 一 句, 跟 [saveToR2] put ok 同 风 格, 让 R2 真 落 盘 有 痕 迹
+        console.error(
+          `[log] put ok key=${key} etag=${result?.etag || 'n/a'} version=${result?.version || 'n/a'}`
+        );
         return;
       } catch (e: any) {
         lastErr = e;

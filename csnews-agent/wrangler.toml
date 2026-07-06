@@ -6,7 +6,15 @@ compatibility_date = "2026-05-29"
 binding = "AI"
 
 [[r2_buckets]]
+# v0.37.63: re-add bucket_name to ensure binding maps to correct R2 bucket.
+# 历史 (2e88285 security commit): 误 把 bucket_name 当 secret 删 了, 但 bucket_name 是公开标识符.
+# 后果: wrangler.toml 仅 有 binding="csnews_raw" (下划线) → wrangler 推 断 bucket 名 = "csnews_raw" (下划线) →
+#       该 bucket 不 存 在 (实 际 bucket 是 "csnews-raw" 连 字符).
+# 推 测: 旧 部署 (v0.37.12 时) 配 置 有 bucket_name, CF Dashboard 留 了 真 实 binding 指 向 "csnews-raw".
+#       但 v0.37.62 推 完 后, 部分 写 (news/) 仍 走 Dashboard 的 真 binding, 而 logs/ 写 走 新 binding 指 向 "csnews_raw" 不 存 在.
+# 修 法: 显 式 加 bucket_name = "csnews-raw" 让 推 断 100% 正 确.
 binding = "csnews_raw"
+bucket_name = "csnews-raw"
 
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"
@@ -27,7 +35,7 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.62"
+WORKER_VERSION = "v0.37.64"
 # dispatcher log diagnostic mode flag (ring buffer 100 条 + ?action=logs-diag)
 # 配 1 = 开, 不 配 / 0 = 关 (default 关, 不 影 响 production)
 DEBUG_LOG_BUFFER = "1"
