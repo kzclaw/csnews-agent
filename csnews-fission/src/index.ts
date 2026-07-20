@@ -13,7 +13,8 @@
  *   - src/shared.ts：共享类型
  *   - src/utils.ts：工具函数
  */
-import { Env } from './shared';
+import { Env, getSupabaseHost } from './shared';
+import { supabaseHeaders } from './utils';
 import { runFissionTrigger } from './fission-trigger';
 import { authRequest } from './auth';
 
@@ -22,7 +23,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';
-  const NO_AUTH_ACTIONS = ['ping', 'debug-token'];
+  const NO_AUTH_ACTIONS = ['ping', 'debug-token', 'debug-fission'];
   if (!NO_AUTH_ACTIONS.includes(action)) {
     const deny = authRequest(request, env);
     if (deny) return deny;
@@ -54,6 +55,27 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     return new Response(JSON.stringify({ ok: true, bearer_token_length: tokenLen }), {
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // DEBUG: step-by-step diagnostics
+  if (action === 'debug-fission') {
+    const supabaseUrl = getSupabaseHost(env);
+    const steps: Record<string, string> = {};
+
+    // Step 1: find topics
+    try {
+      const r1 = await fetch(
+        `${supabaseUrl}/rest/v1/topics?score=eq.9&level=eq.explosive&order=created_at.desc&limit=1&select=id,topic_key,level,score`,
+        { headers: { ...supabaseHeaders(env.SUPABASE_SERVICE_KEY), 'Content-Type': 'application/json' } }
+      );
+      const topics = await r1.json() as any[];
+      steps['topics'] = JSON.stringify(topics);
+    } catch (e) { steps['topics_error'] = String(e); }
+
+    return new Response(
+      JSON.stringify({ ok: true, env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY }, steps }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   // 手动触发裂变（用于调试或手动干预）

@@ -29,11 +29,9 @@ import { shouldTriggerAiCall } from './ai-budget';
 
 export interface FissionTopic {
   id: string;
-  title: string;
+  topic_key: string;
   level: string;
   score: number;
-  fission_count: number;
-  fission_triggered_at: string | null;
 }
 
 export interface FissionResult {
@@ -363,34 +361,27 @@ ${searchResults.map((r) => `- [${r.title}](${r.url}) (${r.source})`).join('\n')}
  */
 export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
   const supabaseUrl = getSupabaseHost(env);
-  const sql = `
-    SELECT id, title, level, score,
-           COALESCE(fission_count, 0) as fission_count,
-           fission_triggered_at
-    FROM topics
-    WHERE score = 9
-      AND level = 'explosive'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-      method: 'POST',
-      headers: {
-        ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: sql }),
-    });
+    // PostgREST: query topics table directly (no exec_sql RPC needed)
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/topics` +
+        `?score=eq.9&level=eq.explosive` +
+        `&order=created_at.desc&limit=1` +
+        `&select=id,topic_key,level,score`,
+      {
+        headers: {
+          ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     if (!res.ok) {
       console.error('[fission] findFissionTopics failed:', await res.text());
       return [];
     }
 
-    const data = (await res.json()) as { result?: FissionTopic[] };
-    return data.result || [];
+    return (await res.json()) as FissionTopic[];
   } catch (err) {
     console.error('[fission] findFissionTopics exception:', err);
     return [];
@@ -402,29 +393,27 @@ export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
  */
 async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
   const supabaseUrl = getSupabaseHost(env);
-  const sql = `
-    SELECT n.title
-    FROM news_hotspots n
-    JOIN news_topic_members ntm ON ntm.news_id = n.id
-    WHERE ntm.topic_id = '${topicId}'
-    ORDER BY n.created_at DESC
-    LIMIT 3
-  `;
-
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-      method: 'POST',
-      headers: {
-        ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: sql }),
-    });
+    // PostgREST: embed news via news_topic_members → news join
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/news_topic_members` +
+        `?topic_id=eq.${topicId}` +
+        `&select=news:news_id(title)` +
+        `&order=news.created_at.desc&limit=3`,
+      {
+        headers: {
+          ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     if (!res.ok) return [];
 
-    const data = (await res.json()) as { result?: { title: string }[] };
-    return (data.result || []).map((r) => r.title).filter(Boolean);
+    const data = (await res.json()) as { news?: { title: string } }[];
+    return (data || [])
+      .map(r => r.news?.title)
+      .filter((t): t is string => Boolean(t));
   } catch {
     return [];
   }
@@ -441,6 +430,7 @@ export async function resetTopicScore(
   const supabaseUrl = getSupabaseHost(env);
   const now = new Date().toISOString();
 
+  // topics table only has score column (no fission_count/fission_triggered_at)
   const res = await fetch(`${supabaseUrl}/rest/v1/topics?id=eq.${topicId}`, {
     method: 'PATCH',
     headers: {
@@ -448,17 +438,13 @@ export async function resetTopicScore(
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
-    body: JSON.stringify({
-      score: 0,
-      fission_triggered_at: now,
-      fission_count: currentCount + 1,
-    }),
+    body: JSON.stringify({ score: 0 }),
   });
 
   if (!res.ok) {
     console.error('[fission] resetTopicScore failed for topic:', topicId, await res.text());
   } else {
-    console.log(`[fission] topic ${topicId} reset score=0, fission_count=${currentCount + 1}`);
+    console.log(`[fission] topic ${topicId} reset score=0`);
   }
 }
 
@@ -592,7 +578,7 @@ async function parallelSearch(queries: string[], tavilyKey?: string): Promise<Se
  * 执行单个 topic 的裂变流程（Phase 2 完整实现）
  */
 export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise<void> {
-  console.log(`[fission] processing topic=${topic.id} title="${topic.title}"`);
+  console.log(`[fission] processing topic=${topic.id} topic_key="${topic.topic_key}"`);
 
   const now = new Date().toISOString();
   let queries: string[] = [];
@@ -607,7 +593,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
 
     // Step 2: LLM 生成搜索词
     console.log('[fission] step 2/5 generating search queries...');
-    queries = await generateSearchQueries(env, topic.title, relatedNews);
+    queries = await generateSearchQueries(env, topic.topic_key, relatedNews);
     console.log(`[fission] queries: ${JSON.stringify(queries)}`);
 
     // Step 3: 并行搜索（ZAKER + Tavily fallback）
@@ -616,7 +602,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
 
     // Step 4: LLM 生成裂变报告
     console.log('[fission] step 4/5 generating fission report...');
-    reportContent = await generateFissionReport(env, topic.title, searchResults);
+    reportContent = await generateFissionReport(env, topic.topic_key, searchResults);
 
     // Step 5: 写入 R2（报告 + index）
     const yearMonth = now.slice(0, 7); // e.g. "2026-06"
@@ -630,9 +616,9 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
     // 更新 index
     await appendFissionIndex(env, {
       topic_id: topic.id,
-      topic_title: topic.title,
+      topic_title: topic.topic_key,
       r2_key: r2Key,
-      fission_count: topic.fission_count + 1,
+      fission_count: 1,
       triggered_at: now,
     });
 
@@ -648,7 +634,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
     });
 
     // 重置 topic score
-    await resetTopicScore(env, topic.id, topic.fission_count);
+    await resetTopicScore(env, topic.id, 0);
 
     console.log(`[fission] completed topic=${topic.id} r2_key=${r2Key}`);
   } catch (err) {
@@ -666,7 +652,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
     });
 
     // 失败时仍重置 score，避免无限重试
-    await resetTopicScore(env, topic.id, topic.fission_count);
+    await resetTopicScore(env, topic.id, 0);
   }
 }
 
@@ -685,6 +671,6 @@ export async function runFissionTrigger(env: Env): Promise<void> {
 
   // 每次最多处理 1 个 topic（节省 Neurons 预算）
   const topic = topics[0];
-  console.log(`[fission] found ${topics.length} topic(s), processing 1: ${topic.title}`);
+  console.log(`[fission] found ${topics.length} topic(s), processing 1: ${topic.topic_key}`);
   await runFissionForTopic(env, topic);
 }
