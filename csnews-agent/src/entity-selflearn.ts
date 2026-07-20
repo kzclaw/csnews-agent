@@ -18,8 +18,6 @@
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
 import { loadNoiseAnchors, filterNoiseCandidates, cosineSimilarity } from './entity-noise-filter';
-// Re-export for contract tests (validate/entity-selflearn.contract.ts)
-export { cosineSimilarity } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 import { logEvent } from './log';
 

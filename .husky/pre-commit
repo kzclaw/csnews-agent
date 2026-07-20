@@ -112,11 +112,10 @@ git add "$WRANGLER_TOML"
 # 把新 tag 写到 .git/TAG_NEXT (供 post-commit hook 读)
 echo "$NEW_TAG" > .git/TAG_NEXT
 
-# ============================================================
 # vitest 合约测试 (戴舒柯 02:22 拍板)
-# 跑 csnews-agent + csnews-fission + csnews-mcp-server 三个子项目,
-# 确保所有测试通过才允许 commit.
-# ============================================================
+# 跑 csnews-agent + csnews-fission + csnews-mcp-server 三个子项目.
+# 测试文件在本机磁盘 (validate/), 不入仓库. hook 执行本地 vitest.
+# 任一子项目测试不通过则 block commit.
 echo "[pre-commit] vitest — csnews-agent..."
 cd csnews-agent && npm run validate 2>&1 | tail -5
 AGENT_EXIT=$?

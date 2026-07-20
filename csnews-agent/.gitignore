@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
 
-# Test contracts — committed to repository for pre-commit hook + CI validation
+# Test contracts — local only, pre-commit hook runs from disk (not tracked in git)
+validate/
 
 # R2 runtime outputs (auto-generated, not source)
 entity-finalized.json
