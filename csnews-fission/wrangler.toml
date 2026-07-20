@@ -45,6 +45,7 @@ crons = [ "0 */6 * * *" ]
 
 # updated: sync cron to CF via auto-deploy on main push
 # v0.37.66: rebuild to re-apply bindings (R2/AI/KV/Service)
+# v0.37.67: add HTTP route for manual fission-manual trigger (fission.kwokzit.info)
 
 # v0.37.13: 加 observability 暴露 console.error (跟 csnews-agent 5c991a5 一致)
 # 之前 14 天 R2 写入 broken · 同样缺 [observability] 块让 console.error 看不到
