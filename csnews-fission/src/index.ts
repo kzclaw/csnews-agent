@@ -23,7 +23,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';
-  const NO_AUTH_ACTIONS = ['ping', 'debug-token', 'debug-fission'];
+  const NO_AUTH_ACTIONS = ['ping', 'debug-token', 'debug-fission', 'debug-r2'];
   if (!NO_AUTH_ACTIONS.includes(action)) {
     const deny = authRequest(request, env);
     if (deny) return deny;
@@ -76,6 +76,31 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
       JSON.stringify({ ok: true, env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY }, steps }),
       { headers: { 'Content-Type': 'application/json' } }
     );
+  }
+
+  // DEBUG: test R2 write directly
+  if (action === 'debug-r2') {
+    if (!env.csnews_raw) {
+      return new Response(JSON.stringify({ ok: false, error: 'csnews_raw binding missing' }), {
+        status: 500, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const testKey = `fission/debug/test-${Date.now()}.txt`;
+    const testContent = `R2 write test at ${new Date().toISOString()}`;
+    try {
+      await env.csnews_raw.put(testKey, testContent, {
+        httpMetadata: { contentType: 'text/plain' },
+      });
+      const obj = await env.csnews_raw.get(testKey);
+      const readBack = obj ? await obj.text() : 'FILE NOT FOUND';
+      return new Response(JSON.stringify({ ok: true, testKey, readBack, length: readBack.length }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ ok: false, error: String(err), testKey }), {
+        status: 500, headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   // 手动触发裂变（用于调试或手动干预）
