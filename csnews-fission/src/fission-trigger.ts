@@ -30,7 +30,7 @@ import { shouldTriggerAiCall } from './ai-budget';
 export interface FissionTopic {
   id: string;
   title: string;
-  stage: string;
+  level: string;
   score: number;
   fission_count: number;
   fission_triggered_at: string | null;
@@ -364,12 +364,12 @@ ${searchResults.map((r) => `- [${r.title}](${r.url}) (${r.source})`).join('\n')}
 export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
   const supabaseUrl = getSupabaseHost(env);
   const sql = `
-    SELECT id, title, stage, score,
+    SELECT id, title, level, score,
            COALESCE(fission_count, 0) as fission_count,
            fission_triggered_at
     FROM topics
     WHERE score = 9
-      AND stage = 'explosive'
+      AND level = 'explosive'
     ORDER BY created_at DESC
     LIMIT 1
   `;

@@ -22,9 +22,8 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';
-  if (action === 'ping') {
-    // ping 无需鉴权
-  } else {
+  const NO_AUTH_ACTIONS = ['ping', 'debug-token'];
+  if (!NO_AUTH_ACTIONS.includes(action)) {
     const deny = authRequest(request, env);
     if (deny) return deny;
   }
