@@ -394,12 +394,30 @@ export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
 async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
   const supabaseUrl = getSupabaseHost(env);
   try {
-    // PostgREST: embed news via news_topic_members → news join
-    const res = await fetch(
+    // Step 1: get news IDs for this topic (ordered by created_at desc)
+    const r1 = await fetch(
       `${supabaseUrl}/rest/v1/news_topic_members` +
         `?topic_id=eq.${topicId}` +
-        `&select=news:news_id(title)` +
-        `&order=news.created_at.desc&limit=3`,
+        `&select=news_id` +
+        `&order=created_at.desc&limit=3`,
+      {
+        headers: {
+          ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    if (!r1.ok) return [];
+
+    const members = (await r1.json()) as { news_id: string }[];
+    if (members.length === 0) return [];
+
+    // Step 2: fetch news titles by IDs
+    const newsIds = members.map(m => m.news_id).join(',');
+    const r2 = await fetch(
+      `${supabaseUrl}/rest/v1/news_hotspots` +
+        `?id=in.(${newsIds})` +
+        `&select=title&limit=3`,
       {
         headers: {
           ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
@@ -408,12 +426,9 @@ async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
       }
     );
 
-    if (!res.ok) return [];
-
-    const data = (await res.json()) as { news?: { title: string } }[];
-    return (data || [])
-      .map(r => r.news?.title)
-      .filter((t): t is string => Boolean(t));
+    if (!r2.ok) return [];
+    const news = (await r2.json()) as { title: string }[];
+    return (news || []).map(n => n.title).filter(Boolean);
   } catch {
     return [];
   }
@@ -592,8 +607,10 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
     console.log(`[fission] found ${relatedNews.length} related news items`);
 
     // Step 2: LLM 生成搜索词
+    // v0.37.74: 用 news title 作为 topic title（而不是 topic_key 系统 ID）
+    const topicTitle = relatedNews[0] || topic.topic_key;
     console.log('[fission] step 2/5 generating search queries...');
-    queries = await generateSearchQueries(env, topic.topic_key, relatedNews);
+    queries = await generateSearchQueries(env, topicTitle, relatedNews.slice(1));
     console.log(`[fission] queries: ${JSON.stringify(queries)}`);
 
     // Step 3: 并行搜索（ZAKER + Tavily fallback）
@@ -602,7 +619,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
 
     // Step 4: LLM 生成裂变报告
     console.log('[fission] step 4/5 generating fission report...');
-    reportContent = await generateFissionReport(env, topic.topic_key, searchResults);
+    reportContent = await generateFissionReport(env, topicTitle, searchResults);
 
     // Step 5: 写入 R2（报告 + index）
     const yearMonth = now.slice(0, 7); // e.g. "2026-06"
@@ -616,7 +633,7 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
     // 更新 index
     await appendFissionIndex(env, {
       topic_id: topic.id,
-      topic_title: topic.topic_key,
+      topic_title: topicTitle,
       r2_key: r2Key,
       fission_count: 1,
       triggered_at: now,
