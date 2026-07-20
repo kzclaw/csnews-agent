@@ -71,3 +71,9 @@ csnews-agent/AGENTS.md
 !csnews-agent/package-lock.json
 csnews-agent/src/test-helpers.ts
 .mavis/
+
+# Supabase CLI generated config (from supabase link)
+supabase/supabase/
+
+# Local fission R2 write test artifact
+fission/
