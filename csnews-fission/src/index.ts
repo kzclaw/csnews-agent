@@ -49,6 +49,14 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     );
   }
 
+  // 调试端点：看 env.BEARER_TOKEN 长度（不暴露内容）
+  if (action === 'debug-token') {
+    const tokenLen = env.BEARER_TOKEN ? env.BEARER_TOKEN.length : -1;
+    return new Response(JSON.stringify({ ok: true, bearer_token_length: tokenLen }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   // 手动触发裂变（用于调试或手动干预）
   if (action === 'fission-manual') {
     try {
