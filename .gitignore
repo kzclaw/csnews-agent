@@ -47,10 +47,8 @@ verifier/
 .privacy-patterns.txt.example
 csnews-agent/scripts/check-privacy.sh
 csnews-agent/validate/privacy-grep.contract.ts
-# 排除测试文件（validate/ 目录整体不入仓库）
-csnews-agent/validate/
-csnews-fission/validate/
-csnews-mcp-server/validate/
+# 测试文件 — 由 pre-commit hook 自动跑 vitest，必须入库
+# 子项目的 .gitignore 也应取消忽略 (csnews-agent/.gitignore 已移除 validate/ 规则)
 
 # 诊断产物 (curl 探测 / R2 抓取)
 csnews-agent/diagnostic/

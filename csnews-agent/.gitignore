@@ -1,8 +1,7 @@
 # Dependencies
 node_modules/
 
-# Test contracts — committed to repository for CI validation
-validate/
+# Test contracts — committed to repository for pre-commit hook + CI validation
 
 # R2 runtime outputs (auto-generated, not source)
 entity-finalized.json

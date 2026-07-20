@@ -112,6 +112,39 @@ git add "$WRANGLER_TOML"
 # 把新 tag 写到 .git/TAG_NEXT (供 post-commit hook 读)
 echo "$NEW_TAG" > .git/TAG_NEXT
 
+# ============================================================
+# vitest 合约测试 (戴舒柯 02:22 拍板)
+# 跑 csnews-agent + csnews-fission + csnews-mcp-server 三个子项目,
+# 确保所有测试通过才允许 commit.
+# ============================================================
+echo "[pre-commit] vitest — csnews-agent..."
+cd csnews-agent && npm run validate 2>&1 | tail -5
+AGENT_EXIT=$?
+if [ $AGENT_EXIT -ne 0 ]; then
+  echo "[pre-commit] FAIL: csnews-agent 测试未通过"
+  exit 1
+fi
+cd ..
+
+echo "[pre-commit] vitest — csnews-fission..."
+cd csnews-fission && npm run validate 2>&1 | tail -5
+FISSION_EXIT=$?
+if [ $FISSION_EXIT -ne 0 ]; then
+  echo "[pre-commit] FAIL: csnews-fission 测试未通过"
+  exit 1
+fi
+cd ..
+
+echo "[pre-commit] vitest — csnews-mcp-server..."
+cd csnews-mcp-server && npm run validate 2>&1 | tail -5
+MCP_EXIT=$?
+if [ $MCP_EXIT -ne 0 ]; then
+  echo "[pre-commit] FAIL: csnews-mcp-server 测试未通过"
+  exit 1
+fi
+cd ..
+
+echo "[pre-commit] ✓ vitest 全部通过"
 echo "[pre-commit] OK · wrangler.toml staged + TAG_NEXT=$NEW_TAG"
 echo "[pre-commit] git status:"
 git status --short
