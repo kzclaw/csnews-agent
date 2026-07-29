@@ -676,6 +676,16 @@ export async function runFissionForTopic(env: Env, topic: FissionTopic): Promise
 
 /**
  * 主入口：扫描所有满足条件的 topic 并执行裂变
+ *
+ * 注意(v0.37.79): 此函数作为备份路径运行.
+ * 主 worker (?action=process) 通过 Service Binding 直接触发 fission (topic_ids 参数,
+ * 绕过 score=eq.9 过滤). 此 cron 路径只兜底以下情况:
+ *   1. Service Binding 请求失败 (如 401, 网络错误)
+ *   2. Service Binding 未配置 (env.FISSION 为空)
+ *   3. 尚未被主 worker process 覆盖的遗留 topic
+ *
+ * findFissionTopics 的 score=eq.9&level=eq.explosive 条件在主流程中很少匹配,
+ * 因为 RPC update_topic_score 触发 fission 后已将 score 重置为 0.
  */
 export async function runFissionTrigger(env: Env): Promise<void> {
   console.log('[fission] scanning for explosive topics with score=9...');

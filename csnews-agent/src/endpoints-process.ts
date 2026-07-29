@@ -22,7 +22,6 @@ import { handleLogsAction } from './logs';
 import { handleAiUsageAction } from './ai-usage';
 import { runTavilyPipeline, fetchTavilyNews } from './tavily';
 // v0.37.36 (董事长 2026-07-04 拍板): Score 自适应 + Fission 接力赛 触发
-import { getCurrentScoreThreshold } from './score-threshold';
 import { triggerFissionFromTopics } from './fission-trigger';
 import { logEvent } from './log';
 export { handleHealthAction, handleLogsAction, handleAiUsageAction };
@@ -153,17 +152,16 @@ export async function handleProcessAction(
     };
 
     // v0.37.36 (董事长 2026-07-04 拍板): 决策 1+3 实施 — process 完后 立即 触发 fission (sync · 等 fission 跑完 返)
-    // 触发 条件: level='explosive' AND score >= current_score_threshold (从 R2 score-threshold-history.json 读 · 自适应 默认 9)
+    // 触发 条件: topic 的 fission 标志位为 true (RPC update_topic_score 已判定 score=9+explosive)
+    // v0.37.79: 移除旧 score>=threshold 自检 (RPC 已重置 score=0, 旧条件永远不满足; 且对首次升 explosive 的 topic 误触发)
     // 失败 fallback: 6h cron 兜底 (决策 2)
     let fissionTriggerResult: { ok: boolean; status?: number; reason?: string; topic_count?: number } = {
       ok: false,
       reason: 'no_triggerable_topic',
     };
     try {
-      const currentThreshold = await getCurrentScoreThreshold(env);
-      // v0.37.79 fix: 用 fission 标志位 (RPC 已重置 score=0, 旧条件永远不满足)
       const triggerableTopics = results
-        .filter((r: any) => r.fission === true || (r.level === 'explosive' && (r.score ?? 0) >= currentThreshold))
+        .filter((r: any) => r.fission === true)
         .map((r: any) => ({ name: r.title, title: r.title, score: r.score, topic_id: r.topic_id }));
       if (triggerableTopics.length > 0 && env.FISSION) {
         const r = await triggerFissionFromTopics(env, triggerableTopics, 'post-process-immediate');
@@ -278,9 +276,9 @@ export async function handleProcessAction(
       },
       cors
     );
+  } finally {
     // v0.37.13: clear cached R2 error after reading (next request gets fresh state)
     delete (globalThis as any).__R2_LAST_ERROR__;
-  } finally {
     if (env.PROCESS_STATE) {
       const ts = new Date().toISOString();
       await env.PROCESS_STATE.put(

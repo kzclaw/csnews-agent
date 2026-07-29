@@ -16,10 +16,18 @@
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { runFissionTrigger, findFissionTopics, runFissionForTopic } from './fission-trigger';
-import { authRequest } from './auth';
+import { authRequest, corsHeaders } from './auth';
 
 // ====== HTTP fetch handler ======
 async function handleFetch(request: Request, env: Env): Promise<Response> {
+  // CORS preflight
+  if (request.method === 'OPTIONS') {
+    const origin = request.headers.get('Origin');
+    return new Response(null, {
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+    });
+  }
+
   // 鉴权（ping 不需要）
   const url = new URL(request.url);
   const action = url.searchParams.get('action') || 'ping';

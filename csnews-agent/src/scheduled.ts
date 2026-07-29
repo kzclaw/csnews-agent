@@ -24,7 +24,6 @@ import {
   handleProcessAction,
   runKnowledgeAccumulation,
   runKnowledgeGeneration,
-  handleTavilyAction,
 } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
@@ -88,52 +87,10 @@ export async function scheduledProcess(
       ).catch(() => {})
     );
 
-    // O13: Tavily News API ingestion — runs after ZAKER process in same cron slot
-    // Fire-and-forget: Tavily failure does not block knowledge accumulation
-    // Skip if TAVILY_API_KEY not configured (env check inside handleTavilyAction)
-    const tavilyStart = Date.now();
-    try {
-      const tavilyDummyUrl = new URL('https://example.com/?action=tavily');
-      const tavilyDummyRequest = new Request(tavilyDummyUrl.toString(), { method: 'GET' });
-      const tavilyRes = await handleTavilyAction(tavilyDummyRequest, env, tavilyDummyUrl, {});
-      const tavilyBody = await tavilyRes.text();
-      const tavilyElapsed = Date.now() - tavilyStart;
-      await logEvent(
-        env,
-        'info',
-        `[cron] tavily done status=${tavilyRes.status} elapsed=${tavilyElapsed}ms body=${tavilyBody.slice(0, 300)}`
-      );
-      ctx.waitUntil(
-        logEvent(
-          env,
-          tavilyRes.status === 200 ? 'info' : 'error',
-          '[cron] tavily done',
-          {
-            status: tavilyRes.status,
-            elapsed_ms: tavilyElapsed,
-            body_preview: tavilyBody.slice(0, 200),
-          },
-          'scheduler'
-        ).catch(() => {})
-      );
-    } catch (e: any) {
-      const tavilyElapsed = Date.now() - tavilyStart;
-      await logEvent(
-        env,
-        'error',
-        `[cron] tavily failed elapsed=${tavilyElapsed}ms err=${e?.message || e}`
-      );
-      ctx.waitUntil(
-        logEvent(
-          env,
-          'error',
-          '[cron] tavily failed',
-          { elapsed_ms: tavilyElapsed, err: e?.message || String(e) },
-          'scheduler'
-        ).catch(() => {})
-      );
-    }
-
+    // v0.37.51: Tavily 已改为异步触发 (handleProcessAction 写 tavily_pending KV flag,
+    // csnews-fission 6H cron 读 flag 后通过 Service Binding 调 ?action=tavily&max=1).
+    // 此处不再 inline 调用, 避免消耗 cron invocation 的 50 subrequest 预算.
+    // 
     // v0.36.7: process 跑完 inline 调 runKnowledgeAccumulation 累积 job
     // "快赢"哲学: 0 Supabase DDL · 全 R2 持久化 · 0 5h 配额期打扰
     // 跟 process 走同 ctx.waitUntil, 累积失败不阻塞 process 200 (早晨日报金句是 nice-to-have, 失败可次日累积)

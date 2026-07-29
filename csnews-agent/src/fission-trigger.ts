@@ -52,6 +52,7 @@ export async function triggerFission(
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.BEARER_TOKEN}`,
       'X-Fission-Source': 'csnews-agent',
       'X-Fission-Reason': reason,
     },
