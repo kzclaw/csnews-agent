@@ -142,7 +142,13 @@ export function checkCacheMetrics(): {
         status: 'unknown',
         detail: 'no cache requests yet (cold start or no pull traffic this isolate)',
       };
-    } else if (m.hit_rate >= 0.5) {
+    } else if (m.total_requests < 10) {
+      // v0.37.77: small sample → unknown, not degraded, avoid false alarms
+      checks.cache_metrics = {
+        status: 'unknown',
+        detail: `low sample: ${m.total_requests} total, hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits} hits). Not enough traffic to judge.`,
+      };
+    } else if (m.hit_rate >= 0.3) {
       checks.cache_metrics = {
         status: 'ok',
         detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests)`,
@@ -150,7 +156,7 @@ export function checkCacheMetrics(): {
     } else {
       checks.cache_metrics = {
         status: 'degraded',
-        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests, < 50%)`,
+        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests, < 30%)`,
       };
     }
   } catch (e: any) {

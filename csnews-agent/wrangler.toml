@@ -5,6 +5,14 @@ compatibility_date = "2026-05-29"
 [ai]
 binding = "AI"
 
+# v0.37.77: add missing Vectorize binding. Index csnews-news-vectors (1024d, cosine)
+# was created 2026-06-22 but never wired into wrangler.toml → env.VECTORIZE was
+# always undefined → all Vectorize queries silently fell back to pgvector,
+# dual-writes logged "binding not available" and dropped.
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "csnews-news-vectors"
+
 [[r2_buckets]]
 # v0.37.63: re-add bucket_name to ensure binding maps to correct R2 bucket.
 # 历史 (2e88285 security commit): 误 把 bucket_name 当 secret 删 了, 但 bucket_name 是公开标识符.
@@ -35,7 +43,7 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.76"
+WORKER_VERSION = "v0.37.77"
 # dispatcher log diagnostic mode flag (ring buffer 100 条 + ?action=logs-diag)
 # 配 1 = 开, 不 配 / 0 = 关 (default 关, 不 影 响 production)
 DEBUG_LOG_BUFFER = "1"
