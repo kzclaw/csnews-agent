@@ -77,58 +77,22 @@ export async function makeCacheKey(
   return `${CACHE_PREFIX}${namespace}:${hash}`;
 }
 
-/** Module-level metrics (per-isolate 独立 V8) */
-export interface CacheMetrics {
-  hits: number;
-  misses: number;
-  stores: number;
-  store_failures: number;
-  total_requests: number;
-  hit_rate: number;
-}
-
-let metrics: CacheMetrics = {
-  hits: 0,
-  misses: 0,
-  stores: 0,
-  store_failures: 0,
-  total_requests: 0,
-  hit_rate: 0,
-};
-
-export function getCacheMetrics(): CacheMetrics {
-  const total = metrics.hits + metrics.misses;
-  return {
-    ...metrics,
-    total_requests: total,
-    hit_rate: total > 0 ? metrics.hits / total : 0,
-  };
-}
-
-export function resetCacheMetrics(): void {
-  metrics = { hits: 0, misses: 0, stores: 0, store_failures: 0, total_requests: 0, hit_rate: 0 };
-}
-
 /**
  * 读缓存 — 命中 unwrap SeedEnvelope, 未命中/错返回 null (静默)
  * 向后兼容: 无 _seed 字段返回原数据 (v0.36.25 之前裸数据)
  */
 export async function cacheGet(env: Env, key: string): Promise<any | null> {
   if (!env.PROCESS_STATE) {
-    metrics.misses++;
     return null;
   }
   try {
     const raw = await env.PROCESS_STATE.get(key);
     if (!raw) {
-      metrics.misses++;
       return null;
     }
-    metrics.hits++;
     const parsed = JSON.parse(raw);
     return parsed?._seed?.fetchedAt !== undefined ? parsed.data : parsed;
   } catch {
-    metrics.misses++;
     return null;
   }
 }
@@ -142,7 +106,6 @@ export async function cacheSet(
   opts?: { recordCount?: number; maxContentAgeMin?: number }
 ): Promise<void> {
   if (!env.PROCESS_STATE) {
-    metrics.store_failures++;
     return;
   }
   try {
@@ -160,13 +123,10 @@ export async function cacheSet(
         : value;
     const serialized = JSON.stringify(toStore);
     if (new TextEncoder().encode(serialized).length > MAX_VALUE_SIZE_BYTES) {
-      metrics.store_failures++;
       return;
     }
     await env.PROCESS_STATE.put(key, serialized, { expirationTtl: ttlSeconds });
-    metrics.stores++;
   } catch {
-    metrics.store_failures++;
   }
 }
 

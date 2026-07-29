@@ -3,7 +3,6 @@
 // ============================================================
 
 import { Env, jsonResponse } from './shared';
-  import { resetCacheMetrics } from './cache';
   import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
   import { scoreTitle, classifyTitle } from './process-ai';
   import { mapNewsScoreToDelta } from './topic-delta';
@@ -55,7 +54,6 @@ export async function handleProcessAction(
   };
 
   try {
-    resetCacheMetrics();
     const cleaned = (await cleanupStTopics(env)) as CleanupStaleTopicsResult;
     const list = await fetchZakerHot();
     if (list.length === 0) {

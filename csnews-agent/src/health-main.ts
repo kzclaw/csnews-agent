@@ -19,8 +19,6 @@ import {
   checkZscoreSignals,
   checkAiBudget,
   checkEntityAndEventFreshness,
-  checkCacheMetrics,
-  checkPullCacheFreshness,
   checkAiCallsBreakdown,
   checkLastProcessStoredReason,
 } from './health-checks';
@@ -144,17 +142,7 @@ export async function handleHealthAction(
   checks.entity_freshness = freshnessResult.checks.entity_freshness;
   checks.event_freshness = freshnessResult.checks.event_freshness;
 
-  // 14. cache_metrics
-  const cacheResult = checkCacheMetrics();
-  result.cache_metrics = cacheResult.cache_metrics;
-  checks.cache_metrics = cacheResult.checks.cache_metrics;
-
-  // 15. pull_cache_freshness
-  const pullCacheFreshnessResult = await checkPullCacheFreshness(env, ts);
-  result.pull_cache_freshness = pullCacheFreshnessResult.pull_cache_freshness;
-  checks.pull_cache_freshness = pullCacheFreshnessResult.checks.pull_cache_freshness;
-
-  // 16-18. neurons + budget_status + ai_calls_breakdown
+  // 14-16. neurons + budget_status + ai_calls_breakdown
   const aiCallsResult = await checkAiCallsBreakdown(env);
   result.neurons_used_today = aiCallsResult.neurons_used_today;
   result.ai_budget_status = aiCallsResult.ai_budget_status;

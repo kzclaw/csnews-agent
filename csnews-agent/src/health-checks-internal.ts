@@ -89,7 +89,22 @@ export async function checkCronHistory(
 // Cascade dependency utilities
 // ============================================================
 
-import type { HealthGroup } from './health-cache-freshness';
+/** Cache key health record (for cascade dependency tracking) */
+export interface CacheKeyHealth {
+  key: string;
+  recordCount: number;
+  maxContentAgeMin: number;
+  fetchedAt: string;
+  state: 'ok' | 'error' | 'empty';
+  keyStatus: 'ok' | 'stale' | 'down';
+}
+
+/** Health group with cascade support */
+export interface HealthGroup {
+  status: 'ok' | 'degraded' | 'down' | 'unknown';
+  keys: CacheKeyHealth[];
+  cascadedFrom?: string;
+}
 
 /**
  * Cascade dependency chain definition.

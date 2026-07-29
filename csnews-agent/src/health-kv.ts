@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Env } from './shared';
-import { getCacheMetrics, countNegativeSentinels } from './cache';
+import { countNegativeSentinels } from './cache';
 
 // ============================================================
 // 1. last_process_at + cron_health derived
@@ -91,87 +91,7 @@ export async function checkLastProcessAt(
 }
 
 // ============================================================
-// 2. cache_metrics — pull KV cache hit rate
-// ============================================================
-export function checkCacheMetrics(): {
-  cache_metrics:
-    | {
-        hits: number;
-        misses: number;
-        stores: number;
-        store_failures: number;
-        total_requests: number;
-        hit_rate: number;
-      }
-    | { error: string };
-  checks: {
-    cache_metrics: { status: 'ok' | 'degraded' | 'unknown'; detail: string };
-  };
-} {
-  let cacheMetrics:
-    | {
-        hits: number;
-        misses: number;
-        stores: number;
-        store_failures: number;
-        total_requests: number;
-        hit_rate: number;
-      }
-    | { error: string } = {
-    hits: 0,
-    misses: 0,
-    stores: 0,
-    store_failures: 0,
-    total_requests: 0,
-    hit_rate: 0,
-  };
-  const checks: any = {};
-
-  try {
-    const m = getCacheMetrics();
-    cacheMetrics = {
-      hits: m.hits,
-      misses: m.misses,
-      stores: m.stores,
-      store_failures: m.store_failures,
-      total_requests: m.total_requests,
-      hit_rate: Number(m.hit_rate.toFixed(4)),
-    };
-    if (m.total_requests === 0) {
-      checks.cache_metrics = {
-        status: 'unknown',
-        detail: 'no cache requests yet (cold start or no pull traffic this isolate)',
-      };
-    } else if (m.total_requests < 10) {
-      // v0.37.77: small sample → unknown, not degraded, avoid false alarms
-      checks.cache_metrics = {
-        status: 'unknown',
-        detail: `low sample: ${m.total_requests} total, hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits} hits). Not enough traffic to judge.`,
-      };
-    } else if (m.hit_rate >= 0.3) {
-      checks.cache_metrics = {
-        status: 'ok',
-        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests)`,
-      };
-    } else {
-      checks.cache_metrics = {
-        status: 'degraded',
-        detail: `hit_rate ${(m.hit_rate * 100).toFixed(1)}% (${m.hits}/${m.total_requests} requests, < 30%)`,
-      };
-    }
-  } catch (e: any) {
-    cacheMetrics = { error: e?.message || 'cache metrics read failed' };
-    checks.cache_metrics = { status: 'unknown', detail: e?.message };
-  }
-
-  return {
-    cache_metrics: cacheMetrics,
-    checks: { cache_metrics: checks.cache_metrics },
-  };
-}
-
-// ============================================================
-// 3. neg_sentinel_count — current active Negative Sentinel count
+// 2. neg_sentinel_count — current active Negative Sentinel count
 // ============================================================
 export async function checkNegativeSentinel(env: Env): Promise<{
   neg_sentinel_count: number;
