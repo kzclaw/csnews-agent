@@ -357,16 +357,17 @@ ${searchResults.map((r) => `- [${r.title}](${r.url}) (${r.source})`).join('\n')}
 // ============================================================
 
 /**
- * 查询满足裂变条件的 topic（最多 1 个）
+ * 查询满足裂变条件的 topic
+ * @param topicId 如果指定, 直接查该 topic (用于 Service Binding seed 触发, 跳过 score=eq.9 过滤)
  */
-export async function findFissionTopics(env: Env): Promise<FissionTopic[]> {
+export async function findFissionTopics(env: Env, topicId?: string): Promise<FissionTopic[]> {
   const supabaseUrl = getSupabaseHost(env);
   try {
-    // PostgREST: query topics table directly (no exec_sql RPC needed)
+    const idFilter = topicId ? `id=eq.${topicId}` : 'score=eq.9&level=eq.explosive';
+    const orderFilter = topicId ? '' : '&order=created_at.desc&limit=1';
     const res = await fetch(
       `${supabaseUrl}/rest/v1/topics` +
-        `?score=eq.9&level=eq.explosive` +
-        `&order=created_at.desc&limit=1` +
+        `?${idFilter}${orderFilter}` +
         `&select=id,topic_key,level,score`,
       {
         headers: {

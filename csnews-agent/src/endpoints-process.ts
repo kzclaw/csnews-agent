@@ -161,9 +161,10 @@ export async function handleProcessAction(
     };
     try {
       const currentThreshold = await getCurrentScoreThreshold(env);
+      // v0.37.79 fix: 用 fission 标志位 (RPC 已重置 score=0, 旧条件永远不满足)
       const triggerableTopics = results
-        .filter((r: any) => r.level === 'explosive' && (r.score ?? 0) >= currentThreshold)
-        .map((r: any) => ({ name: r.title, title: r.title, score: r.score }));
+        .filter((r: any) => r.fission === true || (r.level === 'explosive' && (r.score ?? 0) >= currentThreshold))
+        .map((r: any) => ({ name: r.title, title: r.title, score: r.score, topic_id: r.topic_id }));
       if (triggerableTopics.length > 0 && env.FISSION) {
         const r = await triggerFissionFromTopics(env, triggerableTopics, 'post-process-immediate');
         fissionTriggerResult = {

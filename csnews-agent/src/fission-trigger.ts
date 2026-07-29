@@ -37,16 +37,17 @@ export interface FissionTriggerResult {
 export async function triggerFission(
   env: Env,
   seedTopics: string[],
-  reason: string
+  reason: string,
+  topicIds?: string[]
 ): Promise<FissionTriggerResult> {
   if (seedTopics.length === 0) {
     return { ok: false, skipped: true, reason: 'no seed topics' };
   }
 
-  // 跟 csnews-fission src/index.ts handleFetch + endpoints-core.ts handleFissionAction 对齐:
-  // 接受 seed 或 title 参数 (优先 seed · 跟 链路 一致)
   const seed = seedTopics.join(' | ');
-  const url = `https://fission.local/?action=fission-manual&seed=${encodeURIComponent(seed)}&reason=${encodeURIComponent(reason)}`;
+  // v0.37.79 fix: 传 topic_ids 参数 (csnews-fission fission-manual 用其直接查 topic, 不再依赖 score=eq.9)
+  const topicIdsParam = topicIds && topicIds.length > 0 ? `&topic_ids=${encodeURIComponent(topicIds.join(','))}` : '';
+  const url = `https://fission.local/?action=fission-manual&seed=${encodeURIComponent(seed)}&reason=${encodeURIComponent(reason)}${topicIdsParam}`;
   const request = new Request(url, {
     method: 'GET',
     headers: {
@@ -99,11 +100,14 @@ export async function triggerFission(
  */
 export async function triggerFissionFromTopics(
   env: Env,
-  topics: Array<{ name?: string; title?: string; topic_key?: string }>,
+  topics: Array<{ name?: string; title?: string; topic_key?: string; topic_id?: string }>,
   reason: string
 ): Promise<FissionTriggerResult> {
   const seeds = topics
     .map((t) => t.name || t.title || t.topic_key || '')
     .filter((s) => s.length > 0);
-  return triggerFission(env, seeds, reason);
+  const topicIds = topics
+    .map((t) => t.topic_id || '')
+    .filter((id) => id.length > 0);
+  return triggerFission(env, seeds, reason, topicIds);
 }

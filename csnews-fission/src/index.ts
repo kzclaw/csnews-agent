@@ -15,7 +15,7 @@
  */
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
-import { runFissionTrigger } from './fission-trigger';
+import { runFissionTrigger, findFissionTopics, runFissionForTopic } from './fission-trigger';
 import { authRequest } from './auth';
 
 // ====== HTTP fetch handler ======
@@ -106,12 +106,29 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   // 手动触发裂变（用于调试或手动干预）
   if (action === 'fission-manual') {
     try {
+      // v0.37.79 fix: 从 main worker Service Binding 收 topic_ids 参数,
+      // 直接查 topic 处理, 不再依赖 score=eq.9 (RPC 已重置 score=0)
+      const topicIdsParam = url.searchParams.get('topic_ids') || '';
+      if (topicIdsParam) {
+        const topicIds = topicIdsParam.split(',').filter(Boolean);
+        let processed = 0;
+        for (const tid of topicIds) {
+          const topics = await findFissionTopics(env, tid);
+          if (topics.length > 0) {
+            await runFissionForTopic(env, topics[0]);
+            processed++;
+          }
+        }
+        return new Response(
+          JSON.stringify({ ok: true, action: 'fission-manual', result: 'seed_triggered', topics: processed }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      // fallback: 扫描 score=eq.9 (cron / 手动调试)
       await runFissionTrigger(env);
       return new Response(
         JSON.stringify({ ok: true, action: 'fission-manual', result: 'triggered' }),
-        {
-          headers: { 'Content-Type': 'application/json' },
-        }
+        { headers: { 'Content-Type': 'application/json' } }
       );
     } catch (err) {
       return new Response(JSON.stringify({ ok: false, error: String(err) }), {
