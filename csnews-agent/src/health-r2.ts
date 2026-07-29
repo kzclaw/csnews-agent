@@ -79,6 +79,48 @@ export async function checkR2LatestWrite(
     return 'info'; // cold archive is never "down" for being quiet
   };
 
+  // v0.37.78: Phase 1 — read latest R2 write from PROCESS_STATE KV
+  // (populated by saveToR2 on each successful R2 put). O(1), no pagination,
+  // avoids the false alarm when news/zaker/ has 1000+ objects.
+  try {
+    if (env.PROCESS_STATE) {
+      const raw = await env.PROCESS_STATE.get('r2_latest_write');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.key && p?.ts) {
+          const writeTs = Date.parse(p.ts);
+          if (!isNaN(writeTs)) {
+            ageHours = Math.round((ts - writeTs) / 3600_000);
+            r2LatestWrite = {
+              key: p.key,
+              uploaded: p.ts,
+              source: 'process_state_kv',
+              r2_role: 'cold_archive' as const,
+              cold_archive_age_hours: ageHours,
+              cold_archive_status_explanation: explain(ageHours),
+              primary_store_field: 'supabase_latest_write' as const,
+            };
+            checks.r2_latest_write = {
+              status: statusFor(ageHours),
+              detail:
+                ageHours !== null
+                  ? `cold_archive · ${ageHours}h since last write (KV) · ${explain(ageHours)}`
+                  : `cold_archive · historical (KV) · ${explain(null)}`,
+            };
+            return {
+              r2_latest_write: r2LatestWrite,
+              r2_cold_archive_latest_write: r2LatestWrite,
+              checks: { r2_latest_write: checks.r2_latest_write },
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // KV read failed — fall through to R2 list (Phase 2)
+  }
+
+  // Phase 2: Fallback — R2 list (bootstrapping when KV is cold / fresh deploy)
   try {
     const list = await env.csnews_raw.list({ prefix: 'news/zaker/', limit: 1000 });
     if (list.objects && list.objects.length > 0) {

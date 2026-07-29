@@ -233,6 +233,16 @@ export async function saveToR2(env: Env, prefix: string, data: object): Promise<
     console.error(
       `[saveToR2] put ok key=${key} etag=${result?.etag || 'n/a'} version=${result?.version || 'n/a'}`
     );
+    // Track latest R2 write for health check (fire-and-forget, don't block)
+    try {
+      await env.PROCESS_STATE?.put(
+        'r2_latest_write',
+        JSON.stringify({ key, ts: new Date().toISOString(), prefix }),
+        { expirationTtl: 86400 * 7 }
+      );
+    } catch {
+      // Non-critical — R2 write already succeeded
+    }
     return key;
   } catch (e: any) {
     const errMsg = e?.message || String(e);
