@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Env } from './shared';
+import { recordAiCall } from './ai-budget';
 import { findSimilarNews } from './news-process';
 import type {
   BgeEmbeddingResponse,
@@ -47,6 +48,8 @@ export async function embedTitle(env: Env, title: string, summary?: string): Pro
     const embResp = (await env.AI.run('@cf/baai/bge-m3', {
       text: [combined],
     })) as BgeEmbeddingResponse;
+    // AI budget tracking
+    await recordAiCall('@cf/baai/bge-m3', 1, env);
     if (Array.isArray(embResp?.data) && embResp.data.length > 0) {
       const it = embResp.data[0];
       return Array.isArray(it?.embedding) ? it.embedding : Array.isArray(it) ? it : [];

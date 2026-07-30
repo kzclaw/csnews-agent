@@ -14,6 +14,7 @@
  * bge-m3 走 CF Workers AI 独立池 (0 Neurons 关系)
  */
 import { Env } from './shared';
+import { recordAiCall } from './ai-budget';
 
 export const ENTITY_NOISE_ANCHORS_R2_KEY = 'entity-noise-anchors.json';
 export const NOISE_THRESHOLD_DEFAULT = 0.85;
@@ -129,6 +130,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] } | null;
+  await recordAiCall('@cf/baai/bge-m3', 1, env);
   return result?.data || [];
 }
 

@@ -20,6 +20,7 @@ import { supabaseFetch, safeJson } from './shared';
 import { loadNoiseAnchors, filterNoiseCandidates, cosineSimilarity } from './entity-noise-filter';
 import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
 import { logEvent } from './log';
+import { recordAiCall } from './ai-budget';
 
 export interface EntityCandidate {
   uuid: string;
@@ -144,6 +145,8 @@ async function bgeM3Embedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
   // env.AI.run() 运行时才解析 Workers AI 动态响应，形状不静态确定
   const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as BgeEmbeddingResponse;
+  // AI budget tracking
+  await recordAiCall('@cf/baai/bge-m3', 1, env);
   return result.data ? result.data.map((item) => item.embedding ?? []) : [];
 }
 
