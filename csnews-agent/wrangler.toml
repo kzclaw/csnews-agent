@@ -1,10 +1,8 @@
 name = "csnews-agent"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
-
 [ai]
 binding = "AI"
-
 # v0.37.77: add missing Vectorize binding. Index csnews-news-vectors (1024d, cosine)
 # was created 2026-06-22 but never wired into wrangler.toml → env.VECTORIZE was
 # always undefined → all Vectorize queries silently fell back to pgvector,
@@ -12,7 +10,6 @@ binding = "AI"
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "csnews-news-vectors"
-
 [[r2_buckets]]
 # v0.37.63: re-add bucket_name to ensure binding maps to correct R2 bucket.
 # 历史 (2e88285 security commit): 误 把 bucket_name 当 secret 删 了, 但 bucket_name 是公开标识符.
@@ -23,34 +20,29 @@ index_name = "csnews-news-vectors"
 # 修 法: 显 式 加 bucket_name = "csnews-raw" 让 推 断 100% 正 确.
 binding = "csnews_raw"
 bucket_name = "csnews-raw"
-
 [[kv_namespaces]]
 binding = "AI_USAGE_KV"
 # KV namespace ID 是公开标识符，非密钥
 id = "470a9354d39241a09e311cdac06a1c69"
-
 [[kv_namespaces]]
 binding = "PROCESS_STATE"
 # KV namespace ID 是公开标识符，非密钥
 id = "3be3cd1e5da544cd9b323f3b8a4af7a0"
-
 [[kv_namespaces]]
 binding = "PROCESS_STATE_PREVIEW"
 preview_id = "c8b14c901b114f32aa5903a2d733ff91"
-
 [vars]
 AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.84"
+WORKER_VERSION = "v0.37.85"
 # dispatcher log diagnostic mode flag (ring buffer 100 条 + ?action=logs-diag)
 # 配 1 = 开, 不 配 / 0 = 关 (default 关, 不 影 响 production)
 DEBUG_LOG_BUFFER = "1"
 # v0.37.18 (方案 4 拍板): WORKER_VERSION 由顶层 .husky/pre-commit hook 自动 bump tag (v0.37.x+1).
 # 跟 v0.37.17 KV 注入方案说再见 (那条路 token 权限不够, 走不通). tag 在 post-commit hook 立刻 git tag 绑回.
 # 起点 = v0.37.18 (因为 changelog 上次更新到 v0.37.17). (拍板时间 in changelog v0.37.18 row.)
-
 [triggers]
 # 4/5 cron 槽位（CF 账户上限 5 · csnews-fission 用 1 + csnews-agent 用 4）
 # 董事长 2026-07-02 00:17 push back: "CSNEWS-fission 1 cron + CSnews-agent 4 cron = 5 满了"
@@ -66,7 +58,6 @@ crons = [
   "0 4 * * *",
   "0 0 * * *",
 ]
-
 # v0.37.36 (董事长 2026-07-04 拍板): Service Binding · 接力赛 模式
 # 限制: CF Free Plan cron 5/账号 已 满, 不能 加 cron 立即 触发 fission
 # 解法: 加 [[services]] binding FISSION → csnews-fission
@@ -75,7 +66,6 @@ crons = [
 [[services]]
 binding = "FISSION"
 service = "csnews-fission"
-
 # v0.37.13 (a5a31b0 deployment failed): 加 observability 暴露 console.error
 # 之前 14 天 R2 写入 broken · saveToR2 console.error 看不到是因为 wrangler.toml 缺 [observability] 块
 # 修复: 董事长 push back 指出 "wrangler.toml 根本没有开 log"
