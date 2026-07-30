@@ -1,0 +1,26 @@
+#!/bin/sh
+# ============================================================
+# csnews pre-push hook · OCR AI review (advisory · non-blocking)
+#
+# 审最新 push 的 commit diff（HEAD~1 vs HEAD），纯建议性质。
+# 永不 block push —— 哪怕 OCR 超时 / 报错 / 文件不存在。
+# ============================================================
+
+echo ""
+echo "============================================"
+echo "[pre-push] 🔍 OCR AI 代码审查（advisory）"
+echo "  审 diff: HEAD~1 → HEAD"
+echo "============================================"
+
+# 非 blocking：永远返回 0
+ocr review \
+  --from HEAD~1 --to HEAD \
+  --rule .ocr-rules.json \
+  --exclude '**/.temp/**,**/supabase/.temp/**' \
+  --audience agent --format text 2>&1 || true
+
+echo ""
+echo "[pre-push] ✅ 完成（advisory，未 block push）"
+echo "============================================"
+echo ""
+exit 0

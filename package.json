@@ -6,6 +6,8 @@
     "husky": "^9.1.7"
   },
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "ocr": "ocr review --rule .ocr-rules.json --audience agent --format text",
+    "ocr:prepush": "ocr review --rule .ocr-rules.json --audience agent --format text"
   }
 }
