@@ -36,7 +36,7 @@ function getLimit(env: AiBudgetEnv, key: keyof AiBudgetEnv, fallback: number): n
 }
 
 function getDailyLimit(env: AiBudgetEnv): number {
-  return getLimit(env, 'AI_BUDGET_DAILY_LIMIT', 10000);
+  return getLimit(env, 'AI_BUDGET_DAILY_LIMIT', DEFAULT_DAILY_LIMIT);
 }
 
 function getWarningThreshold(env: AiBudgetEnv): number {
@@ -50,6 +50,13 @@ function getCriticalThreshold(env: AiBudgetEnv): number {
 function getShutdownThreshold(env: AiBudgetEnv): number {
   return getLimit(env, 'AI_BUDGET_SHUTDOWN_THRESHOLD', 8000);
 }
+
+// ===========================
+// 常量定义
+// ===========================
+const SEVEN_DAYS_TTL = 604800; // 7 days in seconds (TTL 滚动清理)
+export const DEFAULT_DAILY_LIMIT = 10000; // Workers AI Free Tier 10K Neurons/天
+const MAX_CALLS_IN_KV = 1000; // calls 数组上限，防止单 KV 值膨胀超过 25 MiB
 
 // ===========================
 // 日期工具
@@ -72,6 +79,11 @@ function kvKey(date?: string): string {
  * 记录一次 AI 调用消耗的 Neurons
  * @param model  模型名称（如 @cf/meta/llama-3.1-8b-instruct-fp8）
  * @param neurons  消耗的 Neurons 数量
+ *
+ * NOTE: 存在 read-modify-write 竞态条件（KV get → modify → put）。
+ * 两并发请求可导致一次增量丢失。KV 不提供原子 counter，
+ * 此函数接受最终一致性（fail-open 设计：丢失计数只影响预算检查，
+ * 不会漏调用）。
  */
 export async function recordAiCall(
   model: string,
@@ -79,19 +91,29 @@ export async function recordAiCall(
   env: AiBudgetEnv
 ): Promise<void> {
   if (!env.AI_USAGE_KV) return;
-  const key = kvKey();
-  const raw = await env.AI_USAGE_KV.get(key, 'text');
-  const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } = raw
-    ? JSON.parse(raw)
-    : { total: 0, calls: [] };
+  try {
+    const key = kvKey();
+    const raw = await env.AI_USAGE_KV.get(key, 'text');
+    const current: { total: number; calls: { model: string; neurons: number; ts: string }[] } = raw
+      ? JSON.parse(raw)
+      : { total: 0, calls: [] };
 
-  current.total += neurons;
-  current.calls.push({ model, neurons, ts: new Date().toISOString() });
+    current.total += neurons;
+    current.calls.push({ model, neurons, ts: new Date().toISOString() });
 
-  // TTL 7 天（604800 秒）= 滚动清理
-  await env.AI_USAGE_KV.put(key, JSON.stringify(current), {
-    expirationTtl: 604800,
-  });
+    // calls 数组上限保护：超限时丢弃最旧记录
+    if (current.calls.length > MAX_CALLS_IN_KV) {
+      current.calls = current.calls.slice(-MAX_CALLS_IN_KV);
+    }
+
+    // TTL 7 天 = 滚动清理
+    await env.AI_USAGE_KV.put(key, JSON.stringify(current), {
+      expirationTtl: SEVEN_DAYS_TTL,
+    });
+  } catch (err) {
+    // Fail-open: KV 写入失败不阻断调用方
+    console.warn('[ai-budget] recordAiCall failed (non-fatal):', err);
+  }
 }
 
 /**
@@ -151,11 +173,17 @@ export async function getBudgetStatus(env: AiBudgetEnv): Promise<BudgetStatusRes
 /**
  * CF Cron 每日 0 点 UTC 重置计数器
  * 由 wrangler.toml 的 `triggers.crons = ["0 0 * * *"]` 触发
+ *
+ * 注意：此函数在 UTC 0 点被 cron 触发，此时"今天"刚开局，
+ * 应读"昨天"的总计作为 previousTotal 返回，然后删除昨天的 key。
+ * 删除是装饰性的（TTL 自然过期），但确保 KV namespace 不累积陈旧 key。
  */
 export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTotal: number }> {
   if (!env.AI_USAGE_KV) return { previousTotal: 0 };
-  const key = kvKey();
-  const raw = await env.AI_USAGE_KV.get(key, 'text');
+  // 计算昨天的日期（UTC 0 点触发，读前天-Yesterday 的数据）
+  const yesterday = new Date(Date.now() - 86400000);
+  const yesterdayKey = kvKey(yesterday.toISOString().slice(0, 10));
+  const raw = await env.AI_USAGE_KV.get(yesterdayKey, 'text');
   let previousTotal = 0;
   if (raw) {
     try {
@@ -165,8 +193,8 @@ export async function resetDailyCounter(env: AiBudgetEnv): Promise<{ previousTot
       /* ignore */
     }
   }
-  // 删除旧 key（TTL 会自然过期，但手动删除确保立即重置）
-  await env.AI_USAGE_KV.delete(key);
+  // 删除昨天 key（TTL 会自然过期，但手动删除确保 namespace 干净）
+  await env.AI_USAGE_KV.delete(yesterdayKey);
   return { previousTotal };
 }
 

@@ -190,6 +190,7 @@ export interface ParsedFilters {
   stage?: string;
   eventStage?: string; // topics.event_stage 独立枚举
   fissionTriggered?: boolean;
+  fissionType?: string;
   titleLike?: string;
   select?: string;
   format: Format;
@@ -214,7 +215,14 @@ function resolveRelativeTime(rel: string): string | null {
   const n = parseInt(m[1], 10);
   const unit = m[2];
   const now = Date.now();
-  const ms = unit === 'm' ? n * 60_000 : unit === 'h' ? n * 3_600_000 : n * 86_400_000;
+  let ms: number;
+  if (unit === 'm') {
+    ms = n * 60_000;
+  } else if (unit === 'h') {
+    ms = n * 3_600_000;
+  } else {
+    ms = n * 86_400_000;
+  }
   return new Date(now - ms).toISOString();
 }
 
@@ -532,10 +540,22 @@ async function queryFissionReports(
   params.push(`limit=${filters.limit}`);
 
   // 通用 filter (白名单 only)
+  // Maps snake_case config keys to camelCase ParsedFilters properties
+  const FILTER_KEY_MAP: Record<string, string> = {
+    topic_id: 'topicId',
+    event_stage: 'eventStage',
+    fission_triggered: 'fissionTriggered',
+    title_like: 'titleLike',
+    fission_type: 'fissionType',
+  };
   const safeFilters: Record<string, string> = {};
   for (const k of config.allowedFilters) {
-    const v = (filters as any)[k];
-    if (v) safeFilters[k] = String(v);
+    const prop = FILTER_KEY_MAP[k] || k;
+    const v = (filters as any)[prop];
+    if (v != null) {
+      // Use the PostgREST snake_case column name for the query param
+      safeFilters[k] = String(v);
+    }
   }
   for (const [k, v] of Object.entries(safeFilters)) {
     params.push(`${k}=eq.${encodeURIComponent(v)}`);
@@ -625,11 +645,12 @@ async function queryEntity(
       const text = await obj.text();
       raw = JSON.parse(text) as EntityR2Payload;
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[pull:entity] R2 read failed: ${e?.message || e}`,
+      `[pull:entity] R2 read failed: ${msg}`,
       undefined,
       'pull'
     );
@@ -820,7 +841,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
 
     // 成功: 清除 Negative Sentinel (cleanup)
     await clearNegativeSentinel(env, cacheKey);
-  } catch (e: any) {
+  } catch (e: unknown) {
     // 失败: 写入 Negative Sentinel, 30s 内跳过重试
     await setNegativeSentinel(env, cacheKey);
     throw e;

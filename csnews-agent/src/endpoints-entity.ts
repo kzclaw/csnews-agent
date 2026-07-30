@@ -48,11 +48,12 @@ const EVENT_RATE_LIMIT_PER_MIN = 60;
 const triggerEventRecluster = async (env: Env): Promise<void> => {
   try {
     await runEventProcess(env);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[handleEntityAction] event re-clustering failed: ${e?.message || e}`,
+      `[handleEntityAction] event re-clustering failed: ${msg}`,
       undefined,
       'entity'
     );
@@ -92,7 +93,10 @@ async function applyEntityReviewMutation(
 
   const { candidates: newCandidates, noise: newNoise } = opts.mutate(json);
   await writeCandidatesJson(env, { ...json, candidates: newCandidates, noise: newNoise });
-  triggerEventRecluster(env);
+  triggerEventRecluster(env).catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[entity] triggerEventRecluster failed: ${msg}`);
+  });
 
   return jsonResponse(
     {
@@ -199,8 +203,9 @@ async function entityReadHandler(
       );
     }
     return jsonResponse({ error: 'internal_error' }, cors, { status: 500 });
-  } catch (e: any) {
-    return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: 'r2_read_failed', reason: msg }, cors, {
       status: 500,
     });
   }
@@ -230,7 +235,7 @@ export async function handleEntityAction(
     return jsonResponse(
       {
         error: 'invalid_type',
-        reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise 六选一, 当前 ${type}`,
+        reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise|approve|reject|noise-add|noise-remove 十选一, 当前 ${type}`,
       },
       cors,
       { status: 400 }
@@ -299,8 +304,9 @@ export async function handleEntityAction(
         },
         cors
       );
-    } catch (e: any) {
-      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return jsonResponse({ error: 'r2_read_failed', reason: msg }, cors, {
         status: 500,
       });
     }
@@ -318,29 +324,30 @@ export async function handleEntityAction(
     return applyEntityReviewMutation(env, entityName, cors, {
       findMode: 'either',
       mutate: (json) => {
-        const inNoise = json.noise.findIndex((e: any) => e.name === entityName);
-        const inCandidates = json.candidates.findIndex((e: any) => e.name === entityName);
+        const inNoise = json.noise?.findIndex((e: any) => e.name === entityName) ?? -1;
+        const inCandidates = json.candidates?.findIndex((e: any) => e.name === entityName) ?? -1;
         // 2026-07-03 UX fix: approve 后 从 candidates/noise 移除 (user 不 再 想看)
         // 之前 buggy 行为: map 跟 push,  保留 在 candidates 列表 · user 采纳后 仍 显示 同 名字
         // 现在 改: inNoise < 0 (典型 candidate case) → filter 移除; inNoise >= 0 (noise case) → 推回 candidates (作为 approved 实体)
+        const noiseEntry = inNoise >= 0 && json.noise ? json.noise[inNoise] : null;
         return {
           candidates:
-            inNoise >= 0
+            inNoise >= 0 && noiseEntry
               ? [
-                  ...json.candidates.filter((_: any, i: number) => i !== inCandidates),
+                  ...(json.candidates?.filter((_: any, i: number) => i !== inCandidates) || []),
                   {
                     name: entityName,
-                    type: json.noise[inNoise].type,
+                    type: noiseEntry.type,
                     confidence: 0.9,
                     source: 'review' as const,
-                    first_seen: json.noise[inNoise].first_seen,
+                    first_seen: noiseEntry.first_seen,
                     last_seen: new Date().toISOString(),
-                    mention_count: json.noise[inNoise].mention_count || 1,
+                    mention_count: noiseEntry.mention_count || 1,
                   },
                 ]
-              : json.candidates.filter((_: any, i: number) => i !== inCandidates),
+              : json.candidates?.filter((_: any, i: number) => i !== inCandidates) || [],
           noise:
-            inNoise >= 0 ? json.noise.filter((_: any, i: number) => i !== inNoise) : json.noise,
+            inNoise >= 0 ? json.noise?.filter((_: any, i: number) => i !== inNoise) : json.noise,
         };
       },
       errorIfNotFound: `实体 "${entityName}" 不存在`,
@@ -352,14 +359,14 @@ export async function handleEntityAction(
   if (type === 'reject') {
     return applyEntityReviewMutation(env, entityName, cors, {
       findMode: 'either',
-      mutate: (json) => ({
-        candidates: json.candidates.filter(
-          (_: any, i: number) => i !== json.candidates.findIndex((e: any) => e.name === entityName)
-        ),
-        noise: json.noise.filter(
-          (_: any, i: number) => i !== json.noise.findIndex((e: any) => e.name === entityName)
-        ),
-      }),
+      mutate: (json) => {
+        const rejInCandidates = json.candidates?.findIndex((e: any) => e.name === entityName) ?? -1;
+        const rejInNoise = json.noise?.findIndex((e: any) => e.name === entityName) ?? -1;
+        return {
+          candidates: json.candidates?.filter((_: any, i: number) => i !== rejInCandidates) || [],
+          noise: json.noise?.filter((_: any, i: number) => i !== rejInNoise) || [],
+        };
+      },
       errorIfNotFound: `实体 "${entityName}" 不存在`,
       successType: 'reject',
       successDescription: 'review 拒绝 entity → 触发 event re-clustering',
@@ -402,7 +409,10 @@ export async function handleEntityAction(
       anchorsData.updated_at = new Date().toISOString();
       await saveNoiseAnchors(env, anchorsData);
     }
-    triggerEventRecluster(env);
+    triggerEventRecluster(env).catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[entity] triggerEventRecluster failed: ${msg}`);
+    });
     return jsonResponse(
       {
         type: 'noise-add',
@@ -448,7 +458,10 @@ export async function handleEntityAction(
           ],
         });
       }
-      triggerEventRecluster(env);
+      triggerEventRecluster(env).catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[entity] triggerEventRecluster failed: ${msg}`);
+      });
       return jsonResponse(
         {
           type: 'noise-remove',
@@ -475,7 +488,10 @@ export async function handleEntityAction(
       noise: json.noise.filter((_: any, i: number) => i !== inNoise),
       candidates: [...(json.candidates || []), restoredEntity],
     });
-    triggerEventRecluster(env);
+    triggerEventRecluster(env).catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[entity] triggerEventRecluster failed: ${msg}`);
+    });
     return jsonResponse(
       {
         type: 'noise-remove',
@@ -550,8 +566,9 @@ export async function handleEventAction(
         },
         cors
       );
-    } catch (e: any) {
-      return jsonResponse({ error: 'r2_read_failed', reason: e?.message || e }, cors, {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return jsonResponse({ error: 'r2_read_failed', reason: msg }, cors, {
         status: 500,
       });
     }

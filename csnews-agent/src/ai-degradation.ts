@@ -233,8 +233,9 @@ export async function markAsDegraded(
       return false;
     }
     return true;
-  } catch (e: any) {
-    console.error(`[ai-degradation] markAsDegraded ${table}#${recordId} threw: ${e?.message || e}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[ai-degradation] markAsDegraded ${table}#${recordId} threw: ${msg}`);
     return false;
   }
 }

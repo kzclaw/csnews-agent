@@ -78,7 +78,6 @@ export async function runEventClustering(
   // 1. Group entities by topic_id
   // Each topic_id represents a news item with a set of entity names
   const topicToEntities = new Map<string, Set<string>>();
-  const entityToTopics = new Map<string, Set<string>>();
 
   for (const entity of entities) {
     const topicIds = entity.topic_ids || [];
@@ -87,11 +86,6 @@ export async function runEventClustering(
         topicToEntities.set(topicId, new Set());
       }
       topicToEntities.get(topicId)!.add(entity.name);
-
-      if (!entityToTopics.has(entity.name)) {
-        entityToTopics.set(entity.name, new Set());
-      }
-      entityToTopics.get(entity.name)!.add(topicId);
     }
   }
 
@@ -101,12 +95,18 @@ export async function runEventClustering(
     const uf = new UnionFind();
     for (const name of uniqueNames) uf.find(name);
 
+    /** Split name into tokens for word-level Jaccard comparison */
+    function nameTokens(name: string): string[] {
+      return name.toLowerCase().split(/[\s_/-]+/).filter(Boolean);
+    }
+
     let jaccardPairs = 0;
     for (let i = 0; i < uniqueNames.length; i++) {
       for (let j = i + 1; j < uniqueNames.length; j++) {
         const a = uniqueNames[i];
         const b = uniqueNames[j];
-        const jaccard = entityOverlapJaccard(Array.from(new Set(a)), Array.from(new Set(b)));
+        // Use word/term tokenization instead of character-level sets
+        const jaccard = entityOverlapJaccard(nameTokens(a), nameTokens(b));
         jaccardPairs++;
         if (jaccard >= threshold) {
           uf.union(a, b);
@@ -124,12 +124,13 @@ export async function runEventClustering(
     const clusters: EventCluster[] = [];
     let clusterIdx = 0;
     for (const [, members] of rootToMembers) {
+      const pairCount = (members.length * (members.length - 1)) / 2;
       clusters.push({
         cluster_id: `cluster-${clusterIdx++}-${members.length}`,
         entity_names: members,
         entity_count: members.length,
         topic_ids: [],
-        jaccard_pairs: jaccardPairs,
+        jaccard_pairs: pairCount,
         created_at: new Date().toISOString(),
         reviewed: 'pending',
       });
@@ -188,7 +189,7 @@ export async function runEventClustering(
       entity_names: Array.from(clusterEntities),
       entity_count: clusterEntities.size,
       topic_ids: Array.from(clusterTopics),
-      jaccard_pairs: jaccardPairs,
+      jaccard_pairs: (topics.length * (topics.length - 1)) / 2,
       created_at: new Date().toISOString(),
       reviewed: 'pending',
     });

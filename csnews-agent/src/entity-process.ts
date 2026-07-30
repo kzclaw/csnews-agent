@@ -54,11 +54,12 @@ export async function runEntityProcess(
   let reviewed: EntityFinalized[] = [];
   try {
     reviewed = await loadReviewedCandidates(env);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[entity-process] loadReviewedCandidates failed: ${e?.message || e}`,
+      `[entity-process] loadReviewedCandidates failed: ${msg}`,
       undefined,
       'entity'
     );
@@ -83,11 +84,12 @@ export async function runEntityProcess(
         2
       )
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[entity-process] R2 put failed: ${e?.message || e}`,
+      `[entity-process] R2 put failed: ${msg}`,
       undefined,
       'entity'
     );
@@ -159,11 +161,12 @@ export async function writeEntitiesHotLayer(
       'entity'
     );
     return { written: entities.length, errors: 0 };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[entity-process] writeEntitiesHotLayer failed: ${e?.message || e}`,
+      `[entity-process] writeEntitiesHotLayer failed: ${msg}`,
       undefined,
       'entity'
     );

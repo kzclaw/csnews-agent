@@ -36,6 +36,21 @@ export interface TransitionResult {
  */
 export async function transitionEventStage(env: Env, topicId: string): Promise<TransitionResult> {
   try {
+    // Step 1: Read old stage BEFORE RPC (否则 RPC 已更新, old_stage 永远等于 new_stage)
+    let oldStage: EventStage | null = null;
+    const topicRes = await supabaseFetch(
+      env,
+      `/rest/v1/topics?id=eq.${topicId}&select=event_stage`,
+      { method: 'GET' }
+    );
+    if (topicRes.ok) {
+      const rows = (await safeJson(topicRes)) as Array<{ event_stage: EventStage }>;
+      if (rows && rows.length > 0) {
+        oldStage = rows[0].event_stage;
+      }
+    }
+
+    // Step 2: Call RPC to transition event stage
     const res = await supabaseFetch(env, '/rest/v1/rpc/update_topic_event_stage', {
       method: 'POST',
       body: JSON.stringify({ p_topic_id: topicId }),
@@ -50,28 +65,11 @@ export async function transitionEventStage(env: Env, topicId: string): Promise<T
         undefined,
         'event'
       );
-      return { topic_id: topicId, old_stage: null, new_stage: null, changed: false };
+      return { topic_id: topicId, old_stage: oldStage, new_stage: null, changed: false };
     }
 
     const data = (await safeJson(res)) as string | null;
     const newStage = data as EventStage | null;
-
-    // We don't know the old stage from the RPC return value alone,
-    // so we fetch it as part of the transition result by reading the topic.
-    // To avoid extra round-trip, we query topics for the old stage in the same call.
-    const topicRes = await supabaseFetch(
-      env,
-      `/rest/v1/topics?id=eq.${topicId}&select=event_stage`,
-      { method: 'GET' }
-    );
-
-    let oldStage: EventStage | null = null;
-    if (topicRes.ok) {
-      const rows = (await safeJson(topicRes)) as Array<{ event_stage: EventStage }>;
-      if (rows && rows.length > 0) {
-        oldStage = rows[0].event_stage;
-      }
-    }
 
     return {
       topic_id: topicId,
@@ -79,11 +77,12 @@ export async function transitionEventStage(env: Env, topicId: string): Promise<T
       new_stage: newStage,
       changed: newStage !== null && newStage !== oldStage,
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[event-stage] transitionEventStage exception for topic ${topicId}: ${e?.message || e}`,
+      `[event-stage] transitionEventStage exception for topic ${topicId}: ${msg}`,
       undefined,
       'event'
     );

@@ -5,6 +5,11 @@
 import { Env } from './shared';
 import { countNegativeSentinels } from './cache';
 
+type CheckEntry = {
+  status: 'ok' | 'degraded' | 'down' | 'unknown' | 'info';
+  detail: string;
+};
+
 // ============================================================
 // 1. last_process_at + cron_health derived
 // ============================================================
@@ -15,11 +20,11 @@ export async function checkLastProcessAt(
   last_process_at: string | null | { error: string };
   cron_health: 'ok' | 'degraded' | 'down';
   checks: {
-    last_process_at: { status: 'ok' | 'degraded' | 'down'; detail: string };
-    cron_health: { status: 'ok' | 'degraded' | 'down'; detail: string };
+    last_process_at: CheckEntry;
+    cron_health: CheckEntry;
   };
 }> {
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
   let lastProcessAt: string | null | { error: string } = null;
 
   try {
@@ -53,9 +58,10 @@ export async function checkLastProcessAt(
       lastProcessAt = null;
       checks.last_process_at = { status: 'down', detail: 'PROCESS_STATE KV binding missing' };
     }
-  } catch (e: any) {
-    lastProcessAt = { error: e?.message || 'kv unavailable' };
-    checks.last_process_at = { status: 'down', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    lastProcessAt = { error: msg || 'kv unavailable' };
+    checks.last_process_at = { status: 'down', detail: msg };
   }
 
   let cronHealth: 'ok' | 'degraded' | 'down' = 'ok';
@@ -134,10 +140,10 @@ export interface LastProcessStoredReason {
 export async function checkLastProcessStoredReason(env: Env): Promise<{
   last_process_stored_reason: LastProcessStoredReason | null | { error: string };
   checks: {
-    last_process_stored_reason: { status: 'ok' | 'info' | 'unknown'; detail: string };
+    last_process_stored_reason: CheckEntry;
   };
 }> {
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
   let lastProcessStoredReason: LastProcessStoredReason | null | { error: string } = null;
 
   try {
@@ -146,7 +152,7 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'PROCESS_STATE KV binding missing',
       };
-      return { last_process_stored_reason: null, checks };
+      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
     }
     const raw = await env.PROCESS_STATE.get('last_process_stored_reason');
     if (!raw) {
@@ -154,7 +160,7 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'no stored_reason snapshot yet (process not run since v0.37.16)',
       };
-      return { last_process_stored_reason: null, checks };
+      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
     }
     const parsed = JSON.parse(raw);
     const inner = parsed?.data?.last_process_stored_reason as LastProcessStoredReason | undefined;
@@ -163,7 +169,7 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'stored_reason snapshot unparseable',
       };
-      return { last_process_stored_reason: null, checks };
+      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
     }
     lastProcessStoredReason = inner;
     // Status:
@@ -175,9 +181,10 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
       status,
       detail: inner.human_readable,
     };
-  } catch (e: any) {
-    lastProcessStoredReason = { error: e?.message || 'kv read failed' };
-    checks.last_process_stored_reason = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    lastProcessStoredReason = { error: msg || 'kv read failed' };
+    checks.last_process_stored_reason = { status: 'unknown', detail: msg };
   }
 
   return {

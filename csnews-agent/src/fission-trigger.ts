@@ -59,8 +59,13 @@ export async function triggerFission(
   });
 
   try {
+    // v0.37.80 fix: Service Binding fetch 需显式加 auth header
+    if (!('FISSION' in env) || !(env as any).FISSION) {
+      await logEvent(env, 'warn', '[fission-trigger] FISSION binding not available, skipping', undefined, 'trigger');
+      return { ok: false, skipped: true, reason: 'FISSION binding not configured' };
+    }
     const start = Date.now();
-    const resp = await (env as Env & { FISSION: { fetch: (req: Request) => Promise<Response> } }).FISSION.fetch(request);
+    const resp = await (env as any).FISSION.fetch(request);
     const elapsed = Date.now() - start;
     const body = await resp.text();
 
@@ -83,16 +88,17 @@ export async function triggerFission(
       'trigger'
     );
     return { ok: true, status: resp.status, body };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     // 决策 2: 失败 fallback → 6h cron 兜底 (不 propagate error to user)
     await logEvent(
       env,
       'error',
-      `[fission-trigger] throw for ${seedTopics.length} topics (reason=${reason}): ${e?.message || e}. 6h cron fallback will retry.`,
+      `[fission-trigger] throw for ${seedTopics.length} topics (reason=${reason}): ${msg}. 6h cron fallback will retry.`,
       undefined,
       'trigger'
     );
-    return { ok: false, error: e?.message || String(e) };
+    return { ok: false, error: msg };
   }
 }
 

@@ -128,8 +128,8 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  */
 export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] };
-  return result.data || [];
+  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] } | null;
+  return result?.data || [];
 }
 
 /**
