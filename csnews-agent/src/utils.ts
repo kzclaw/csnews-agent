@@ -4,7 +4,7 @@
 //用途：抽离 index.ts 的 Workers AI 响应解析 + 裂变报告生成函数
 // 让 endpoints.ts 不依赖 index.ts（避免循环依赖）
 import { Env, jsonResponse } from './shared';
-import { recordAiCall, shouldTriggerAiCall } from './ai-budget';
+import { recordAiCall, shouldTriggerAiCall, computeNeurons } from './ai-budget';
 
 // ============================================================
 // Supabase auth headers helper
@@ -53,7 +53,8 @@ export async function maybeFissionReport(title: string, env: Env, rScore: number
       temperature: 0.3,
     })) as LlamaAIResponse;
     // AI budget tracking
-    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', 200, env);
+    const neurons = computeNeurons('@cf/meta/llama-3.1-8b-instruct-fp8', { usage: resp.usage });
+    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', neurons, env);
     return extractText(resp) || '(无AI输出)';
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

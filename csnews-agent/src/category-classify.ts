@@ -9,7 +9,7 @@
 import { Env } from './shared';
 import { loadCategorySeeds } from './category-seeds';
 import { bgeM3BatchEmbedding, cosineSimilarity } from './entity-noise-filter';
-import { recordAiCall, shouldTriggerAiCall } from './ai-budget';
+import { recordAiCall, shouldTriggerAiCall, computeNeurons } from './ai-budget';
 
 /**
  * 自分类主函数 (18:43 确定候选 A 核心)
@@ -132,7 +132,8 @@ export async function batchClassifyBySemantic(
     data: number[][];
   };
   // AI budget tracking
-  await recordAiCall('@cf/baai/bge-m3', 1, env);
+  const seedNeurons = computeNeurons('@cf/baai/bge-m3', { inputTexts: seedTexts });
+  await recordAiCall('@cf/baai/bge-m3', seedNeurons, env);
   const seedEmbeddings = seedEmbResp.data || [];
 
   // 3. Workers AI input embeddings (1 次 API call, 全部 input)
@@ -140,7 +141,8 @@ export async function batchClassifyBySemantic(
     data: number[][];
   };
   // AI budget tracking
-  await recordAiCall('@cf/baai/bge-m3', 1, env);
+  const inputNeurons = computeNeurons('@cf/baai/bge-m3', { inputTexts: inputTexts });
+  await recordAiCall('@cf/baai/bge-m3', inputNeurons, env);
   const inputEmbeddings = inputEmbResp.data || [];
 
   // 4. 对每个 input 算 cosine 跟所有 seeds

@@ -21,7 +21,7 @@ import { loadCategorySeeds, addSeedToCategory, removeSeedFromCategory } from './
 import { scoreRule, AI_ROUTE_R_THRESHOLD } from './score';
 import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
-import { recordAiCall, shouldTriggerAiCall } from './ai-budget';
+import { recordAiCall, shouldTriggerAiCall, computeNeurons } from './ai-budget';
 import { writeDegradedFission } from './ai-degradation';
 import type {
   LlamaAIResponse,
@@ -98,7 +98,8 @@ export async function handleModelTestAction(
       max_tokens: 100,
     })) as LlamaAIResponse;
     // AI budget tracking
-    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', 200, env);
+    const neurons = computeNeurons('@cf/meta/llama-3.1-8b-instruct-fp8', { usage: r.usage });
+    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', neurons, env);
     return jsonResponse(
       { ok: true, model: 'llama-3.1-8b-instruct-fp8', response: extractText(r).substring(0, 200) },
       cors
@@ -369,7 +370,8 @@ export async function handleFissionAction(
       temperature: 0.3,
     })) as LlamaAIResponse;
     // AI budget tracking
-    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', 200, env);
+    const neurons = computeNeurons('@cf/meta/llama-3.1-8b-instruct-fp8', { usage: resp.usage });
+    await recordAiCall('@cf/meta/llama-3.1-8b-instruct-fp8', neurons, env);
     const text = extractText(resp);
     const queries = text
       .split('|')
@@ -477,7 +479,8 @@ export async function handleEmbedAction(
       text: [text],
     })) as BgeEmbeddingResponse;
     // AI budget tracking
-    await recordAiCall('@cf/baai/bge-m3', 1, env);
+    const neurons = computeNeurons('@cf/baai/bge-m3', { inputTexts: [text] });
+    await recordAiCall('@cf/baai/bge-m3', neurons, env);
 
     // bge-m3 返回格式: { shape: [n, dim], data: [...], response: string }
     const raw = resp as BgeEmbeddingResponse;
