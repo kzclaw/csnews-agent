@@ -33,6 +33,10 @@ csnews-h1-test/
 
 # Supabase CLI temp files
 supabase/.temp/
+csnews-agent/supabase/.temp/
+
+# OCR review rules (used by local-only pre-push hook, never push)
+.ocr-rules.json
 
 # Local-only directories · never push (planning docs, hooks, scripts)
 tasks/
