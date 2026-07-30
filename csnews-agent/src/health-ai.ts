@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Env } from './shared';
-import { getBudgetStatus } from './ai-budget';
+import { getBudgetStatus, DEFAULT_DAILY_LIMIT } from './ai-budget';
 
 // Map CF Workers AI model names → L1-L6 tier levels
 function modelToLevel(model: string): string {
@@ -11,6 +11,8 @@ function modelToLevel(model: string): string {
   if (model === '@cf/baai/bge-m3') return 'L3';
   return 'L1'; // unknown/default
 }
+
+type CheckEntry = { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
 
 // ============================================================
 // 1. ai_budget_today
@@ -20,7 +22,7 @@ export async function checkAiBudget(env: Env): Promise<{
     | { used: number; tier: string; remaining: number; daily_limit: number }
     | { error: string };
   checks: {
-    ai_budget_today: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+    ai_budget_today: CheckEntry;
   };
 }> {
   let aiBudgetToday:
@@ -29,9 +31,9 @@ export async function checkAiBudget(env: Env): Promise<{
     used: 0,
     tier: 'ok',
     remaining: 0,
-    daily_limit: 10000,
+    daily_limit: DEFAULT_DAILY_LIMIT,
   };
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
 
   try {
     const budget = await getBudgetStatus(env);
@@ -42,14 +44,22 @@ export async function checkAiBudget(env: Env): Promise<{
       remaining: budget.remaining,
       daily_limit: budget.limit,
     };
+    let budgetStatus: 'ok' | 'degraded' | 'down';
+    if (budget.status === 'shutdown') {
+      budgetStatus = 'down';
+    } else if (budget.status === 'critical') {
+      budgetStatus = 'degraded';
+    } else {
+      budgetStatus = 'ok';
+    }
     checks.ai_budget_today = {
-      status:
-        budget.status === 'shutdown' ? 'down' : budget.status === 'critical' ? 'degraded' : 'ok',
+      status: budgetStatus,
       detail: `daily used: ${budget.used} / ${budget.limit} (${budget.status})`,
     };
-  } catch (e: any) {
-    aiBudgetToday = { error: e?.message || 'ai_budget calc failed' };
-    checks.ai_budget_today = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    aiBudgetToday = { error: msg || 'ai_budget calc failed' };
+    checks.ai_budget_today = { status: 'unknown', detail: msg };
   }
 
   return {
@@ -66,10 +76,10 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
   neurons_used_today: number;
   ai_budget_status: string;
   checks: {
-    ai_calls_breakdown: { status: 'ok' | 'unknown'; detail: string };
+    ai_calls_breakdown: CheckEntry;
   };
 }> {
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
   const breakdown: Record<string, number> = {};
 
   try {
@@ -130,8 +140,9 @@ export async function checkAiCallsBreakdown(env: Env): Promise<{
       ai_budget_status: statusName,
       checks: { ai_calls_breakdown: checks.ai_calls_breakdown },
     };
-  } catch (e: any) {
-    checks.ai_calls_breakdown = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    checks.ai_calls_breakdown = { status: 'unknown', detail: msg };
     return {
       ai_calls_breakdown: {},
       neurons_used_today: 0,

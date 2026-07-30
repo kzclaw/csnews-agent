@@ -344,11 +344,12 @@ export async function runEntitySelfLearn(env: Env): Promise<{
       noise_filtered: noiseCandidates.length,
       noise_anchors_count: noiseAnchorsData.anchors.length,
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[entity-selflearn] failed: ${e?.message || e}`,
+      `[entity-selflearn] failed: ${msg}`,
       undefined,
       'entity'
     );

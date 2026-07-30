@@ -86,8 +86,9 @@ export async function handleLogsAction(
         }
       }
     }
-  } catch (e: any) {
-    return jsonResponse({ error: 'r2 unavailable', detail: e?.message || String(e) }, cors, {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: 'r2 unavailable', detail: msg }, cors, {
       status: 503,
     });
   }

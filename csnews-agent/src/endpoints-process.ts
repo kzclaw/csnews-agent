@@ -61,8 +61,9 @@ export async function handleProcessAction(
 
     const FULL_COUNT = 6;
     const pendingNews: PendingItem[] = [];
+    const topItems = list.slice(0, 10);
 
-    for (let i = 0; i < list.slice(0, 10).length; i++) {
+    for (let i = 0; i < topItems.length; i++) {
       const result = await processZakerItem(list[i], i, env, FULL_COUNT);
       if (result) {
         pendingNews.push(result);
@@ -86,27 +87,33 @@ export async function handleProcessAction(
     }));
 
     const batchIds = await insertNewsBatch(env, batchNewsArray);
-    dualWriteVectors(env, batchNewsArray, batchIds);
+    await dualWriteVectors(env, batchNewsArray, batchIds);
 
-    const results = [];
-    for (let i = 0; i < pendingNews.length; i++) {
-      const p = pendingNews[i];
-      const newsId = batchIds[i];
-      let trend: null | object = null;
-      if (newsId && p.topicId) {
-        const ts = await recordTrendForNews(env, newsId, p.topicId, p.isNewTopic);
-        if (ts) {
-          trend = {
-            snapshot_id: ts.snapshot_id,
-            warning_id: ts.warning_id,
-            velocity: ts.out_velocity,
-            acceleration: ts.out_acceleration,
-            stage: ts.out_stage,
-            warning_created: ts.out_warning_created,
-          };
+    // Fire all trend requests in parallel (independent calls)
+    const trendResults = await Promise.all(
+      pendingNews.map((p, i) => {
+        const newsId = batchIds[i];
+        if (newsId && p.topicId) {
+          return recordTrendForNews(env, newsId, p.topicId, p.isNewTopic);
         }
+        return null;
+      })
+    );
+
+    const results = pendingNews.map((p, i) => {
+      const ts = trendResults[i];
+      let trend: null | object = null;
+      if (ts) {
+        trend = {
+          snapshot_id: ts.snapshot_id,
+          warning_id: ts.warning_id,
+          velocity: ts.out_velocity,
+          acceleration: ts.out_acceleration,
+          stage: ts.out_stage,
+          warning_created: ts.out_warning_created,
+        };
       }
-      results.push({
+      return {
         title: p.title,
         category: p.category,
         score: p.rule.score,
@@ -117,8 +124,8 @@ export async function handleProcessAction(
         stored_reason: p.storedReason,
         trend,
         fission: p.fission,
-      });
-    }
+      };
+    });
 
     // v0.37.16: aggregate stored_reason distribution so consumers can see
     // *why* R2 didn't get new writes this run. The dominant reason is
@@ -176,11 +183,12 @@ export async function handleProcessAction(
       } else {
         fissionTriggerResult = { ok: false, reason: 'FISSION_binding_missing', topic_count: triggerableTopics.length };
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       // 决策 2: 失败 fallback → 6h cron 兜底 (不 propagate error to user)
-      fissionTriggerResult = { ok: false, reason: e?.message || String(e) };
+      fissionTriggerResult = { ok: false, reason: msg };
       try {
-        await logEvent(env, 'error', `[fission-trigger] post-process failed: ${e?.message || e}`, undefined, 'process');
+        await logEvent(env, 'error', `[fission-trigger] post-process failed: ${msg}`, undefined, 'process');
       } catch {
         // ignore logging error
       }
@@ -226,7 +234,8 @@ export async function handleProcessAction(
           elapsed_ms: 0,
           reason: 'scheduled_async',
         };
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
         tavilyTriggerResult = {
           ok: false,
           fetched: 0,
@@ -234,10 +243,10 @@ export async function handleProcessAction(
           skipped_duplicates: 0,
           errors: [],
           elapsed_ms: 0,
-          reason: `kv_put_failed: ${e?.message || String(e)}`,
+          reason: `kv_put_failed: ${msg}`,
         };
         try {
-          await logEvent(env, 'error', `[tavily-trigger] KV flag put failed: ${e?.message || e}`, undefined, 'process');
+          await logEvent(env, 'error', `[tavily-trigger] KV flag put failed: ${msg}`, undefined, 'process');
         } catch {
           // ignore logging error
         }

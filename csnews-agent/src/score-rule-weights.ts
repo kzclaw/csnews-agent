@@ -63,7 +63,9 @@ export async function loadWeights(env: Env, category: string): Promise<Record<st
     if (res.ok) {
       const rows: WeightRow[] = await res.json();
       for (const row of rows) {
-        weights[row.hot_word] = row.weight;
+        if (row.weight != null) {
+          weights[row.hot_word] = row.weight;
+        }
       }
     }
     // On error: silently use defaults (DB may not have data yet)

@@ -47,7 +47,7 @@ export async function checkCronHistory(
     | { error: string } = {
     this_hour: { hour: '', scheduler_log_count: 0 },
   };
-  const checks: any = {};
+  const checks: Record<string, { status: 'ok' | 'degraded' | 'unknown'; detail: string }> = {};
 
   try {
     const now = new Date(ts);
@@ -74,9 +74,10 @@ export async function checkCronHistory(
           ? `${thisHourSchedulerLogs.length} scheduler logs this hour`
           : 'no scheduler logs this hour (cron may not have run)',
     };
-  } catch (e: any) {
-    cronHistory = { error: e?.message };
-    checks.cron_history = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    cronHistory = { error: msg };
+    checks.cron_history = { status: 'unknown', detail: msg };
   }
 
   return {

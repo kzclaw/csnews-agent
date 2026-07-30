@@ -91,11 +91,11 @@ export async function handleProxyAction(
 
     html = await resp.text();
     fetchOk = true;
-  } catch (e: any) {
+  } catch (e: unknown) {
     const reason =
-      e.name === 'AbortError' || e.message?.includes('aborted')
+      e instanceof Error && (e.name === 'AbortError' || e.message?.includes('aborted'))
         ? '请求超时 (10s)'
-        : `fetch 失败: ${e.message || String(e)}`;
+        : `fetch 失败: ${e instanceof Error ? e.message : String(e)}`;
     return jsonResponse({ error: 'fetch_failed', reason }, cors, { status: 502 });
   }
 
@@ -123,11 +123,11 @@ export async function handleProxyAction(
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return jsonResponse(
       {
         error: 'extraction_failed',
-        reason: `Readability 解析失败: ${e.message || String(e)}`,
+        reason: `Readability 解析失败: ${e instanceof Error ? e.message : String(e)}`,
       },
       cors,
       { status: 502 }
@@ -149,8 +149,10 @@ function buildArticleHtml(
   sourceUrl: string
 ): string {
   const title = article.title || '正文';
-  const content = article.content || article.textContent || '<p>正文内容提取失败</p>';
+  const rawContent = article.content || article.textContent || '<p>正文内容提取失败</p>';
   const siteName = article.siteName || new URL(sourceUrl).hostname;
+  // Sanitize article HTML: strip event handlers and javascript: URLs to prevent XSS
+  const content = sanitizeHtml(rawContent);
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -201,6 +203,20 @@ function buildArticleHtml(
 <article>${content}</article>
 </body>
 </html>`;
+}
+
+/**
+ * Strip known XSS vectors from HTML content.
+ * Removes event handler attributes (on*) and javascript: URLs in links.
+ */
+function sanitizeHtml(html: string): string {
+  return html
+    // Remove event handler attributes (onerror, onclick, onload, etc.)
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    // Remove javascript: URLs in href/src attributes
+    .replace(/(href|src)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '$1=""')
+    // Remove <base> tags (can redirect relative URLs)
+    .replace(/<base\b[^>]*>/gi, '');
 }
 
 function escapeHtmlAttr(s: string): string {

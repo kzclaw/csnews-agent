@@ -59,6 +59,13 @@ export async function getDailyUsage(env: Env, date?: string): Promise<number> {
 }
 
 // ============================================================
+// 阈值常量
+// ============================================================
+const BUDGET_L4_THRESHOLD = 7_000;
+const BUDGET_L5_THRESHOLD = 8_000;
+const BUDGET_L6_THRESHOLD = 9_000;
+
+// ============================================================
 // Phase 2: 预算检查 hook
 // ============================================================
 
@@ -81,9 +88,9 @@ export async function shouldTriggerAiCall(
 ): Promise<boolean> {
   const used = await getDailyUsage(env);
 
-  if (level === 'L4') return used < 7_000;
-  if (level === 'L5') return used < 8_000;
-  if (level === 'L6') return used < 9_000;
+  if (level === 'L4') return used < BUDGET_L4_THRESHOLD;
+  if (level === 'L5') return used < BUDGET_L5_THRESHOLD;
+  if (level === 'L6') return used < BUDGET_L6_THRESHOLD;
 
   // Unknown level: allow by default
   return true;

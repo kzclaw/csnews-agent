@@ -10,6 +10,8 @@ import { Env, getSupabaseHost, supabaseFetch, safeJson } from './shared';
 import { checkEntityCronHealth, supabaseHeaders } from './utils';
 import type { TrendSnapshotRow } from './types';
 
+type CheckEntry = { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+
 // ============================================================
 // data_store_architecture — explains which store is primary vs cold archive
 // ============================================================
@@ -113,18 +115,17 @@ export async function checkR2LatestSupabaseWrite(
 ): Promise<{
   r2_latest_supabase_write:
     | { last_write: string; source: string; role: 'primary_store' }
-    | { last_write: string; source: string; role: 'primary_store' }
     | { error: string };
   supabase_latest_write: any; // alias
   checks: {
-    r2_latest_supabase_write: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
-    supabase_latest_write: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+    r2_latest_supabase_write: CheckEntry;
+    supabase_latest_write: CheckEntry;
   };
 }> {
   let r2LatestSupabaseWrite:
     | { last_write: string; source: string; role: 'primary_store' }
-    | { error: string } = null as any;
-  const checks: any = {};
+    | { error: string } = { error: 'not_checked' };
+  const checks: Record<string, CheckEntry> = {};
 
   try {
     const res = await fetch(
@@ -171,16 +172,17 @@ export async function checkR2LatestSupabaseWrite(
         checks.supabase_latest_write = { status: 'unknown', detail: 'created_at unparseable' };
       }
     } else {
-      r2LatestSupabaseWrite = null as any;
+      r2LatestSupabaseWrite = { error: 'table_empty' };
       checks.r2_latest_supabase_write = {
         status: 'down',
         detail: 'news_hotspots table empty (no data ever) · primary store has nothing',
       };
       checks.supabase_latest_write = checks.r2_latest_supabase_write;
     }
-  } catch (e: any) {
-    r2LatestSupabaseWrite = { error: e?.message || 'supabase query failed' };
-    checks.r2_latest_supabase_write = { status: 'down', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    r2LatestSupabaseWrite = { error: msg || 'supabase query failed' };
+    checks.r2_latest_supabase_write = { status: 'down', detail: msg };
     checks.supabase_latest_write = checks.r2_latest_supabase_write;
   }
 
@@ -201,8 +203,8 @@ export async function checkEntityAndEventFreshness(env: Env): Promise<{
   entity_freshness: { status: string; detail: string } | { error: string };
   event_freshness: { status: string; detail: string } | { error: string };
   checks: {
-    entity_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
-    event_freshness: { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: string };
+    entity_freshness: CheckEntry;
+    event_freshness: CheckEntry;
   };
 }> {
   let entityFreshness: { status: string; detail: string } | { error: string } = {
@@ -213,7 +215,7 @@ export async function checkEntityAndEventFreshness(env: Env): Promise<{
     status: 'unknown',
     detail: '',
   };
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
 
   try {
     const { entity_freshness: ef, event_freshness: evf } = await checkEntityCronHealth(env);
@@ -221,11 +223,12 @@ export async function checkEntityAndEventFreshness(env: Env): Promise<{
     eventFreshness = evf;
     checks.entity_freshness = { status: ef.status, detail: ef.detail };
     checks.event_freshness = { status: evf.status, detail: evf.detail };
-  } catch (e: any) {
-    entityFreshness = { error: e?.message || 'entity freshness check failed' };
-    eventFreshness = { error: e?.message || 'event freshness check failed' };
-    checks.entity_freshness = { status: 'unknown', detail: e?.message };
-    checks.event_freshness = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    entityFreshness = { error: msg || 'entity freshness check failed' };
+    eventFreshness = { error: msg || 'event freshness check failed' };
+    checks.entity_freshness = { status: 'unknown', detail: msg };
+    checks.event_freshness = { status: 'unknown', detail: msg };
   }
 
   return {
@@ -254,7 +257,7 @@ export async function checkZscoreSignals(
       }
     | { error: string };
   checks: {
-    zscore_signals_today: { status: 'ok' | 'unknown'; detail: string };
+    zscore_signals_today: CheckEntry;
   };
 }> {
   let zscoreSignalsToday:
@@ -270,7 +273,7 @@ export async function checkZscoreSignals(
     snapshots_analyzed: 0,
     window: '7d',
   };
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
 
   try {
     const { countAnomalySignals } = await import('./zscore');
@@ -284,7 +287,7 @@ export async function checkZscoreSignals(
     let totalAnomalies = 0;
     const anomaliesByField: Record<string, number> = { score: 0, velocity: 0, acceleration: 0 };
     if (snapshots.length >= 2) {
-      const byTopic: Record<string, any[]> = {};
+      const byTopic: Record<string, TrendSnapshotRow[]> = {};
       for (const s of snapshots) {
         if (!s.topic_id) continue;
         if (!byTopic[s.topic_id]) byTopic[s.topic_id] = [];
@@ -313,9 +316,10 @@ export async function checkZscoreSignals(
           ? `${totalAnomalies} z-score anomalies in last 7d (${JSON.stringify(anomaliesByField)})`
           : `0 anomalies in last 7d (algorithm ready, wakeup review pending)`,
     };
-  } catch (e: any) {
-    zscoreSignalsToday = { error: e?.message || 'zscore calc failed' };
-    checks.zscore_signals_today = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    zscoreSignalsToday = { error: msg || 'zscore calc failed' };
+    checks.zscore_signals_today = { status: 'unknown', detail: msg };
   }
 
   return {

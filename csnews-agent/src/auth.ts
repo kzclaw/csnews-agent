@@ -11,23 +11,24 @@ import { Env, jsonResponse } from './shared';
  */
 export function authRequest(request: Request, env: Env): Response | null {
   const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.replace('Bearer ', '');
+  // RFC 7235: Bearer scheme is case-insensitive
+  const token = authHeader?.replace(/^[Bb]earer\s+/i, '') || '';
   const encoder = new TextEncoder();
   const expected = encoder.encode(env.BEARER_TOKEN);
-  const provided = encoder.encode(token);
+  const provided = encoder.encode(token || '');
 
-  // Length check first to prevent timing leak on length mismatch
-  if (expected.length !== provided.length) {
-    return jsonResponse({ error: 'Unauthorized' }, {}, { status: 401 });
-  }
+  // Constant-time comparison using Web Crypto API (available in CF Workers runtime)
+  // Pad both buffers to max length so timingSafeEqual doesn't throw on mismatch
+  const maxLen = Math.max(expected.length, provided.length);
+  const paddedExpected = new Uint8Array(maxLen);
+  const paddedProvided = new Uint8Array(maxLen);
+  paddedExpected.set(expected);
+  paddedProvided.set(provided);
 
-  // Constant-time comparison to prevent timing attacks
-  // timingSafeEqual is part of Web Crypto API (available in CF Workers runtime)
-  // TypeScript lib may not include it; cast to bypass incomplete type definition
   const subtle = crypto.subtle as SubtleCrypto & {
     timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean;
   };
-  if (!subtle.timingSafeEqual(expected, provided)) {
+  if (!subtle.timingSafeEqual(paddedExpected, paddedProvided)) {
     return jsonResponse({ error: 'Unauthorized' }, {}, { status: 401 });
   }
   return null;

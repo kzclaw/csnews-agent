@@ -157,29 +157,41 @@ async function handleJSONRPC(request) {
 }
 
 async function handleTool(name, params) {
-  const url = `${CSNEWS_URL}/?action=mcp`;
-  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: name, params });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const url = `${CSNEWS_URL}/?action=mcp`;
+    const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: name, params });
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${CSNEWS_TOKEN}`,
-    },
-    body,
-  });
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${CSNEWS_TOKEN}`,
+      },
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.error) {
+      throw new Error(`[${data.error.code}] ${data.error.message}`);
+    }
+
+    return data.result?.content?.[0]?.text || JSON.stringify(data, null, 2);
+  } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') {
+      throw new Error('请求超时 (30s)');
+    }
+    throw e;
   }
-
-  if (data.error) {
-    throw new Error(`[${data.error.code}] ${data.error.message}`);
-  }
-
-  return data.result?.content?.[0]?.text || JSON.stringify(data, null, 2);
 }
 
 const TOOL_HANDLERS = {
@@ -195,7 +207,7 @@ const TOOL_HANDLERS = {
 // MCP Protocol — stdio 循环
 // ============================================================
 
-let requestId = 0;
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10 MB
 
 process.stdin.setEncoding('utf8');
 
@@ -203,6 +215,13 @@ let buffer = '';
 
 process.stdin.on('data', async (chunk) => {
   buffer += chunk;
+
+  // Buffer size limit to prevent DoS
+  if (buffer.length > MAX_BUFFER_SIZE) {
+    process.stderr.write('[CSNEWS MCP] 错误: 输入缓冲区超过 10MB 限制, 重置连接\n');
+    buffer = '';
+    return;
+  }
 
   // 尝试解析每行 JSON
   const lines = buffer.split('\n');
@@ -214,11 +233,24 @@ process.stdin.on('data', async (chunk) => {
     try {
       const request = JSON.parse(line);
 
-      // listTools
-      if (
-        request.method === 'initialize' ||
-        (request.method === 'tools/list' && request.jsonrpc === '2.0')
-      ) {
+      // Initialize — MCP 协议: 返回 protocolVersion + capabilities + serverInfo
+      if (request.method === 'initialize') {
+        process.stdout.write(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: request.id,
+            result: {
+              protocolVersion: '2024-11-05',
+              capabilities: { tools: {} },
+              serverInfo: { name: 'csnews-mcp-server', version: '1.0.0' },
+            },
+          }) + '\n'
+        );
+        continue;
+      }
+
+      // tools/list
+      if (request.method === 'tools/list' && request.jsonrpc === '2.0') {
         process.stdout.write(
           JSON.stringify({
             jsonrpc: '2.0',
@@ -229,11 +261,16 @@ process.stdin.on('data', async (chunk) => {
         continue;
       }
 
-      // notifications/ping
-      if (request.method === 'ping' || request.method === 'notifications/initialized') {
+      // ping — MCP 协议: 回复 pong
+      if (request.method === 'ping') {
         process.stdout.write(
-          JSON.stringify({ jsonrpc: '2.0', id: request.id, result: null }) + '\n'
+          JSON.stringify({ jsonrpc: '2.0', id: request.id, result: {} }) + '\n'
         );
+        continue;
+      }
+
+      // notifications/initialized — JSON-RPC 通知没有 id, 服务端不应回复
+      if (request.method === 'notifications/initialized') {
         continue;
       }
 

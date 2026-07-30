@@ -12,6 +12,8 @@
 
 import { Env } from './shared';
 
+type CheckEntry = { status: 'ok' | 'info' | 'down'; detail: string };
+
 // ============================================================
 // 1. r2_latest_write — news/zaker/ latest write (informational / cold archive)
 // ============================================================
@@ -46,13 +48,48 @@ export async function checkR2LatestWrite(
         primary_store_field: 'supabase_latest_write';
       }
     | { error: string; r2_role: 'cold_archive'; cold_archive_age_hours: null };
-  r2_cold_archive_latest_write: any; // alias of r2_latest_write
+  r2_cold_archive_latest_write:
+    | {
+        key: string;
+        uploaded: string | null;
+        source: string;
+        r2_role: 'cold_archive';
+        cold_archive_age_hours: number | null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | {
+        r2_role: 'cold_archive';
+        empty: true;
+        cold_archive_age_hours: null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | { error: string; r2_role: 'cold_archive'; cold_archive_age_hours: null }; // alias
   checks: {
-    r2_latest_write: { status: 'ok' | 'info' | 'down'; detail: string };
+    r2_latest_write: CheckEntry;
   };
 }> {
-  const checks: any = {};
-  let r2LatestWrite: any = null;
+  const checks: Record<string, CheckEntry> = {};
+  type R2LatestWriteResult =
+    | {
+        key: string;
+        uploaded: string | null;
+        source: string;
+        r2_role: 'cold_archive';
+        cold_archive_age_hours: number | null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | {
+        r2_role: 'cold_archive';
+        empty: true;
+        cold_archive_age_hours: null;
+        cold_archive_status_explanation: string;
+        primary_store_field: 'supabase_latest_write';
+      }
+    | { error: string; r2_role: 'cold_archive'; cold_archive_age_hours: null };
+  let r2LatestWrite: R2LatestWriteResult | null = null;
   let ageHours: number | null = null;
 
   // Compute the one-line explanation based on the R2 age, so consumers
@@ -175,16 +212,17 @@ export async function checkR2LatestWrite(
         detail: explain(null),
       };
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     r2LatestWrite = {
-      error: e?.message || 'r2 unavailable',
+      error: msg || 'r2 unavailable',
       r2_role: 'cold_archive' as const,
       cold_archive_age_hours: null,
     };
     // R2 list failure: still 'info' (cold archive, doesn't block process)
     checks.r2_latest_write = {
       status: 'info',
-      detail: `r2 list failed: ${e?.message} · cold archive, does not block process. Primary store: Supabase (see supabase_latest_write).`,
+      detail: `r2 list failed: ${msg} · cold archive, does not block process. Primary store: Supabase (see supabase_latest_write).`,
     };
   }
 

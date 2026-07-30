@@ -43,7 +43,7 @@ AI_BUDGET_DAILY_LIMIT = "10000"
 AI_BUDGET_WARNING_THRESHOLD = "5000"
 AI_BUDGET_CRITICAL_THRESHOLD = "7000"
 AI_BUDGET_SHUTDOWN_THRESHOLD = "8000"
-WORKER_VERSION = "v0.37.80"
+WORKER_VERSION = "v0.37.82"
 # dispatcher log diagnostic mode flag (ring buffer 100 条 + ?action=logs-diag)
 # 配 1 = 开, 不 配 / 0 = 关 (default 关, 不 影 响 production)
 DEBUG_LOG_BUFFER = "1"

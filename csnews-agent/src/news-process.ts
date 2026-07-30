@@ -126,11 +126,12 @@ export async function recordTrendSnapshot(env: Env, topicId: string) {
     }
     const data = (await safeJson(res)) as RecordTrendWithMemberResult[];
     return Array.isArray(data) ? data[0] || null : null;
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[TIE] record_trend_snapshot threw for ${topicId}: ${e?.message || e}`,
+      `[TIE] record_trend_snapshot threw for ${topicId}: ${msg}`,
       undefined,
       'process'
     );
@@ -244,10 +245,10 @@ export async function saveToR2(env: Env, prefix: string, data: object): Promise<
       // Non-critical — R2 write already succeeded
     }
     return key;
-  } catch (e: any) {
-    const errMsg = e?.message || String(e);
-    const errName = e?.name || 'n/a';
-    const errStack = (e?.stack || '').slice(0, 500);
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    const errName = e instanceof Error ? e.name : 'n/a';
+    const errStack = (e instanceof Error ? e.stack || '' : '').slice(0, 500);
     console.error(
       `[saveToR2] put FAILED key=${key} err=${errMsg} name=${errName} stack=${errStack}`
     );
@@ -495,11 +496,12 @@ export async function recordTrendWithMember(
     }
 
     return result;
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `record_trend_with_member threw for ${newsId}/${topicId}: ${e?.message || e}`,
+      `record_trend_with_member threw for ${newsId}/${topicId}: ${msg}`,
       undefined,
       'process'
     );

@@ -53,8 +53,9 @@ export async function maybeFissionReport(title: string, env: Env, rScore: number
       temperature: 0.3,
     })) as LlamaAIResponse;
     return extractText(resp) || '(无AI输出)';
-  } catch (e: any) {
-    return `(AI错误: ${e.message})`;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return `(AI错误: ${msg})`;
   }
 }
 

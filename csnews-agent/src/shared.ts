@@ -76,7 +76,10 @@ export interface Env {
 }
 
 export function getSupabaseHost(env: Env): string {
-  return `https://${env.SUPABASE_URL}.supabase.co`;
+  // SUPABASE_URL 可能是项目引用（e.g., "abc123"）或完整 URL（e.g., "https://abc.supabase.co"）
+  // 防御性地处理两种情形
+  const url = env.SUPABASE_URL.replace(/^https?:\/\//, '').replace(/\.supabase\.co$/, '');
+  return `https://${url}.supabase.co`;
 }
 
 /**

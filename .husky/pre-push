@@ -1,0 +1,26 @@
+#!/bin/sh
+# ============================================================
+# csnews pre-push hook · OCR review (advisory)
+#
+# 在 git push 前自动跑 ocr review，审 HEAD commit 的 diff。
+# 纯建议性质（不 block push），输出审查结果供参考。
+# ============================================================
+
+echo ""
+echo "============================================"
+echo "[pre-push] 🔍 OCR AI 代码审查（advisory）"
+echo "============================================"
+
+ocr review -c HEAD --rule .ocr-rules.json --audience agent --format text 2>&1
+
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+  echo ""
+  echo "[pre-push] ✅ OCR 审查完成，未发现问题"
+else
+  echo ""
+  echo "[pre-push] ⚠️  OCR 审查完成（exit=$EXIT_CODE），以上为发现的问题"
+  echo "[pre-push]    本次不 block push，请自行 review 上述建议"
+fi
+echo "============================================"
+echo ""

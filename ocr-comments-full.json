@@ -1,0 +1,1616 @@
+[
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "bug",
+    "severity": "critical",
+    "content": "`initialize` 响应不符合 MCP 协议规范。MCP 客户端(Claude Desktop / Cursor)期望 initialize 返回 `protocolVersion`、`capabilities`、`serverInfo`，而非 `{ tools: TOOLS }`。当前实现会导致客户端连接失败或协商异常。\n\n建议: initialize 应返回符合 MCP 规范的响应，例如:\n```\nresult: {\n  protocolVersion: '2024-11-05',\n  capabilities: { tools: {} },\n  serverInfo: { name: 'csnews-mcp-server', version: '1.0.0' }\n}\n```\n`tools/list` 可单独处理，返回 `{ tools: TOOLS }`。"
+  },
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "bug",
+    "severity": "high",
+    "content": "对 `notifications/initialized` 通知发送了 JSON-RPC 响应。根据 JSON-RPC 2.0 规范，通知(notification)没有 `id` 字段，服务端不应回复。发送带 `id: null` 的响应可能导致客户端行为异常。\n\n建议: 该分支应仅 `continue` 而不写入任何响应。"
+  },
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "performance",
+    "severity": "medium",
+    "content": "`buffer` 变量没有大小限制。如果客户端发送超长行(无 `\\n`)或恶意数据，buffer 会无限增长直至内存耗尽(DoS 风险)。\n\n建议: 对 buffer 设置上限(如 10MB)，超过则重置连接或丢弃数据。"
+  },
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`fetch` 调用没有设置超时。如果远程 Worker 无响应(网络故障、服务挂起)，此请求会永久挂起，导致 MCP 客户端超时或卡死。\n\n建议: 使用 `AbortController` + `setTimeout` 为 fetch 添加超时(如 30 秒)。"
+  },
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`requestId` 变量(line 174)声明后从未使用，应删除。\n`handleJSONRPC` 和 `TOOL_HANDLERS` 对象在主流中几乎不被使用(仅当客户端发送非标准 method 时作为兜底)，且 `TOOL_HANDLERS` 每个条目都是冗余的 `(params) => handleTool(name, params)` 包装。这些代码增加了维护负担。\n\n建议: 如确需保留兜底路径，可简化为直接判断 method 是否在工具名列表中。"
+  },
+  {
+    "file": "csnews-mcp-server/src/index.cjs",
+    "category": "bug",
+    "severity": "low",
+    "content": "两处错误响应使用不同格式:\n- `handleJSONRPC` 返回标准 JSON-RPC error: `{ error: { code: -32000, message: ... } }`\n- stdin 事件处理中 `tools/call` 的 catch 返回 MCP 格式: `{ result: { content: [...], isError: true } }`\n\n虽然两种格式在各自上下文中可能都有效，但不一致的风格容易导致混淆。建议统一使用 MCP 的 `isError` 方式(因为这是 MCP server)。"
+  },
+  {
+    "file": "csnews-agent/src/ai-degradation.ts",
+    "category": "security",
+    "severity": "medium",
+    "content": "**Timing side-channel from early length check.**\n\nThe comment says \"Length check first to prevent timing leak\" but ironically this early return *creates* a timing leak: an attacker can measure response time to deduce the length of the expected token, then brute-force each character position-by-position. Cloudflare Workers' `crypto.subtle.timingSafeEqual` already handles different-length inputs in constant time. Remove the early length check and rely on `timingSafeEqual` alone."
+  },
+  {
+    "file": "csnews-agent/src/cache.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Silent failure: rejected KV read promises from `Promise.allSettled` are ignored without any error logging. If KV reads fail (e.g., network issues, quota exceeded), the corresponding date's data is silently dropped from the aggregated results with no operational visibility. Consider logging `result.reason` for rejected promises so operators can detect KV degradation."
+  },
+  {
+    "file": "csnews-agent/src/cache.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Hardcoded model name strings in `modelToLevel` make the tier mapping brittle and hard to maintain. If model names change or new models are added, the function must be updated in code and redeployed. Consider extracting model names to named constants or a lookup map."
+  },
+  {
+    "file": "csnews-agent/src/cache.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `neurons` field in `levelTotals` is accumulated for each call but never included in the response body (`ai_calls_breakdown` only exposes `calls`). Either include the `neurons` total per level in the response, or remove the unused accumulation to avoid confusion and wasted computation."
+  },
+  {
+    "file": "csnews-agent/src/ai-usage.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Race condition: `recordAiCall` uses a read-modify-write pattern (`get` → modify → `put`) without atomicity. If two concurrent requests both read the same KV value before either writes back, one increment will be silently lost. Consider using KV's atomic operations (if supported) or accepting the eventual-consistency tradeoff with a comment."
+  },
+  {
+    "file": "csnews-agent/src/ai-usage.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`resetDailyCounter` calls `kvKey()` (which defaults to today) and deletes today's key at midnight UTC. At that moment, today's key is brand new and empty, so this function is effectively a no-op — it reads 0 and deletes an empty key. It does NOT capture the previous day's total or reset it. Either use yesterday's date (`kvKey(yesterday)`) or remove the cron and rely solely on TTL-based expiration."
+  },
+  {
+    "file": "csnews-agent/src/ai-usage.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "The `calls` array in the KV value grows unbounded with every `recordAiCall`. Over a day with thousands of calls, the serialized JSON can become very large, causing slow KV reads/writes and potentially hitting the 25 MiB KV value size limit. Consider capping the array (e.g., keep only the last N entries) or storing only the aggregated `total` count."
+  },
+  {
+    "file": "csnews-agent/src/ai-usage.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Magic number `604800` (7 days in seconds) used inline. Define a named constant (e.g., `const SEVEN_DAYS_IN_SECONDS = 604800`) for clarity and easier maintenance."
+  },
+  {
+    "file": "csnews-agent/src/ai-usage.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "`recordAiCall` lacks error handling. If `KV.put()` fails (network error, quota exceeded, etc.), the error propagates to the caller uncaught. While `getDailyUsage` and `resetDailyCounter` have try/catch guards, `recordAiCall` does not. Wrap the KV operations in a try/catch to prevent a transient KV failure from breaking the caller's flow, especially since budget tracking is auxiliary (fail-open design)."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`String(params[k])` on non-primitive values (objects, arrays) will produce `[object Object]` or comma-joined strings, causing cache-key collisions for structurally different params. Use `JSON.stringify` (with sorted keys for objects) to produce deterministic, collision-free keys."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "`env.PROCESS_STATE.list()` returns paginated results with a default limit (usually 1000). If the number of negative sentinels exceeds one page, subsequent pages are silently missed, returning an inaccurate count. Pass a `cursor` loop or accept an optional limit parameter."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Widespread use of `any` type (in `getSeedMeta`, `cacheGet`, `cacheSet`, `makeCacheKey`) undermines TypeScript safety. Prefer `unknown` with runtime guards, or define explicit JSON-serialisable value types (e.g. `type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }`). If `any` is unavoidable, add a brief comment explaining why."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The guard `if (!env.PROCESS_STATE) return …; try { … } catch {}` is repeated across eight functions. Consider extracting a higher-order wrapper (e.g. `withKV(env, fn)`) to reduce duplication and ensure consistent silent-failure behaviour."
+  },
+  {
+    "file": "csnews-agent/src/cf-types.d.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expressions are prohibited by the project review checklist. Replace with an `if/else` chain or a lookup map to improve readability and maintainability."
+  },
+  {
+    "file": "csnews-agent/src/cf-types.d.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expressions are prohibited by the project review checklist. Replace with an `if/else` chain or a switch statement to improve readability."
+  },
+  {
+    "file": "csnews-agent/src/cf-types.d.ts",
+    "category": "style",
+    "severity": "low",
+    "content": "Avoid using `any` type in catch clause. Use `unknown` instead and add a type guard (e.g., `e instanceof Error`) before accessing `.message`. If `any` is necessary, add a comment explaining why per the project TypeScript guidelines."
+  },
+  {
+    "file": "csnews-agent/src/cf-types.d.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "`recordId` is interpolated directly into a URL query string without encoding. If `recordId` ever contains special characters (spaces, `&`, `=`, etc.), the Supabase REST API call may fail or behave unexpectedly. Use `encodeURIComponent(recordId)` to safely embed it in the URL."
+  },
+  {
+    "file": "csnews-agent/src/classify.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Both async functions lack try/catch error handling. If bgeM3BatchEmbedding, loadCategorySeeds, or env.AI.run fails, the error will propagate unhandled, potentially causing the Worker request to fail without graceful fallback. The design intent (fallback to '综合') is already present for empty/zero results but not for exceptions."
+  },
+  {
+    "file": "csnews-agent/src/classify.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Significant code duplication between classifyBySemantic and batchClassifyBySemantic. Both functions independently implement: (1) R2 seed loading & flattening, (2) seed embedding computation, (3) per-input cosine similarity scoring loop, (4) max-category selection, (5) confidence threshold at 0.3 with fallback to '综合'. Consider extracting shared helpers (e.g., loadAllSeeds, computeCategoryFromEmbedding) to reduce maintenance burden and ensure consistent behavior."
+  },
+  {
+    "file": "csnews-agent/src/classify.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded magic strings and numbers throughout the file: (1) '综合' as default fallback category appears 8+ times — extract to a named constant (e.g., DEFAULT_CATEGORY). (2) 0.3 confidence threshold appears in both functions — extract to a named constant with a comment explaining why 0.3 was chosen. (3) 'L3' budget level string is hardcoded — consider defining an enum or constant for budget tier identifiers."
+  },
+  {
+    "file": "csnews-agent/src/classify.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Unsafe type assertion `as { data: number[][] }` on the AI.run response in batchClassifyBySemantic. If the Workers AI runtime returns a different shape (e.g., error object, missing `data` field, or non-array `data`), the destructured `seedEmbeddings` / `inputEmbeddings` will be `[]` (via `|| []`), which silently produces all-'综合' results — masking a real API failure. Consider adding runtime validation or using a proper type guard."
+  },
+  {
+    "file": "csnews-agent/src/classify.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Inconsistent embedding API usage: classifyBySemantic uses the shared bgeM3BatchEmbedding() helper, while batchClassifyBySemantic bypasses it and calls env.AI.run() directly. If bgeM3BatchEmbedding contains additional logic (error handling, retry, logging, response normalization), the batch path misses it. Consider using the same helper or documenting why the direct call is intentional for batch workloads."
+  },
+  {
+    "file": "csnews-agent/src/content-validation.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Missing error handling: `loadCategorySeeds` has no try/catch around the R2 `get` call. If the R2 binding fails (network error, binding not configured, etc.), the error will propagate unhandled to callers."
+  },
+  {
+    "file": "csnews-agent/src/content-validation.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Missing error handling: `saveCategorySeeds` has no try/catch around the R2 `put` call. A failed write will propagate as an unhandled rejection."
+  },
+  {
+    "file": "csnews-agent/src/content-validation.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Missing data validation: `loadCategorySeeds` parses R2 JSON via `obj.json<CategorySeedsData>()` but does not validate that the result actually has a `categories` property of type `Record<string, string[]>`. If the stored JSON is malformed or corrupted, subsequent code accessing `data.categories[category]` will throw a TypeError at runtime."
+  },
+  {
+    "file": "csnews-agent/src/content-validation.ts",
+    "category": "performance",
+    "severity": "low",
+    "content": "In `removeSeedFromCategory`, if the target category does not exist in `data.categories`, the function still updates `updated_at` and performs an unnecessary R2 write. Consider early-returning when no change was made."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple uses of `any` type without explanatory comments, violating the project's TypeScript type-safety rule. In a `.d.ts` ambient declaration file this is particularly impactful because consumers of these types lose all type checking.\n\nAffected locations:\n- `Ai.run`: `inputs: any` and return `Promise<any>`\n- `R2Bucket.put`: `options?: any` and return `Promise<any>`\n- `R2Bucket.get`: return `Promise<any>`\n- `R2Bucket.list`: `options?: any` and return `Promise<any>`\n\nIf `any` is unavoidable (e.g. due to dynamic CF binding signatures), add a `// eslint-disable-next-line @typescript-eslint/no-explicit-any` comment with a brief justification. Otherwise, consider using more specific types (e.g. `Record<string, unknown>`, `unknown`, or narrower overloads) borrowed from `@cloudflare/workers-types`."
+  },
+  {
+    "file": "csnews-agent/src/category-seeds.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Widespread `any` in R2Bucket method signatures (see `put`, `get`, `list`). This prevents the compiler from catching misuse of R2 options objects (e.g. custom metadata, HTTP headers, range requests) and return values (e.g. `R2ObjectBody`).\n\nEither:\n1. Narrow the types using the official `@cloudflare/workers-types` definitions, or\n2. Add a comment on each `any` explaining why the specific type cannot be provided."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "The fallback condition `result.confidence < 0.3 && result.top_scores.length === 0` is too restrictive and contradicts the comment above it. The comment says \"confidence < 0.3 时 fallback 到 keywords\", but the code also requires `top_scores.length === 0`. This means when confidence is low (e.g. 0.1) but `top_scores` still has entries, the fallback is **not** triggered and a low-confidence category is returned. The `&&` should likely be removed, or changed to `||`."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple keywords appear across different categories (e.g. '降价' in 房产/汽车/消费, '食品安全' in 社会/消费), and some keywords are duplicated within the same category ('社区', '治安', '带货'). Since `classifyRule` returns the first match via `Object.entries` iteration, cross-category duplicates make classification order-dependent and can cause unexpected results when a keyword like '降价' matches the wrong category first."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The async functions `classify` and `classifyByAI` have no try/catch error handling. If `classifyBySemantic` throws (e.g. network failure, embedding service error), the error propagates uncaught. Per async handling standards, async functions should include proper error handling with user-friendly error messages or fallback behavior."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `classify` function computes `inputText` combining title and summary for semantic classification, but the fallback `classifyRule(title)` only uses `title` — the summary is discarded. This means keyword fallback loses the extra context that was available. Consider at least logging this event for observability, or passing the combined text to the fallback."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-entity.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `as string` type assertion in the `escapeHtml` return statement suppresses a potential TypeScript error. If someone adds a character to the regex pattern without adding a corresponding entry to the replacement map, the lookup will return `undefined` at runtime without any compile-time warning. Consider using a typed record or extracting the map to a constant with an index signature so TypeScript can verify exhaustiveness."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-process.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`logs-diag` is dispatched at line 118 but is missing from the `ALLOWED_ACTIONS` whitelist array (lines 58–85). If this array is later used for action validation (e.g., `ALLOWED_ACTIONS.includes(action)`), the `logs-diag` action would be incorrectly rejected as unknown. Add `'logs-diag'` to the array to keep the whitelist in sync with the dispatcher."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-process.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`ALLOWED_ACTIONS` is declared but never referenced in this file, and it is not exported. This is dead code. Either remove it or export it for use by other modules (e.g., for input validation before dispatch)."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-process.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The comment says \"20 个支持 action（白名单）\" but the array now contains 27 items (and the dispatcher handles 28). This stale comment is misleading. Update the count or remove the specific number."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-process.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The dispatcher has no try/catch around handler invocations. If any handler throws synchronously or returns a rejected promise, the error propagates to the Cloudflare Workers runtime, which returns a generic 500 with no actionable logging in this module. Consider wrapping the dispatch chain in a try/catch to log the failure and return a structured error response."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-proxy.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "handleAiTestAction lacks error handling (no try/catch). All other handlers in this file wrap their logic in try/catch with graceful JSON error responses. If maybeFissionReport throws an unexpected error, this handler will propagate the exception, potentially causing a raw 500 without structured error response — inconsistent with the file's error handling contract."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-proxy.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Widespread use of `any` type without justification comments (project rule requires comments explaining why `any` is necessary). Found in: 8+ catch blocks (`catch (e: any)`), `list: any[]` (line 491), `diffs: any[]` (line 563), `errorSamples: string[]` (though this is typed). Consider using `unknown` for catch clauses with type narrowing, or adding explicit // eslint-disable / justification comments."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-proxy.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded external third-party API URL. Per project rules, business-related hardcoded strings (especially URL paths) should be extracted into configuration/environment variables for maintainability and to support different environments (dev/staging/prod)."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-proxy.ts",
+    "category": "documentation",
+    "severity": "low",
+    "content": "The comment on lines 85-86 states that env.AI.run() exceptions should 'degrade instead of returning 500' and should follow the same pattern as handleFissionAction/maybeFissionReport. However, the code actually returns status 500 (line 113), and handleFissionAction also returns 500 on catch (line 342). This comment is misleading — either the degradation logic was never implemented, or the comment is outdated."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "`list.slice(0, 10)` is recomputed on every loop iteration, creating 10 unnecessary array copies. Cache the result before the loop."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple magic numbers are hardcoded: similarity thresholds (0.85, 0.95), FULL_COUNT (6), slice limit (10), summary max length (200), and KV TTLs (7200, 86400*2, 86400*7). These should be extracted as named constants for readability and maintainability."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`dualWriteVectors` is called without `await`, making it fire-and-forget. If it fails (e.g., Vectorize insert error), the failure is silently lost — no error is caught or logged, and the response to the caller still reports success."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "performance",
+    "severity": "low",
+    "content": "The `recordTrendForNews` calls inside this loop are independent of each other and run sequentially. Consider using `Promise.all` to parallelize them for lower latency."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Extensive use of `any` type casts throughout the function (e.g., `(r as any)`, `(e: any)`, `(globalThis as any)`). This bypasses TypeScript's type safety. Define proper interfaces for the `results` array elements and use typed catch clauses or narrow types explicitly."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "If any single `processZakerItem` call throws (e.g., embedding API timeout, DB error), the entire request fails and no partial results are persisted. Consider wrapping each iteration in try/catch to collect errors per-item while letting successful items proceed."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-core.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `saveToR2` dynamic import inside `processZakerItem` is called inside a loop and may be invoked multiple times per run (once per item that reaches the similarity/new-topic branch). While dynamic imports are cached by the runtime, a top-level static import would be clearer unless there is a circular-dependency concern. If circular, add a comment explaining why the dynamic import is necessary."
+  },
+  {
+    "file": "csnews-agent/src/endpoints.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Dead code: `fetchOk` is initialized to `false` and set to `true` only at the end of the try block (line 95). If the try block completes without throwing, `fetchOk` is *always* `true`; if an exception is thrown, the catch block returns early. Therefore `!fetchOk` on line 108 is unreachable — the condition can never be true. This suggests either a leftover from a previous refactor or a logic misunderstanding."
+  },
+  {
+    "file": "csnews-agent/src/endpoints.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Using `any` type in catch clauses violates the TypeScript strict-typing rule. Since TypeScript 4.0+, catch variables can be typed as `unknown`. This forces proper type-narrowing before accessing properties like `e.name` or `e.message`, preventing accidental runtime errors."
+  },
+  {
+    "file": "csnews-agent/src/endpoints.ts",
+    "category": "security",
+    "severity": "high",
+    "content": "Readability's extracted `article.content` is interpolated directly into an HTML template via `${content}` (line 170), then served as `text/html`. The consumer (viewer) renders this with `innerHTML`. While Mozilla Readability strips `<script>` tags and event handlers, it is not a full HTML sanitizer — bypasses have historically existed (e.g., in `srcdoc` iframes, SVG, or `meta` refresh). Defense-in-depth requires running the output through a dedicated sanitizer (e.g., DOMPurify or Cloudflare's HTMLRewriter) before embedding it in an HTML page."
+  },
+  {
+    "file": "csnews-agent/src/endpoints.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Hardcoded \"magic numbers\" and strings that should be extracted as named constants: (a) `10_000` — fetch timeout duration, (b) `10` — Readability `charThreshold`, (c) `'https://csnews.example.com/bot'` — the bot URL in the User-Agent (currently pointing to a reserved `example.com` placeholder). These should be defined as configuration constants, environment variables, or at minimum a clearly named module-level constant."
+  },
+  {
+    "file": "csnews-agent/src/endpoints.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `escapeHtmlAttr` function is applied to both HTML *attribute* values (e.g., `href=\"...\"`) and HTML *text content* (e.g., `<h1>...</h1>`, `<title>...</title>`). While functionally correct (escaping `\"` in text content is harmless), the naming is misleading. Consider renaming to `escapeHtml` or adding a separate `escapeHtmlText` for clarity."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-proxy.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Same `any`-typed catch clause issue as above. Use `unknown` and narrow via `instanceof Error` to maintain strict TypeScript typing throughout the codebase."
+  },
+  {
+    "file": "csnews-agent/src/entity-noise-filter.ts",
+    "category": "documentation",
+    "severity": "low",
+    "content": "Comment says \"process (4)\" but there are 5 exported handlers (handleProcessAction, handleHealthAction, handleAiUsageAction, handleLogsAction, handleTavilyAction). Update to \"process (5)\" to avoid misleading other developers."
+  },
+  {
+    "file": "csnews-agent/src/entity-noise-filter.ts",
+    "category": "documentation",
+    "severity": "low",
+    "content": "Header comment lists 12 core handlers but the file now exports 13 (handleRescoreAction was added). The stale comment may confuse maintainers about what belongs in endpoints-core."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expression violates code quality standards. Refactor to if-else or switch for readability and maintainability."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Potential null pointer: `json.noise` and `json.candidates` are accessed without optional chaining inside the `approve` mutate callback. The outer `applyEntityReviewMutation` uses `?.` defensively, suggesting these properties can be undefined. If the entity is only in candidates and `json.noise` is undefined, `json.noise.findIndex()` will throw a TypeError."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "performance",
+    "severity": "high",
+    "content": "O(n²) performance: `findIndex` is called inside `filter` callback for every element, causing redundant full-array scans. Compute the index once outside the filter. Same pattern exists for both `candidates` and `noise` arrays."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "Dynamic import inside a request handler: every `cluster` request triggers a module load. Use a static top-level import instead to avoid per-request overhead."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Misleading error message: the message says '六选一' (choose one of six) and lists only 6 types, but the `validTypes` array actually contains 10 types including `approve`, `reject`, `noise-add`, `noise-remove`. Users attempting the review actions would get a confusing error message that doesn't mention those types."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`triggerEventRecluster(env)` is called without `await`, so the returned Promise is not tracked. Failures are logged internally but the API response always reports `reclustering: 'triggered'` even if reclustering fails silently. Consider awaiting it or explicitly handling the fire-and-forget pattern with a comment."
+  },
+  {
+    "file": "csnews-agent/src/entity-process.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Pervasive use of `any` type throughout the file (e.g., `e: any`, `_: any`) reduces type safety. Consider defining proper interfaces for candidate/noise entities and error objects, or at minimum add explanatory comments for each `any` usage."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Unsafe access on potentially null result. If `env.AI.run()` returns `null` or `undefined`, accessing `.data` will throw a runtime TypeError. Use optional chaining (`result?.data`) to handle this gracefully."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Async functions `loadNoiseAnchors`, `saveNoiseAnchors`, and `bgeM3BatchEmbedding` all lack try/catch error handling. In a Cloudflare Worker context, unhandled promise rejections from R2 reads/writes or AI binding calls will result in opaque 500 errors. Wrap each with proper error handling and consider returning fallback values or re-throwing with context."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "`loadNoiseAnchors` parses JSON from R2 via `obj.json<NoiseAnchorsData>()` but performs no runtime validation on the resulting structure. If the R2 file is corrupted or has a different shape (e.g. missing `anchors` array or `threshold` field), downstream code (`filterNoiseCandidates`) will receive invalid data and may misbehave. Consider adding a schema guard after parsing."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type in catch clauses. Per the project's TypeScript standards, use `unknown` instead and narrow the type explicitly. This applies to all three catch blocks in this file (lines 55, 76, 146).\n\nSuggestion: `catch (e: unknown) { const message = e instanceof Error ? e.message : String(e); ... }`"
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded Supabase REST API path and query parameters. The table name `entity_hot` and the conflict columns `name,type` are embedded directly in the fetch URL. Extract them to named constants for better maintainability and to align with the project rule against hardcoded business strings (especially URL paths)."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Potential mismatch between code comment and implementation: the comment states `mention_count` should accumulate (`entity_hot.mention_count + excluded.mention_count`), but the code sends the absolute `e.mention_count` value in the upsert payload. Standard PostgREST `ON CONFLICT DO UPDATE` overwrites columns rather than accumulating. Unless there is a database trigger handling the accumulation, `mention_count` will be replaced instead of incremented, which may cause data loss across repeated upserts."
+  },
+  {
+    "file": "csnews-agent/src/event-process.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Dead code: `entityToTopics` map is populated (lines 83-90) but never read anywhere in the function. This wastes memory and indicates incomplete implementation or leftover code."
+  },
+  {
+    "file": "csnews-agent/src/event-process.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Fallback path (when `topicToEntities.size < 2`) computes Jaccard on character sets of entity names (e.g., `new Set(\"张三\")` → `{\"张\", \"三\"}`), which is character-level overlap. This directly contradicts the v0.36.12 fix comment stating: \"不再用 entity name 字符集重叠 (错误)\". The clustering result is semantically meaningless — entities are grouped by how similar their names are spelled, not by shared references. When there are fewer than 2 topics, fallback should either put each entity in its own cluster or (if 1 topic exists) group all entities into a single cluster."
+  },
+  {
+    "file": "csnews-agent/src/event-process.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `jaccard_pairs` field on each `EventCluster` is assigned the global total `jaccardPairs` (the number of all pairs compared across the entire run), rather than a per-cluster meaningful value. If this field is intended to track pairs within each cluster, it should be computed per-cluster. If it's intentional metadata about the overall run, consider renaming or documenting it to avoid confusion."
+  },
+  {
+    "file": "csnews-agent/src/event-process.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Missing error handling: `getCurrentThreshold(env)` can throw (e.g., network failure, D1 error). The async function propagates this raw error to the caller without context, which may make debugging harder in production. Consider wrapping with a try/catch and providing a meaningful error message."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Hardcoded `24` divisor in velocity calculation produces wrong results when `since` is not exactly 24h. `validateSince` allows arbitrary ISO 8601 dates or relative times (e.g. `7d`, `30m`, a specific date), but `hourlyAvg = sinceTotal / 24` always divides by 24. For `since=7d`, `sinceTotal` covers 168 hours yet is divided by 24, making `hourlyAvg` ~7× too high and `velocityRatio` ~7× too low — causing false 'declining' labels.\n\n**Fix**: Compute the actual time span in hours: `const hoursSpan = (Date.now() - new Date(sinceIso).getTime()) / 3600000; const hourlyAvg = sinceTotal / hoursSpan;` or clamp to a safe minimum (e.g. 1 hour) to avoid division by zero."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expressions are explicitly prohibited by the project checklist. This 3-level nested ternary reduces readability and is error-prone.\n\n**Suggestion**: Extract into a helper function or use `if`/`else if`/`else` for clarity."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary (3 levels deep) — prohibited by project checklist. Same pattern as the velocity branch above."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple nested ternary expressions in the Markdown template generation. Project checklist prohibits nested ternaries. Consider extracting trend-label helper functions or defining lookup objects to improve readability."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary (3 levels) for `velocityLabel` — prohibited by project checklist."
+  },
+  {
+    "file": "csnews-agent/src/event-stage.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Widespread `any` type usage throughout the file (`any[]`, `catch (e: any)`). The project checklist requires avoiding `any` type. Consider defining proper interfaces for index entries, knowledge items, and use `unknown` with type guards in catch blocks."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` in catch clauses. TypeScript 4.0+ recommends `unknown` for catch variables. If `any` is truly necessary, add a comment explaining why type narrowing is infeasible."
+  },
+  {
+    "file": "csnews-agent/src/endpoints-trend.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "When R2 write fails, `stage_transitions: 0` is returned even though stage transitions may have already executed successfully earlier. This loses information for the caller. Consider preserving `stageTransitions` so the return value accurately reflects what happened."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "If the R2 write (`env.csnews_raw.put`) on line 296 fails, the entire try block falls through to the catch handler, which returns an empty result. All computed candidates are lost. Consider wrapping the R2 write in a nested try/catch so that the function still returns the computed candidates even when persistence fails, and log the write error separately."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`candidateGrams.indexOf(c.name)` may return `-1` if the gram is not found (theoretically impossible due to how `dedupForFilter` is built, but unsafe against future refactoring). `embeddings[-1]` evaluates to `undefined`, which would then be passed into `filterNoiseCandidates` and could cause runtime errors downstream when cosine similarity is computed on `undefined`. Use a defensive check and consider building the mapping with a `Map` to guarantee alignment."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Deduplication only checks against the first 50 existing candidates (`existing.slice(0, 50)`). If the system has accumulated more than 50 reviewed entities over multiple runs, candidates that are semantically similar to entities beyond the first 50 will not be detected as duplicates and may accumulate as noise. Consider increasing the limit or using a more scalable dedup strategy."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `catch` block uses the `any` type without a comment explaining why. Per TypeScript best practices, use `unknown` and a type guard/narrowing, or add a comment justifying `any`. The same issue applies to the log message template which relies on `e?.message || e` string coercion that may produce `[object Object]`."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `EntityCandidate` object construction is duplicated for regular candidates (lines 264–278) and noise candidates (lines 280–293). The only difference is the source shape (`c` vs `n.candidate`). Consider extracting a helper function `toEntityCandidate(name, count, topicIds)` to reduce duplication and ensure both paths stay in sync."
+  },
+  {
+    "file": "csnews-agent/src/feedback.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The Supabase REST API path is hardcoded as a string literal. If the table name or API version changes, this would need to be updated in every call site. Consider extracting to a shared constant or configuration object."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "bug",
+    "severity": "critical",
+    "content": "Race condition / logic error: `old_stage` is fetched AFTER the RPC (`update_topic_event_stage`) has already updated the database record. Since the GET query retrieves the current `event_stage` from the same row that was just mutated by the RPC, `oldStage` will always equal `newStage`. Consequently, the `changed` field will always be `false`, making it impossible for callers to detect actual stage transitions. Fix: fetch the old stage BEFORE invoking the RPC, or have the RPC return both the old and new stages."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "TypeScript `any` used in catch clause. The error is typed as `any`, which disables type checking. Use `unknown` instead for type safety, and narrow the type when accessing properties (e.g., using `instanceof Error`)."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Hardcoded Supabase REST API paths (`/rest/v1/rpc/update_topic_event_stage`, `/rest/v1/topics?...`). These URL paths are duplicated in the same function and would be hard to maintain if the API version or route structure changes. Consider extracting them into named constants."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "performance",
+    "severity": "low",
+    "content": "`transitionEventStageBatch` processes topics sequentially in a `for...of` loop. Since each topic's RPC call is independent, using `Promise.all` would execute them in parallel and significantly reduce total latency. The comment justifies sequential processing to avoid overwhelming the database, but if that concern is valid, consider batching with a concurrency limiter (e.g., `p-limit`) rather than fully sequential execution."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Redundant intermediate type cast: `safeJson(res)` is first cast to `string | null` and then immediately re-cast to `EventStage | null` on the next line. The first cast is unnecessary and misleading (the RPC is expected to return the stage string, not an arbitrary string). Remove the intermediate cast for clarity."
+  },
+  {
+    "file": "csnews-agent/src/health-ai.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "No error handling in async R2 operations. If R2 is unavailable, corrupted, or returns malformed JSON, these functions will throw unhandled rejections that can crash the Worker invocation. All three async functions (loadThresholdHistory, recordReview, getCurrentThreshold) lack try/catch or .catch() chains."
+  },
+  {
+    "file": "csnews-agent/src/health-ai.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Race condition: recordReview performs a read-modify-write cycle (load → calculate → put) without any concurrency control. Concurrent review submissions can lead to lost updates where one write silently overwrites another, causing the threshold to drift incorrectly. Consider using R2's conditional writes (etag-based) or a Durable Object for atomic updates."
+  },
+  {
+    "file": "csnews-agent/src/health-ai.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Using `||` for the reason fallback means an empty string `''` will be replaced with the default message. If callers intentionally pass an empty string, this is surprising behavior. Prefer the nullish coalescing operator `??` to only fall back on `null` or `undefined`."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "bug",
+    "severity": "critical",
+    "content": "Missing null check for env.FISSION. The Env interface declares FISSION as optional (FISSION?: Fetcher), but the code accesses .FISSION.fetch() without checking if FISSION is defined. If the Service Binding is not configured, this will throw a runtime TypeError. Use optional chaining or an explicit guard: if (!env.FISSION) { return { ok: false, skipped: true, reason: 'FISSION binding not configured' }; }"
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Unnecessary and brittle type assertion. Env already declares FISSION?: Fetcher, so the inline cast to Env & { FISSION: { fetch: ... } } is redundant and overrides the optional type with a required one, masking the potential undefined case. Simply access env.FISSION directly after a null guard."
+  },
+  {
+    "file": "csnews-agent/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using 'any' type. TypeScript best practice is to use 'unknown' for catch clause variables and then narrow the type. The catch block accesses e?.message and performs string conversion, which works with 'unknown' after a type check."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "TypeScript `any` type used in catch clause. In strict mode (or with `useUnknownInCatchVariables`), caught errors are `unknown`. Using `any` bypasses type safety. Consider using `unknown` and narrowing the type before accessing properties, or add a comment explaining why `any` is necessary."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "TypeScript `any` type used in catch clause. Same pattern as above; use `unknown` and explicit narrowing for better type safety."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "TypeScript `any` type used in catch clause. Same pattern; use `unknown` instead."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "TypeScript `any` type used in catch clause. Same pattern; use `unknown` instead."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "Async operations in this loop are independent (each warning's processing does not depend on others). Consider using `Promise.all` for parallel execution to reduce total latency, especially as the number of warnings grows. If rate-limiting on Supabase is a concern, use a concurrency-limited pool (e.g., `p-limit`)."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "documentation",
+    "severity": "low",
+    "content": "The comment says \"Uses ctx.waitUntil\" but the code uses `await` directly and the parameter is named `_ctx` (indicating it is intentionally unused). Remove or correct the misleading comment to match the actual implementation."
+  },
+  {
+    "file": "csnews-agent/src/health-checks.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded business constants (24, 30, 48, 54, 72) controlling feedback checkpoint windows. These magic numbers should be extracted as named constants (e.g., `CHECKPOINT_24H`, `CHECKPOINT_WINDOW_24H`) to improve readability and make adjustments easier."
+  },
+  {
+    "file": "csnews-agent/src/health-db.ts",
+    "category": "maintainability",
+    "severity": "high",
+    "content": "Nested ternary expressions are prohibited by the project checklist. This line chains two ternary operators, making the logic harder to read and error-prone. Extract into a separate function or use if/else or a lookup map for clarity."
+  },
+  {
+    "file": "csnews-agent/src/health-db.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Using `any` type for `checks` (in both `checkAiBudget` and `checkAiCallsBreakdown`) forfeits TypeScript type safety. Define a proper interface for the checks object to catch property access errors at compile time."
+  },
+  {
+    "file": "csnews-agent/src/health-db.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "If `getBudgetStatus(env)` throws *after* KV data has been successfully parsed, the catch block discards the already-computed `breakdown` and `totalNeurons` values, resetting them to empty/zero. This loses useful data. Wrap only the `getBudgetStatus` call in its own try/catch so that KV-derived data is preserved even when the budget check fails."
+  },
+  {
+    "file": "csnews-agent/src/health-db.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Catch-clause error parameters should prefer `unknown` over `any` to enforce explicit type narrowing before accessing properties like `e?.message`. This is a TypeScript best practice noted in the project checklist."
+  },
+  {
+    "file": "csnews-agent/src/health-db.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Magic number `10000` used as a hardcoded fallback daily limit. Extract this into a named constant (e.g. `DEFAULT_DAILY_LIMIT`) to clarify its purpose and keep it consistent across the codebase."
+  },
+  {
+    "file": "csnews-agent/src/health-kv.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Use of `any` type for `checks` variable. The shape of this object is deterministic (status and detail properties). Use an explicit type or let TypeScript infer it to maintain type safety."
+  },
+  {
+    "file": "csnews-agent/src/health-kv.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Using `any` in catch clause discards type information. Use `unknown` instead and narrow the type before accessing `.message`. This also aligns with TypeScript's `useUnknownInCatchVariables` compiler option."
+  },
+  {
+    "file": "csnews-agent/src/health-kv.ts",
+    "category": "security",
+    "severity": "medium",
+    "content": "Raw error messages (`e?.message`) are exposed in the health-check response (`cron_history` and `checks.cron_history.detail`). This may leak internal implementation details (e.g., stack traces, storage-layer error messages) to external callers. Consider logging the original error and returning a sanitized generic message to the client."
+  },
+  {
+    "file": "csnews-agent/src/health-kv.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "`e?.message` can be `undefined` (e.g., when throwing a non-Error value like `throw 'string'`). Assigning `{ error: undefined }` violates the declared type `{ error: string }`. Use a fallback to ensure the error property is always a string."
+  },
+  {
+    "file": "csnews-agent/src/health-kv.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `limit: 100` value is a magic number. Consider extracting it to a named constant to clarify its purpose and make it easier to adjust."
+  },
+  {
+    "file": "csnews-agent/src/health-checks-internal.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Duplicate re-export from the same module './health-db' in two separate export blocks. These should be consolidated into a single export statement to improve readability and reduce the risk of one block being overlooked during future refactors."
+  },
+  {
+    "file": "csnews-agent/src/health-mcp.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "**Mismatch: `mcp_tools_count` returns unique tool count, not total calls.**\n\nThe variable `totalTools` (line 48) correctly accumulates the total number of tool invocations across all calls, but it is only used in the detail string (line 76) and never returned as a value. Instead, `mcp_tools_count` is set to `toolNames.length` (line 78), which counts only distinct tool names, not total invocations.\n\nThe detail string says `\"${totalTools} MCP tool calls across ${toolNames.length} tool(s)\"` — using `totalTools` for the first number but `toolNames.length` for the returned metric. If the caller expects `mcp_tools_count` to reflect total calls (as the detail string implies), this is a bug. Otherwise the field should be renamed to `mcp_distinct_tools_count` for clarity."
+  },
+  {
+    "file": "csnews-agent/src/health-mcp.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "**Avoid using `any` for the `checks` variable.** The `checks` object has a known shape: `{ [key: string]: { status: 'ok' | 'unknown'; detail: string } }`. Using `any` defeats TypeScript's type checking and may hide property-access bugs. Define a proper type or inline type."
+  },
+  {
+    "file": "csnews-agent/src/health-mcp.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Use `unknown` instead of `any` for caught errors.** `catch (e: any)` (line 74) bypasses type safety. Use `unknown` and narrow the type before accessing `.message` to avoid potential runtime issues and to comply with TypeScript best practices."
+  },
+  {
+    "file": "csnews-agent/src/health-mcp.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Silent JSON parse failure hides data corruption.** The `catch` block at lines 62-64 swallows the parse error without any logging. If the KV value is malformed, the system silently treats it as zero usage, making debugging difficult. Consider logging the error (e.g., `console.error`) or including a warning in the `detail` string."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expressions are prohibited by the project's code quality rules. This nested ternary (ok → degraded → down) reduces readability. Consider extracting a helper function or using if/else statements."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "code quality",
+    "severity": "medium",
+    "content": "Using loose equality `!=` is prohibited by project rules; use strict equality `!==` instead. When checking for both `null` and `undefined`, use explicit checks: `c !== null && c !== undefined` or leverage TypeScript's type narrowing."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "code quality",
+    "severity": "medium",
+    "content": "Multiple usages of the `any` type without justification comments. While `any` can be pragmatic for dynamic health-check response shapes, consider defining proper interfaces/types for `checks` detail values and the `result` object to improve type safety and maintainability."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "All async health checks (checkLastProcessAt, checkSupabaseCounts, checkR2LatestWrite, checkR2LatestSupabaseWrite, checkLastProcessStoredReason, checkR2PrefixCounts, checkCronHistory, checkZscoreSignals, checkAiBudget, checkEntityAndEventFreshness, checkAiCallsBreakdown) appear to be independent of each other. Running them sequentially with individual `await` calls increases total latency. Consider using `Promise.all` (or `Promise.allSettled` to avoid one failure aborting all) to parallelize independent checks."
+  },
+  {
+    "file": "csnews-agent/src/health-main.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type. The `checks` object has a well-defined shape; define an explicit interface or use a typed record instead of `any`. If `any` is unavoidable, add a comment explaining why."
+  },
+  {
+    "file": "csnews-agent/src/health-main.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "When `lastProcessAt` is a non-date string (e.g., raw KV value from the catch block, or an unparseable date), `Date.parse()` returns `NaN`, and the detail string renders as \"NaN min ago\". Guard against invalid dates or reuse the already-computed `lastMs` to avoid a misleading health detail."
+  },
+  {
+    "file": "csnews-agent/src/health-main.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded business thresholds: `3 * 3600_000` (3 hours), `1.5 * 3600_000` (1.5 hours), and the magic number `60000` (ms→min) appear multiple times. Extract them as named constants (e.g., `CRON_DOWN_THRESHOLD_MS`, `CRON_DEGRADED_THRESHOLD_MS`, `MS_PER_MINUTE`) to improve readability and make tuning easier."
+  },
+  {
+    "file": "csnews-agent/src/health-main.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Nested ternary inside a template literal makes the logic harder to read. Extract the pluralization into a small helper (e.g., `plural(n, suffix = 's')`) or compute the strings before the return statement."
+  },
+  {
+    "file": "csnews-agent/src/health-main.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`checkNegativeSentinel` calls `await countNegativeSentinels(env)` without a try/catch. If the underlying KV read or count logic throws, the health endpoint itself will fail instead of returning a degraded/down status. Wrap in try/catch and return an error status like the other check functions do."
+  },
+  {
+    "file": "csnews-agent/src/knowledge-validation.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "When the `news_hotspots` table is empty (`arr.length === 0`), `r2LatestSupabaseWrite` is set to `null` via `null as any` (line 148), but the declared return type does not include `null`. This causes a type-safety violation and can lead to runtime `null` reference errors for consumers that destructure or access `.last_write` / `.source` without a null guard. Consider returning `{ error: 'news_hotspots table empty' }` instead of `null` to maintain type consistency."
+  },
+  {
+    "file": "csnews-agent/src/knowledge-validation.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The union type for `r2_latest_supabase_write` contains two identical members (`{ last_write: string; source: string; role: 'primary_store' }` appears twice). This is dead code in the type definition. Remove the duplicate."
+  },
+  {
+    "file": "csnews-agent/src/knowledge-validation.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple `any` type usages without justification comments, violating the project's TypeScript best practices. Specifically: (1) `const checks: any = {}` at lines 119, 190, 246; (2) `supabase_latest_write: any` in the return type at line 107; (3) `Record<string, any[]>` at line 258. Define proper interfaces for these to preserve type safety."
+  },
+  {
+    "file": "csnews-agent/src/knowledge-validation.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Magic numbers for business thresholds and query limits are hardcoded. These should be extracted as named constants for clarity and maintainability: `1.5 * 3600_000` (90 min stale threshold), `3 * 3600_000` (3h down threshold), `7 * 24 * 3600 * 1000` (7-day window), and `500` (snapshot query limit)."
+  },
+  {
+    "file": "csnews-agent/src/index.ts",
+    "category": "security",
+    "severity": "medium",
+    "content": "Potential path traversal risk: `knowledgeR2Key` directly interpolates `topicId` into an R2 object key without any sanitization or validation. If this public export is ever called with unvalidated user input (e.g., topicId containing `../`), it could create objects outside the intended `knowledge/` prefix directory, leading to key collisions or unauthorized access patterns. Consider validating `topicId` with `UUID_REGEX` inside this function as a defense-in-depth measure, or at minimum documenting that callers MUST validate first."
+  },
+  {
+    "file": "csnews-agent/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Semantic overloading of the `reason` field: when `validateType` succeeds (`ok: true`), `reason` holds a normalized type value (e.g. `\"daily\"`). When it fails, `reason` holds an error description. This dual meaning forces callers to branch on `ok` before interpreting `reason` and makes the API confusing. Consider returning the normalized value in a dedicated field (e.g. `normalized` or `value`) and keeping `reason` solely for error messages, or use a discriminated union on `ok`."
+  },
+  {
+    "file": "csnews-agent/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Fragile non-null assertion `resolveRelativeTime('24h')!` – while the literal `'24h'` matches the current regex, if `RELATIVE_TIME_REGEX` or `resolveRelativeTime` is ever changed and `'24h'` stops matching, this will throw a runtime TypeError. A safer alternative is to provide a hardcoded fallback ISO string or throw a descriptive error when the default resolution unexpectedly fails."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Empty catch block silently swallows JSON parse errors. If the response body is invalid JSON, the error is suppressed and t0id remains null, causing the join step to be skipped without any diagnostic information about why parsing failed. Add error logging or at least record the parse error in results."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Empty catch block silently swallows JSON parse errors. Same issue as above — if the news insert response cannot be parsed, the error is lost and t1id stays null, leading to a silent skip of the join step."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "TypeScript strict mode: `let t0id = null` infers type `null`, making subsequent reassignment `t0id = d?.[0]?.id || d?.id` a type error. With `strict: true` in tsconfig.json, this should fail compilation. Add explicit type annotation `let t0id: any = null` or `let t0id: number | null = null`."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "TypeScript strict mode: same `let t1id = null` type inference issue as t0id. The inferred `null` type conflicts with the reassignment inside the try block."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Dead code: `TOPIC_MATCH_THRESHOLD` and `R2_DUP_THRESHOLD` are declared but never referenced anywhere in this file. They are already exported from `./score.ts`. Remove the unused duplicates to avoid confusion."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Dead code: variables `t0`, `t1`, `t2` are assigned `Date.now()` but never used. They appear to be remnants of an incomplete timing/logging implementation. Either use them (e.g., compute elapsed time and push to results) or remove them."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Unused parameter `env` in function `classifyByAI`. The function signature takes `env: Env` but the body only calls `classifyRule(title)` without using `env`. Either remove the parameter or add a `_env` prefix convention to indicate it's intentionally unused."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Unused parameter `env` in function `classify`. Same issue as `classifyByAI` — the parameter is accepted but never referenced in the function body."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type. The `any` type defeats TypeScript's type checking and may hide bugs. Use proper union types or generics instead:\n- `r2_cold_archive_latest_write` should share the same type as `r2_latest_write` rather than `any`.\n- `checks` and `r2LatestWrite` variables should use explicitly defined types matching their actual shapes."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type. Declare with an explicit interface/type that matches the actual shape of the checks object throughout this function."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type. Declare with a proper union type that represents all possible shapes of `r2LatestWrite`."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type in catch clause. Use `unknown` and narrow the type safely, or use `Error` if the caught value is always expected to be an Error instance."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "The `retries` parameter is declared but never used in the function body. The loop always iterates `delays.length` times (3 attempts) regardless of the `retries` value. Either remove the unused parameter or use it to dynamically determine the retry count."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "`Record<string, any>` uses the `any` type which bypasses TypeScript type checking. The review checklist requires avoiding `any` unless accompanied by a comment explaining the reason. Consider using `Record<string, unknown>` instead, or add a comment justifying why `any` is necessary for log context values."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`catch (e: any)` uses the `any` type for caught errors. TypeScript 4.0+ recommends `unknown` for catch variables, requiring explicit type narrowing before accessing properties like `e.message`. This improves type safety."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`console.error` is used to log a successful R2 put operation. This is misleading — `console.error` should be reserved for error conditions. Use `console.log` or `console.info` for success paths to make log filtering and debugging clearer."
+  },
+  {
+    "file": "csnews-agent/src/mcp-handler.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type in catch clause. TypeScript's `useUnknownInCatchVariables` compiler option (enabled by default in strict mode) types caught errors as `unknown`. Using `any` disables type safety and can hide potential runtime errors (e.g., accessing `.message` on a non-Error thrown value like `throw null`). Use `unknown` and type narrowing instead."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The empty catch block silently swallows KV read errors. While the intent is to fall through to Phase 2 (R2 list), consider logging the error (e.g., `console.warn`) to aid debugging in production, especially when Phase 2 also fails and the root cause is unclear."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The R2 `list` API `limit: 1000` is the maximum allowed, but results beyond 1000 objects per prefix are silently truncated. This means the latest write detection (Phase 2) and prefix counts may be inaccurate for busy prefixes. Consider documenting this limitation or implementing pagination with cursor-based listing for accurate results."
+  },
+  {
+    "file": "csnews-agent/src/mcp-execute.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The R2 prefix strings are hardcoded business configuration values. Consider extracting them to a shared constants module (e.g., alongside `Env` in `shared.ts`) to improve maintainability and avoid drift between health checks and the code that actually writes to these prefixes."
+  },
+  {
+    "file": "csnews-agent/src/mcp-tools.ts",
+    "category": "bug",
+    "severity": "low",
+    "content": "When R2 list finds objects but fails to extract a timestamp from both `uploaded` metadata and the object body's `created_at` field, `ageHours` remains `null`. The `explain(null)` message then incorrectly states \"no objects in news/zaker/ yet\", which is misleading — objects exist but their age could not be determined. Consider providing a distinct explanation for this case (e.g., \"objects exist but timestamp unavailable\")."
+  },
+  {
+    "file": "csnews-agent/src/mcp-tools.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `statusFor` function's return type annotation includes `'down'` but the function body never returns `'down'` — only `'ok'` or `'info'`. This is misleading to readers who may expect a `'down'` status. Since the design explicitly states R2 cold archive is never `'down'`, narrow the return type to `'ok' | 'info'` to match the actual behavior."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Hour filter logic has a bug: when a file matches the `\\d{2}\\.log` regex (e.g. `logs/2024-01-01/14/00.log`), the first branch uses `obj.key.endsWith('/${paddedHour}.log')` to filter. Since the key ends with `14/00.log` rather than `/00.log`, this check will **never match** for any non-null hour filter. Such files are only included when `hour === null`. Consider extracting the hour from the parent directory when the filename matches `\\d{2}\\.log` but lives inside an hour-named subdirectory, or adjust the `endsWith` to also check the directory component."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Using `any` type for the `entries` array loses type safety. Define an interface for the log entry shape (e.g. with `ts`, `message`, etc.) so consumers understand the expected structure and TypeScript can catch misuse."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Catch clause uses `any` type for the error. Prefer `unknown` (or an error type) to avoid accidental property access without type guards. The current `e?.message || String(e)` pattern works, but `unknown` better signals that the shape is not guaranteed."
+  },
+  {
+    "file": "csnews-agent/src/health-r2.ts",
+    "category": "performance",
+    "severity": "low",
+    "content": "Each `env.csnews_raw.get(obj.key)` is awaited sequentially inside the for-loop. Since the objects are independent, this could be parallelized with `Promise.all` to reduce total latency (the 50 subrequest budget noted in the comment still applies, but parallelism would not increase the count — only concurrency)."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "The two API calls for 'hot' and 'mature' stages are independent and could run in parallel using `Promise.all` / `Promise.allSettled`. Sequential execution doubles the wait time unnecessarily."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Silently swallowing errors from `handlePull` hides real failures (network issues, API errors). Consider logging the error or at least reporting a partial result with a warning."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Formatter functions and handler function signatures use `any` pervasively (`items: any[]`, `data: any`, `allItems: any[]`). Define proper TypeScript interfaces for the API response shapes to gain type safety and IDE autocompletion."
+  },
+  {
+    "file": "csnews-agent/src/logs.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "URL construction logic (new URL, setting type/order_by/order/limit params, and limit clamping) is duplicated in every handler (get_latest_news, get_explosive_topics, get_warnings, get_trending_velocity, get_topic_acceleration). Extract a shared `buildPullUrl` helper to reduce duplication and ensure consistent behaviour."
+  },
+  {
+    "file": "csnews-agent/src/mcp-validate.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Inconsistent validation ordering between batch and single-request paths: the batch handler validates requests before checking protocol methods (line ~99), while the single-request handler checks protocol methods first (line ~124). A valid protocol-method request (e.g., `initialize`) that fails strict validation could be rejected in batch mode but processed correctly as a single request. Move the protocol-method check before validation in the batch handler to match the single-request path."
+  },
+  {
+    "file": "csnews-agent/src/mcp-validate.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Dead code: the ternary expression `isBatch ? responses : responses[0]` at the final return is only reachable from the batch path (the single-request path always returns early). The `responses[0]` branch is unreachable. Simplify to just `return jsonResponse(responses, cors, { status: 200 });`."
+  },
+  {
+    "file": "csnews-agent/src/mcp-validate.ts",
+    "category": "code quality",
+    "severity": "medium",
+    "content": "Use of `any` type in catch blocks without justification. Replace `e: any` with `e: unknown` and perform a type-narrowing check (e.g., `e instanceof Error ? e.message : String(e)`) for safer error handling. Two occurrences: one in the batch handler and one in the single-request handler."
+  },
+  {
+    "file": "csnews-agent/src/mcp-validate.ts",
+    "category": "code quality",
+    "severity": "low",
+    "content": "Using `||` for default value on `req.params` can incorrectly override intentional falsy values (e.g., `0`, `false`, `''`). Prefer the nullish coalescing operator `??` to only fall back when the value is `null` or `undefined`."
+  },
+  {
+    "file": "csnews-agent/src/process-ai.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `propertiesJsonSchema` field sits alongside `properties` with the same `Record<string, unknown>` type, making their purposes ambiguous. If `properties` stores simplified property definitions and `propertiesJsonSchema` stores the raw JSON Schema, clarify with JSDoc comments. Otherwise, consider whether this is dead code left over from the original monolith split."
+  },
+  {
+    "file": "csnews-agent/src/process-db.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Dead code: `shouldTriggerAiRouting` is explicitly documented as having no in-tree callers (the comment states \"As of v0.37.9 this function has no in-tree callers\"). The imported constant `AI_ROUTE_R_THRESHOLD` is also only used by this dead function, making it an unused import in this file. Consider removing both the function and the import, or add a clear deprecation plan/timeline if they must stay for external consumers."
+  },
+  {
+    "file": "csnews-agent/src/process-ai.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "**Bug: `null` params passes validation due to `typeof null === 'object'`**\n\nThe check `typeof req.params !== 'object'` does not reject `null` because `typeof null` evaluates to `'object'` in JavaScript. According to JSON-RPC 2.0, if `params` is present it must be an Array or Object — `null` is not valid. A client sending `params: null` would bypass this validation and could cause unexpected behavior downstream.\n\nSuggested fix: add an explicit `null` check."
+  },
+  {
+    "file": "csnews-agent/src/process-ai.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Maintainability: hardcoded version strings**\n\nThe protocol version `'2024-11-05'` and server version `'1.0.0'` are hardcoded inline. Consider extracting them to named constants or a shared config so they can be updated consistently across the codebase."
+  },
+  {
+    "file": "csnews-agent/src/pull.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "The return type `CreatedTopicRow | null` implies that `null` is returned on failure, but the function does not catch exceptions from `createTopic`. If `createTopic` throws (e.g. network error, DB failure), the exception propagates to the caller uncaught, breaking the null-return contract. The caller may check for `null` but still get a thrown error. Either wrap with try/catch and return `null` on error, or remove `| null` from the return type and let errors propagate explicitly."
+  },
+  {
+    "file": "csnews-agent/src/pull.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Same issue as `createTopicForTitle`: the return type `RecordTrendWithMemberResult | null` promises null on failure, but `recordTrendWithMember` exceptions are not caught. If the underlying RPC call throws, the caller will receive an exception instead of `null`, violating the return type contract. Either wrap with try/catch or change the return type to not include `| null`."
+  },
+  {
+    "file": "csnews-agent/src/pull.ts",
+    "category": "performance",
+    "severity": "low",
+    "content": "The `async` keyword is unnecessary: the function body contains no `await` expression. The `async` creates an extra Promise wrapper around the fire-and-forget call, adding a microtask overhead with no benefit. Remove the `async` keyword and the return type can stay as `Promise<void>` (implicit from the function), or change to `void` since the function only initiates a side-effect and returns nothing meaningful."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Return type `Promise<any>` should be replaced with a proper type. The function returns an object with shape `{ id, topic_key, level, score, first_news_id }`. Using `any` loses type safety and prevents the compiler from catching misuse."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Return type `Promise<any>` should be replaced with a proper type. The function returns either `null` or a `RecordTrendWithMemberResult` object. Using `any` loses type safety."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Multiple `catch` blocks use `any` type (e.g., `catch (e: any)`, `{ err: err as any }`) without an explanatory comment for why `any` is necessary. Per the review checklist, if `any` is needed, provide a comment explaining the reason. Consider using `unknown` and type-narrowing instead."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`cleanupStaleTopics` uses `response.json()` directly instead of the project's `safeJson()` helper. If the RPC returns malformed JSON, this will throw an unhandled error. Other functions in this file consistently use `safeJson()` for safer parsing."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expressions are not allowed per coding standards. The inner ternary `Array.isArray(it) ? it : []` is nested inside the outer ternary. This harms readability and makes the logic harder to follow. Refactor into an if/else chain or extract a helper."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Business-related hardcoded strings are prohibited, especially URL paths. The ZAKER API endpoint is hardcoded here. If the URL changes, it requires a code change and redeployment. Consider storing it in an environment variable or configuration secret (e.g., `env.ZAKER_HOT_URL`) so it can be updated without code changes."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "No null/undefined check on `row.weight` from the DB response. If the `weight` column is NULL or missing, `weights[row.hot_word]` will be set to `null` or `undefined`. In `adjustWeights`, `weight * factor` with `undefined` produces `NaN`, which propagates through `Math.min`/`Math.max` and gets saved to the DB, corrupting the weight permanently. Validate that `row.weight` is a finite number before using it."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "`WeightRow` interface declares `category` and `updated_at` fields, but the `select` query only requests `hot_word,weight`. These two fields will always be `undefined` at runtime, misleading future maintainers about the actual shape of the API response. Either update the query to include these columns or narrow the type to match what is actually fetched."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `loadWeights` function silently swallows all errors, including network failures, auth errors (401/403), and schema errors (404). This hides real problems that could prevent the feedback loop from ever loading custom weights. At minimum, log the error so operators can detect misconfiguration."
+  },
+  {
+    "file": "csnews-agent/src/process-vector.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Magic numbers for accuracy thresholds (0.6, 0.8), adjustment factors (0.9, 1.05), and weight bounds (0.1, 3.0) are hardcoded inline in `adjustWeights`. Extract them as named constants at module level to make tuning easier and improve readability."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Bug: The generic filter loop in `queryFissionReports` uses snake_case keys from `config.allowedFilters` (e.g., `'topic_id'`, `'fission_type'`) to access properties on `ParsedFilters`, but `ParsedFilters` stores these as camelCase (`topicId`). There is no `fission_type` property at all on `ParsedFilters`. This means `topic_id` and `fission_type` URL filters are silently ignored — the `safeFilters` map will be empty for these keys, and the filter parameters are never added to the PostgREST query."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Dead code: `fission_triggered` filter. No TYPE_CONFIG entry includes `'fission_triggered'` in its `allowedFilters` array, so `parseFilters` will never set `filters.fissionTriggered`. Consequently, the `fissionTriggered` branch in `buildPostgRestQuery` and the corresponding response `filters` property are unreachable."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "Missing offset support: `queryFissionPending` and `queryFissionReports` do not pass the `filters.offset` parameter to PostgREST, unlike `buildPostgRestQuery`. This means pagination via `offset` will not work for 'fission-pending' and 'fission-reports' types, while the parsed `offset` value is silently ignored."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Code duplication: The `filters` object literal in `handlePull` is constructed identically twice — once for the negative-sentinel empty response and once for the actual response. Extract it to avoid drift between the two copies."
+  },
+  {
+    "file": "csnews-agent/src/score-rule-weights.ts",
+    "category": "style",
+    "severity": "low",
+    "content": "Minor typos in Chinese comments: \"冲 突\" should be \"冲突\" (line about FK alias conflict), and \"依 赖\" should be \"依赖\" (line about FK discovery dependency)."
+  },
+  {
+    "file": "csnews-agent/src/pull.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "**Unreliable `content-length` heuristic for DELETE count.** Supabase DELETE without `Prefer: return=representation` returns no body (`content-length` ≈ 0). The fallback to `batch.length` assumes all rows were deleted, which may be incorrect if some rows were already removed or the filter matched fewer rows. Consider using `Prefer: return=representation` and parsing the response body to count actually deleted rows."
+  },
+  {
+    "file": "csnews-agent/src/scheduled.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "**`runKnowledgeGeneration(env)` called without `ctx` — inconsistent with `runKnowledgeAccumulation(env, ctx)`.** If `runKnowledgeGeneration` internally uses `ctx.waitUntil()` for R2 writes or async persistence, the missing `ctx` could cause the Worker to terminate before writes complete, leading to data loss. Confirm whether `runKnowledgeGeneration` needs `ctx` and pass it if so."
+  },
+  {
+    "file": "csnews-agent/src/scheduled.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Magic numbers should be extracted as named constants.** `PAGE_SIZE = 1000`, `BATCH_SIZE = 500`, `30 * 24 * 3600 * 1000` (30 days in ms), and `body.slice(0, 500)` / `body.slice(0, 200)` appear multiple times with no explanation. Named constants would improve readability and make tuning easier (e.g., `const ARCHIVE_PAGE_SIZE = 1000`, `const DELETE_BATCH_SIZE = 500`, `const MS_PER_30_DAYS = 30 * 24 * 3600 * 1000`)."
+  },
+  {
+    "file": "csnews-agent/src/scheduled.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**`any[]` type for `candidates` field.** The `selfLearnResult` type annotation uses `candidates: any[]`, which loses type safety. If `runEntitySelfLearn` returns a known shape, define an interface (e.g., `EntityCandidate`) and use it here."
+  },
+  {
+    "file": "csnews-agent/src/scheduled.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Event clustering (Phase 3) runs in `finally` block even if entity process (Phase 2) failed.** This was intentionally moved from `catch` to `finally` to fix event staleness (per the comment), but if `runEntityProcess` fails and `entity-finalized.json` is stale or missing, `runEventProcess` will cluster stale/incomplete data, potentially producing incorrect event clusters. Consider checking whether Phase 2 succeeded before running Phase 3, or making `runEventProcess` resilient to missing input."
+  },
+  {
+    "file": "csnews-agent/src/scheduled.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**Duplicated logging pattern across all scheduled functions.** The pattern `await logEvent(...)` followed by `ctx.waitUntil(logEvent(...).catch(() => {}))` is repeated ~15 times across 6 functions. Consider extracting a helper like `async function dualLog(env, ctx, level, msg, meta?)` that does both inline and waitUntil logging, reducing boilerplate and the risk of missing one side."
+  },
+  {
+    "file": "csnews-agent/src/tavily.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expression is not allowed per coding standards. Refactor to if/else or a lookup for clarity."
+  },
+  {
+    "file": "csnews-agent/src/tavily.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expression is not allowed per coding standards. Refactor to if/else for readability."
+  },
+  {
+    "file": "csnews-agent/src/tavily.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`matchedHotWords` is always filtered against the hardcoded `DEFAULT_HOT_WORDS` list, ignoring the keys of the dynamic `weights` parameter. If the DB introduces new hot words (not present in `DEFAULT_HOT_WORDS`), they will never be detected as matches — only their weight multipliers would apply if they coincidentally share a name with a default word. Consider using `Object.keys(weights)` or merging both lists for matching."
+  },
+  {
+    "file": "csnews-agent/src/tavily.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Duplicate logic: `hasNum`, `len`, and the `reason` string construction are repeated verbatim in both `scoreRule()` and `scoreRuleWithWeights()`. Extract into a shared helper to reduce maintenance burden."
+  },
+  {
+    "file": "csnews-agent/src/tavily.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`scoreRuleWithWeights` has no error handling around the async `loadWeights` call. If the DB is unreachable or the query fails, the promise rejects entirely and the caller receives an unhandled error instead of falling back gracefully to default weights. Consider wrapping in try/catch and falling back to `DEFAULT_HOT_WORD_WEIGHTS`."
+  },
+  {
+    "file": "csnews-agent/src/score.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Race condition (read-modify-write): `recordScoreAdjustment` reads the current threshold via `loadScoreThresholdHistory`, computes a new value, then writes it back to R2 without any locking or atomic update. In Cloudflare Workers, concurrent requests can interleave: Request A reads current=9, Request B reads current=9, A writes 9.5, B writes 8.5 — A's adjustment is silently lost. Consider using R2's conditional writes (etag-based) or Durable Objects with atomic state to serialize updates."
+  },
+  {
+    "file": "csnews-agent/src/score.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Missing error handling for R2 write: `env.csnews_raw.put(...)` can throw on network failures, quota exceeded, or permission errors. Unlike `loadScoreThresholdHistory` which catches errors internally, this function lets the exception propagate to the caller with no clear error message. Wrap the `put` call in a try/catch and return a meaningful error or re-throw with context."
+  },
+  {
+    "file": "csnews-agent/src/score.ts",
+    "category": "style",
+    "severity": "low",
+    "content": "Potential spelling error: \"explosive\" appears throughout the file (comments, log strings, and the string literal `'explosive'` used in `shouldTriggerFission`). This may be an intentional domain term (e.g., a portmanteau), but if it is meant to be \"explosive\" (as in breaking/explosive news), consider correcting it to avoid confusion in logs and future maintenance."
+  },
+  {
+    "file": "csnews-agent/src/topic-delta.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`parseInt` returns `NaN` when the parsed string is non-numeric (e.g., malformed `content-range` header like `bytes */0`). The function's own doc says \"header 格式异常 → 0\", but `NaN` is returned instead. Use `Number(...)` with a fallback or append `|| 0` to guarantee a zero fallback."
+  },
+  {
+    "file": "csnews-agent/src/topic-delta.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "`safeJson` returns `Promise<any>`, violating the project rule \"Avoid using `any` type; if necessary, provide a comment explaining the reason.\" Use `unknown` instead (callers can narrow the type), or add a comment justifying why `any` is needed here."
+  },
+  {
+    "file": "csnews-agent/src/topic-delta.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`safeJson` is named to imply safe/graceful handling, but `res.text()` can throw (e.g., if the body stream has already been consumed). Wrap the entire body in `try/catch` so the function always returns `null` on any error, matching its documented contract."
+  },
+  {
+    "file": "csnews-agent/src/topic-delta.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "If `SUPABASE_URL` env var holds a full URL (e.g., `https://abc.supabase.co` — the common Supabase convention), this function would produce `https://https://abc.supabase.co.supabase.co`. Either document that `SUPABASE_URL` MUST be only the project reference, or defensively strip an existing scheme/host before appending `.supabase.co`."
+  },
+  {
+    "file": "csnews-agent/src/types-supabase.ts",
+    "category": "documentation",
+    "severity": "low",
+    "content": "There is a spelling error in the comment: \"avalanche\" should be \"avalanche\" (missing the second 'a'). This appears in the constraint explanation for the upper limit of 3."
+  },
+  {
+    "file": "csnews-agent/src/types.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Nested ternary expression violates the code quality rule. The nested ternary is harder to read and error-prone. Consider using a lookup map or if/else for clarity."
+  },
+  {
+    "file": "csnews-agent/src/types.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`PAYLOAD_LIMIT_BYTES` is exported but never referenced within this file. If it is not used by any other module, it is dead code. If it is intended for future use, consider adding a TODO comment or implementing the corresponding payload size validation function."
+  },
+  {
+    "file": "csnews-agent/src/types.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "When validation fails (non-integer or out-of-range), `validateLimit` returns `ok: false` alongside `limit: DEFAULT_LIMIT`. A caller that ignores the `ok` flag could silently use the default value instead of the explicitly invalid input. Consider returning `limit: 0` or omitting `limit` on error to prevent accidental misuse."
+  },
+  {
+    "file": "csnews-agent/src/types.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `reason` field in `validateType` is semantically overloaded: in error cases it carries a human-readable error message, but in the success case (`{ ok: true, reason: normalized }`) it carries the normalized type string. This is confusing for callers. Consider using a separate field like `value` or `normalized` for the success payload."
+  },
+  {
+    "file": "csnews-agent/src/trend-validation.ts",
+    "category": "bug",
+    "severity": "critical",
+    "content": "`dualWriteVectors` is called without `await`. If this function is async (very likely given it writes to Vectorize), its Promise is fire-and-forget. In Cloudflare Workers, the runtime may cancel pending promises when the Response is returned, leading to silently lost vector writes. Either `await` the call or use `ctx.waitUntil()` to keep it alive beyond the response."
+  },
+  {
+    "file": "csnews-agent/src/trend-validation.ts",
+    "category": "performance",
+    "severity": "high",
+    "content": "The per-query fetch loop executes sequentially (`for...of` with `await`). Each `fetchTavilyNews` call is independent — fetching them serially means the total time is `num_queries × timeout` (up to 75 s for 5 queries). Use `Promise.all` to parallelize these independent async operations."
+  },
+  {
+    "file": "csnews-agent/src/trend-validation.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`parseInt` on a non-numeric string returns `NaN`, and `Math.min`/`Math.max` propagate `NaN`. If the `max` query param is a non-numeric value (e.g. `?max=abc`), `maxPerQuery` becomes `NaN` which is then passed to the fetch call as `max_results: NaN`, likely causing an API error or unintended behaviour."
+  },
+  {
+    "file": "csnews-agent/src/trend-validation.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Multiple locations use `as any[]` / `as any` type assertions on `safeJson` returns and row mappings (lines 171, 173, 194, 196). These bypass TypeScript's type safety. Define proper interfaces for Supabase REST responses, or at minimum add runtime validation (e.g. zod or a type guard) so that malformed rows don't cause downstream errors."
+  },
+  {
+    "file": "csnews-agent/src/trend-validation.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Several magic numbers are inlined: fetch timeout (15 000 ms), Vectorize similarity threshold (0.88), duplicate threshold (0.95), and embed count (6). Extract these as named constants at the top of the file so they're easier to discover and tune."
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`isZakerHotResponse` 类型守卫过于宽松：仅检查 `typeof v === 'object' && v !== null`，数组（`typeof [] === 'object'`）和任意普通对象都会通过守卫。调用方随后访问 `v.data?.list` 时虽然不会直接崩溃，但会静默返回 `undefined`，导致后续逻辑在无数据时继续执行，可能产生难以追踪的 bug。建议至少增加对 `data` 属性的检查，例如 `'data' in v`。"
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`isAiEmbeddingResponse` 使用可选字段 `shape` 作为判别属性，但该字段在 `AiEmbeddingResponse` 接口中被标记为可选。如果 Workers AI 返回的嵌入响应中确无 `shape` 字段（完全合法），该守卫会错误地返回 `false`，导致有效响应被拒绝。建议改用更可靠的判别属性如 `data`，或同时检查多个特征字段。"
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "`isSimilarNewsItem` 和 `isTrendSnapshotResult` 两个类型守卫仅检查了单个判别属性，未验证接口中的其他核心字段（如 `similarity`、`velocity`、`acceleration` 等）。虽然当前可能够用，但守卫过于宽松会增加下游代码在访问缺失字段时遇到 `undefined` 的风险。建议根据实际使用场景评估是否需要更严格的校验，或至少在守卫上方添加 JSDoc 注释说明其最小化校验策略。"
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "PullTopicRow duplicates 6 fields from TopicRow (id, topic_key, level, score, last_active_at, first_news_id) instead of extending it. If TopicRow changes, PullTopicRow may silently diverge, causing bugs. Consider using `extends TopicRow` and only adding the delta fields (event_stage, created_at, updated_at)."
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "CreatedTopicRow.first_news_id is typed as `string | undefined`, but the semantically equivalent field in TopicRow and PullTopicRow uses `string | null`. With strict null checks, these types are not assignable to each other, which can cause compilation errors when passing objects between functions that expect one or the other. Use `string | null` for consistency."
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "硬编码业务阈值 7_000、8_000、9_000 违反规范。这些 AI 预算阈值属于业务数字，应抽取为环境变量或配置常量，便于后续运营调整而不需修改代码。"
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "getDailyUsage 的 catch 块完全静默吞掉所有错误（包括 KV 不可用、数据损坏等），导致异常被掩盖且无任何日志。如果 KV 故障，函数返回 0 会让所有 AI 调用被放行，可能造成超出预算。建议至少添加 console.error 记录异常。"
+  },
+  {
+    "file": "csnews-agent/src/vectorize.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "参数 `_severity` 声明了但从未使用，且 JSDoc 描述“severity 影响阈值”与实际行为不符——函数并未根据 severity 调整阈值。如果这是预埋未实现的集成点，建议添加 TODO 注释说明；否则应移除该参数。"
+  },
+  {
+    "file": "csnews-fission/src/ai-budget.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Passing potentially undefined `this.env` to `logEvent` will cause a runtime TypeError. The constructor accepts `env` as optional (`Env | undefined`), but `logEvent` immediately dereferences `env.csnews_raw` without checking if `env` itself is null/undefined. If `env` is `undefined`, the call crashes — and if that crash occurs inside a `catch` block (e.g. line 86), it is unhandled and propagates. Consider making `env` a required parameter, or guard `logEvent` calls with an explicit `if (this.env)` check."
+  },
+  {
+    "file": "csnews-fission/src/ai-budget.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The `this.env as any` cast is used 6 times to bypass TypeScript type checking when calling `logEvent`. The `Env` type from `./shared` should already satisfy `logEvent`'s parameter type without casting. Removing the `as any` casts would restore type safety and help catch issues like passing `undefined`."
+  },
+  {
+    "file": "csnews-fission/src/ai-budget.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "The `query` method calls `result.matches.map(...)` without checking if `result.matches` is defined. If the Vectorize binding returns a result with `matches` undefined or null (e.g., due to a partial failure or API change), the `.map` call throws. Although the surrounding `try/catch` will catch it and return `[]`, it would be clearer to handle this scenario explicitly and avoid a misleading error log."
+  },
+  {
+    "file": "csnews-fission/src/auth.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Dead code: `calculateZScoreFromSnapshots` is defined but never called within this file and is not exported. This function will never be executed at runtime. If it's intended for future use (the header mentions '推迟'), consider adding a `// TODO:` marker explaining when it will be wired in; otherwise remove it to reduce maintenance burden."
+  },
+  {
+    "file": "csnews-fission/src/auth.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid `any` type in generic constraint `Record<string, any>`. This defeats TypeScript's type safety. Since the function only calls `Number()` on field values (which accepts `unknown`), use `Record<string, unknown>` instead. If `any` is intentional, add a comment explaining why."
+  },
+  {
+    "file": "csnews-fission/src/auth.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid `any` type in generic constraint `Record<string, any>`. Same reasoning as above — `Number()` accepts `unknown`, so `Record<string, unknown>` is sufficient and safer."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Unused parameter `limitBytes` — the parameter is declared in the function signature but never referenced in the function body. This appears to be dead code; either the parameter should be used (e.g., to check/skip when the counter reaches a byte-size limit) or removed from the signature."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "`generated_at` is silently overwritten with `new Date().toISOString()` on every write, ignoring whatever `generated_at` the caller passes in. If the caller intentionally passes a preserved timestamp, it is lost. This may be intentional (always set to “now” on save), but it contradicts the function signature which accepts `generated_at` as input. Consider either removing `generated_at` from the input type or only overwriting when the caller does not provide it."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Import statements are split by a function definition (`supabaseHeaders`). While ES module imports are hoisted and this works at runtime, it is unconventional and harms readability. Move all imports to the top of the file."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The inner `freshness` function declares a parameter `env` that shadows the outer `env` captured from `checkEntityCronHealth`. The outer `env` is always passed as the argument anyway, so the parameter is redundant. Remove the parameter and rely on the closure to avoid confusion."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The JSDoc comment claims this function does “R2 put + trigger re-clustering fire-and-forget”, but the implementation only performs the R2 put. The re-clustering trigger is missing, which may be a bug or an outdated comment. Either implement the missing trigger or update the comment to reflect actual behavior."
+  },
+  {
+    "file": "csnews-agent/src/utils.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Bearer scheme is case-insensitive per RFC 7235, but only exact 'Bearer ' (capital B) is matched. Tokens like 'bearer xxx' or 'BEARER xxx' will fail authentication silently."
+  },
+  {
+    "file": "csnews-agent/src/utils.ts",
+    "category": "security",
+    "severity": "medium",
+    "content": "Early return on length mismatch leaks the expected token length via timing side-channel. An attacker can determine the BEARER_TOKEN length by measuring response times. Consider padding the shorter buffer to constant length before calling timingSafeEqual, or use a constant-time length-safe comparison throughout."
+  },
+  {
+    "file": "csnews-agent/src/utils.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "The 401 error response is duplicated 3 times. Extract to a helper (e.g. `unauthorized()`) to reduce duplication and risk of inconsistency."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Hardcoded business numbers for freshness age thresholds (25h, 50h). These should be extracted as named constants (e.g., `FRESHNESS_DEGRADED_HOURS = 25`, `FRESHNESS_DOWN_HOURS = 50`) to improve readability and make tuning easier without searching through logic."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Return types use `any[]` for `candidates` and `noise` arrays. These represent structured entity data; consider defining a proper interface (e.g., `EntityCandidate`, `NoiseEntry`) to improve type safety and catch shape mismatches at compile time."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Hardcoded TTL values for KV expiration: `60` (rate-limit window) and `86400` (hit-counter daily window). These are configuration values that should be defined as named constants (e.g., `RATE_LIMIT_WINDOW_S = 60`, `HIT_COUNTER_TTL_S = 86400`) so they can be centrally adjusted and their meaning is self-documenting."
+  },
+  {
+    "file": "csnews-mcp-server/src/index.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "Missing CORS headers on all non-OPTIONS responses. The OPTIONS preflight handler correctly sets CORS headers, but none of the actual GET/POST response paths include `Access-Control-Allow-Origin`. This means browser-based clients will fail with CORS errors even after a successful preflight. Consider applying `corsHeaders(origin)` to every response or using a shared response builder."
+  },
+  {
+    "file": "csnews-mcp-server/src/index.ts",
+    "category": "security",
+    "severity": "high",
+    "content": "Debug endpoints (`debug-token`, `debug-fission`, `debug-r2`) are listed in `NO_AUTH_ACTIONS` and are accessible without any authentication. `debug-fission` makes real Supabase queries, `debug-r2` writes to R2 storage, and `debug-token` leaks the length of the bearer token. These should require authentication or be guarded by an environment check (e.g., only in non-production)."
+  },
+  {
+    "file": "csnews-mcp-server/src/index.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Missing top-level try-catch in `handleFetch`. If `new URL(request.url)` throws (e.g., malformed URL) or any other unhandled error occurs before reaching an action-specific handler, the Worker will return a raw 500 error without a JSON body, which is inconsistent with the rest of the API. Consider wrapping the handler body in a try-catch that returns a structured error response."
+  },
+  {
+    "file": "csnews-mcp-server/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "Using `any[]` type assertion bypasses TypeScript type checking. The Supabase response shape should be typed, even if only with a minimal interface like `{ id: string; topic_key: string; level: string; score: number }`."
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "**潜在 URL 拼接 Bug**: `getSupabaseHost` 使用模板字符串 `https://${env.SUPABASE_URL}.supabase.co` 构造 URL，但变量名 `SUPABASE_URL` 暗示它已经是完整 URL（如 `https://<project-id>.supabase.co`）。如果 `SUPABASE_URL` 确实存储完整 URL，则结果会变成 `https://https://<id>.supabase.co.supabase.co`，导致请求失败。\n\n**建议**: 确认 `SUPABASE_URL` 的实际格式。如果是项目 ID/引用，请重命名为 `SUPABASE_PROJECT_REF` 或类似名称以避免混淆；如果是完整 URL，直接 `return env.SUPABASE_URL`。"
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "**硬编码域名**: `.supabase.co` 域名以字符串形式硬编码在函数中。如果 Supabase 平台域名变更或使用自托管实例，需要修改多处代码。建议将 Supabase 基础 URL 提取为常量或环境变量。"
+  },
+  {
+    "file": "csnews-fission/src/index.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "**缺少空值检查**: `getSupabaseHost` 直接访问 `env.SUPABASE_URL` 但未检查其是否为 `undefined`/空字符串。虽然接口定义中该字段为非可选，但运行时环境变量可能未正确配置。建议添加断言或默认值处理，避免静默产生错误 URL。"
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "Dead parameter: `currentCount` is declared in the function signature but never referenced in the function body. The call sites pass `0` but this value is unused. Remove the parameter or implement the intended logic."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded external API URLs should be extracted to environment configuration for flexibility across environments and easier maintenance."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Hardcoded external API URL. Extract to environment variable for consistency with the ZAKER URL pattern."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "AI model name `@cf/meta/llama-3.1-8b-instruct-fp8` is hardcoded in two places (search query generation and report generation). Extract to a named constant to avoid drift when updating models."
+  },
+  {
+    "file": "csnews-fission/src/shared.ts",
+    "category": "bug",
+    "severity": "medium",
+    "content": "The file header (line 16) states that topics table should have `fission_count` / `fission_triggered_at` updated, but the actual implementation comment (line 327) contradicts this, saying \"topics table only has score column (no fission_count/fission_triggered_at)\". This indicates either the header is stale or the implementation is incomplete. The R2 index also hardcodes `fission_count: 1` instead of incrementing from previous values, meaning repeated fissions on the same topic are not tracked correctly."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "bug",
+    "severity": "critical",
+    "content": "`server.connect()` is called without a transport argument. In the MCP SDK, `Server.connect(transport: Transport)` requires a Transport instance (e.g., `StdioServerTransport`). Without it, the server will fail to start at runtime. You need to import `StdioServerTransport` from the SDK and pass a new instance to `connect()`."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "bug",
+    "severity": "high",
+    "content": "URL construction adds an unnecessary trailing slash before the query string: `${CSNEWS_URL}/?action=mcp` produces `https://...com/api/v1/?action=mcp`. This makes the path `/api/v1/` instead of `/api/v1`, which may cause a 404 if the Worker route does not match the trailing-slash variant. Remove the extra `/` before `?`."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "medium",
+    "content": "Avoid using `any` type. TypeScript's `any` bypasses all type checking. Use `unknown` instead, and narrow with `instanceof Error` before accessing `e.message`."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "security",
+    "severity": "medium",
+    "content": "The default `CSNEWS_URL` value exposes the internal Worker domain (`csnews.kwokzit.info`) in source code. While it's a fallback, hardcoding infrastructure URLs in public repositories is a security concern. Consider removing the default or using a placeholder like `http://localhost:8787`."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "performance",
+    "severity": "medium",
+    "content": "The `fetch` call has no timeout or `AbortController`. If the remote Worker is unreachable or hangs, this server process will block indefinitely, with no way to recover. Add a timeout (e.g., 30s) using `AbortSignal.timeout()`."
+  },
+  {
+    "file": "csnews-fission/src/fission-trigger.ts",
+    "category": "maintainability",
+    "severity": "low",
+    "content": "The `action=mcp` query parameter is hardcoded in the URL string. Consider extracting it to a constant alongside the other configuration values for consistency and easier maintenance."
+  }
+]

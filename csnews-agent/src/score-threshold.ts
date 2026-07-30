@@ -86,6 +86,12 @@ export function nextScoreThreshold(current: number, review: ScoreReviewType): nu
 
 /**
  * review 反馈 → 持久化 (类似 event-threshold.ts recordReview)
+ *
+ * NOTE: 存在 read-modify-write 竞态条件。两并发请求同时调此函数时，
+ * 后写的会覆盖先写的，导致一次调整丢失。
+ * 因 review 反馈是低频率操作（人工或定时触发），竞态概率极低。
+ * 当前 Worker 为单实例运行（single-worker），无并发写入，故可接受。
+ * 迁移到多 Worker（multi-worker）时需加锁（R2 conditional put if-match）。
  */
 export async function recordScoreAdjustment(
   env: Env,

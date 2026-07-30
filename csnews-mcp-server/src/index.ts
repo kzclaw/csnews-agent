@@ -14,6 +14,7 @@
  */
 
 import { Server } from '@modelcontextprotocol/sdk/dist/esm/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -180,7 +181,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   try {
-    const url = `${CSNEWS_URL}/?action=mcp`;
+    const url = `${CSNEWS_URL}?action=mcp`;
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -229,12 +230,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return {
       content: [{ type: 'text', text }],
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     return {
       content: [
         {
           type: 'text',
-          text: `❌ 网络错误: ${e.message}\n\n请检查:\n1. CSNEWS Worker 是否在线\n2. CSNEWS_TOKEN 是否正确\n3. CSNEWS_URL 是否正确 (当前: ${CSNEWS_URL})`,
+          text: `❌ 网络错误: ${msg}\n\n请检查:\n1. CSNEWS Worker 是否在线\n2. CSNEWS_TOKEN 是否正确\n3. CSNEWS_URL 是否正确 (当前: ${CSNEWS_URL})`,
         },
       ],
       isError: true,
@@ -256,7 +258,8 @@ async function main() {
   console.warn(`   Token: ${CSNEWS_TOKEN ? '✅ 已设置' : '❌ 未设置'}`);
   console.warn('');
 
-  const transport = await server.connect();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
   // 保持进程运行
   transport.onclose = () => {
     console.warn('MCP 连接已关闭');

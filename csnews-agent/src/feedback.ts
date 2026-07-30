@@ -169,11 +169,12 @@ async function writeAccuracyToR2(
   };
   try {
     await env.csnews_raw.put(key, JSON.stringify(entry, null, 2));
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[feedback] R2 write failed key=${key} err=${e?.message || e}`,
+      `[feedback] R2 write failed key=${key} err=${msg}`,
       undefined,
       'feedback'
     );
@@ -250,11 +251,12 @@ export async function runFeedbackCheck(env: Env): Promise<FeedbackResult> {
 
       // Update categoryAccuracy for response
       result.categoryAccuracy[category] = { accuracy: accuracy ?? 0, correct, total };
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       await logEvent(
         env,
         'error',
-        `[feedback] processing warning ${warning.id} failed: ${e?.message || e}`,
+        `[feedback] processing warning ${warning.id} failed: ${msg}`,
         undefined,
         'feedback'
       );
@@ -285,7 +287,8 @@ export async function handleFeedbackCheckAction(
   try {
     const result = await runFeedbackCheck(env);
     return { ok: true, result, elapsed_ms: Date.now() - start };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     return {
       ok: false,
       result: {
@@ -323,13 +326,14 @@ export async function scheduledFeedback(
 ): Promise<void> {
   try {
     await runFeedbackCheck(env);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     // Intentionally swallowed — cron trigger must not re-throw
     await logEvent(
       env,
       'error',
       '[feedback] scheduledFeedback caught error:',
-      { err: e?.message || e },
+      { err: msg },
       'feedback'
     );
   }

@@ -121,9 +121,10 @@ export async function logEvent(
           `[log] put ok key=${key} etag=${result?.etag || 'n/a'} version=${result?.version || 'n/a'}`
         );
         return;
-      } catch (e: any) {
+      } catch (e: unknown) {
         lastErr = e;
-        console.error(`[log] put attempt ${i+1} failed: ${e?.message || e}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[log] put attempt ${i+1} failed: ${msg}`);
       }
     }
     throw lastErr;
@@ -141,9 +142,10 @@ export async function logEvent(
     pushToDiagBuffer(entry);
     const key = getLogKey(now, source);
     await putWithRetry(key, formatLogLine(entry));
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     // 不 静 默 吞, 抛 给 调 用 方 (dispatch.ts catch 显 console.error)
-    console.error('[log] logEvent failed after retries', e?.message || e);
+    console.error('[log] logEvent failed after retries', msg);
     throw e;
   }
 }
