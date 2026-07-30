@@ -59,6 +59,71 @@ export const DEFAULT_DAILY_LIMIT = 10000; // Workers AI Free Tier 10K Neurons/�
 const MAX_CALLS_IN_KV = 1000; // calls 数组上限，防止单 KV 值膨胀超过 25 MiB
 
 // ===========================
+// 模型 Neurons 定价（每百万 token）
+// 来源：https://developers.cloudflare.com/workers-ai/platform/pricing/ (2026-07-29)
+// ===========================
+const NEURON_RATES: Record<string, { inputPerMTokens: number; outputPerMTokens?: number }> = {
+  // Text generation
+  '@cf/meta/llama-3.1-8b-instruct-fp8': { inputPerMTokens: 13778, outputPerMTokens: 26128 },
+  '@cf/meta/llama-3.1-8b-instruct': { inputPerMTokens: 25608, outputPerMTokens: 75147 },
+  '@cf/meta/llama-3.2-1b-instruct': { inputPerMTokens: 2457, outputPerMTokens: 18252 },
+  '@cf/meta/llama-3.2-3b-instruct': { inputPerMTokens: 4625, outputPerMTokens: 30475 },
+  '@cf/mistral/mistral-7b-instruct-v0.1': { inputPerMTokens: 10000, outputPerMTokens: 17300 },
+  // Embedding
+  '@cf/baai/bge-m3': { inputPerMTokens: 1075 },
+  '@cf/baai/bge-small-en-v1.5': { inputPerMTokens: 1841 },
+  '@cf/baai/bge-base-en-v1.5': { inputPerMTokens: 6058 },
+  '@cf/baai/bge-large-en-v1.5': { inputPerMTokens: 18582 },
+};
+
+/**
+ * 根据模型和实际用量计算真实 Neurons 消耗
+ *
+ * 两层计算策略：
+ * 1. 有 usage 数据（文本生成模型：llama 等）：按实际 token 数和 CF 官方定价精确计算
+ * 2. 无 usage 数据（embedding 模型：bge-m3 等）：从输入字符数估算（~4 chars/token）
+ *
+ * 入参至少提供一个数据源（usage 或 inputTexts），否则返回 1（保守估算）。
+ *
+ * @param model  模型名称
+ * @param options.usage      AI.run 返回的 usage 信息（含 prompt_tokens / completion_tokens）
+ * @param options.inputTexts 原始输入文本数组（用于 embedding 模型估算）
+ */
+export function computeNeurons(
+  model: string,
+  options?: {
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    inputTexts?: string[];
+  }
+): number {
+  const rate = NEURON_RATES[model];
+  if (!rate) return 1; // 未知模型：保守估算
+
+  // 策略 1：有 usage 数据 → 按 token 精确计算
+  if (options?.usage) {
+    const inputTokens = options.usage.prompt_tokens ?? 0;
+    const outputTokens = options.usage.completion_tokens ?? 0;
+    const inputNeurons = (inputTokens * rate.inputPerMTokens) / 1_000_000;
+    const outputNeurons = outputTokens > 0 && rate.outputPerMTokens
+      ? (outputTokens * rate.outputPerMTokens) / 1_000_000
+      : 0;
+    // Math.ceil + 下限 1（0 neurons 的记录无意义）
+    return Math.ceil(Math.max(inputNeurons + outputNeurons, 1));
+  }
+
+  // 策略 2：有输入文本 → 从字符数估算 token 数（~4 chars/token 估算）
+  if (options?.inputTexts && options.inputTexts.length > 0) {
+    const totalChars = options.inputTexts.reduce((sum, t) => sum + t.length, 0);
+    const estTokens = totalChars / 4;
+    if (estTokens <= 0) return 1;
+    return Math.ceil((estTokens * rate.inputPerMTokens) / 1_000_000) || 1;
+  }
+
+  // 策略 3：没有任何数据 → 1 neuron（保守估值）
+  return 1;
+}
+
+// ===========================
 // 日期工具
 // ===========================
 function todayUtc(): string {
