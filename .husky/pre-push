@@ -12,12 +12,15 @@ echo "[pre-push] 🔍 OCR AI 代码审查（advisory）"
 echo "  审 diff: HEAD~1 → HEAD"
 echo "============================================"
 
-# 非 blocking：永远返回 0
-ocr review \
+# 用 timeout （macOS 无 timeout 命令，用 perl 替代）
+perl -e '
+  alarm 60;
+  exec @ARGV;
+' ocr review \
   --from HEAD~1 --to HEAD \
   --rule .ocr-rules.json \
   --exclude '**/.temp/**,**/supabase/.temp/**' \
-  --audience agent --format text 2>&1 || true
+  --audience agent --format text 2>&1 || echo "[pre-push] ⚠️  OCR 跳过（超时/报错不影響 push）"
 
 echo ""
 echo "[pre-push] ✅ 完成（advisory，未 block push）"
