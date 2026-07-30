@@ -20,11 +20,19 @@ import { authRequest, corsHeaders } from './auth';
 
 // ====== HTTP fetch handler ======
 async function handleFetch(request: Request, env: Env): Promise<Response> {
+  const origin = request.headers.get('Origin');
+  const cors = corsHeaders(origin);
+  function withCors(data: unknown, init?: ResponseInit): Response {
+    return new Response(JSON.stringify(data), {
+      ...init,
+      headers: { ...init?.headers, 'Content-Type': 'application/json', ...cors },
+    });
+  }
+
   // CORS preflight
   if (request.method === 'OPTIONS') {
-    const origin = request.headers.get('Origin');
     return new Response(null, {
-      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+      headers: { ...cors, 'Content-Type': 'application/json' },
     });
   }
 
@@ -38,31 +46,22 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   }
 
   if (action === 'ping') {
-    return new Response(JSON.stringify({ ok: true, worker: 'csnews-fission', action }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return withCors({ ok: true, worker: 'csnews-fission', action });
   }
 
   if (action === 'health') {
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        worker: 'csnews-fission',
-        action: 'health',
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return withCors({
+      ok: true,
+      worker: 'csnews-fission',
+      action: 'health',
+      timestamp: new Date().toISOString(),
+    });
   }
 
   // 调试端点：看 env.BEARER_TOKEN 长度（不暴露内容）
   if (action === 'debug-token') {
     const tokenLen = env.BEARER_TOKEN ? env.BEARER_TOKEN.length : -1;
-    return new Response(JSON.stringify({ ok: true, bearer_token_length: tokenLen }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return withCors({ ok: true, bearer_token_length: tokenLen });
   }
 
   // DEBUG: step-by-step diagnostics
@@ -80,18 +79,13 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
       steps['topics'] = JSON.stringify(topics);
     } catch (e) { steps['topics_error'] = String(e); }
 
-    return new Response(
-      JSON.stringify({ ok: true, env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY }, steps }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    return withCors({ ok: true, env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY }, steps });
   }
 
   // DEBUG: test R2 write directly
   if (action === 'debug-r2') {
     if (!env.csnews_raw) {
-      return new Response(JSON.stringify({ ok: false, error: 'csnews_raw binding missing' }), {
-        status: 500, headers: { 'Content-Type': 'application/json' },
-      });
+      return withCors({ ok: false, error: 'csnews_raw binding missing' }, { status: 500 });
     }
     const testKey = `fission/debug/test-${Date.now()}.txt`;
     const testContent = `R2 write test at ${new Date().toISOString()}`;
@@ -101,21 +95,15 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
       });
       const obj = await env.csnews_raw.get(testKey);
       const readBack = obj ? await obj.text() : 'FILE NOT FOUND';
-      return new Response(JSON.stringify({ ok: true, testKey, readBack, length: readBack.length }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return withCors({ ok: true, testKey, readBack, length: readBack.length });
     } catch (err) {
-      return new Response(JSON.stringify({ ok: false, error: String(err), testKey }), {
-        status: 500, headers: { 'Content-Type': 'application/json' },
-      });
+      return withCors({ ok: false, error: String(err), testKey }, { status: 500 });
     }
   }
 
   // 手动触发裂变（用于调试或手动干预）
   if (action === 'fission-manual') {
     try {
-      // v0.37.79 fix: 从 main worker Service Binding 收 topic_ids 参数,
-      // 直接查 topic 处理, 不再依赖 score=eq.9 (RPC 已重置 score=0)
       const topicIdsParam = url.searchParams.get('topic_ids') || '';
       if (topicIdsParam) {
         const topicIds = topicIdsParam.split(',').filter(Boolean);
@@ -127,29 +115,16 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
             processed++;
           }
         }
-        return new Response(
-          JSON.stringify({ ok: true, action: 'fission-manual', result: 'seed_triggered', topics: processed }),
-          { headers: { 'Content-Type': 'application/json' } }
-        );
+        return withCors({ ok: true, action: 'fission-manual', result: 'seed_triggered', topics: processed });
       }
-      // fallback: 扫描 score=eq.9 (cron / 手动调试)
       await runFissionTrigger(env);
-      return new Response(
-        JSON.stringify({ ok: true, action: 'fission-manual', result: 'triggered' }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+      return withCors({ ok: true, action: 'fission-manual', result: 'triggered' });
     } catch (err) {
-      return new Response(JSON.stringify({ ok: false, error: String(err) }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return withCors({ ok: false, error: String(err) }, { status: 500 });
     }
   }
 
-  return new Response(JSON.stringify({ ok: false, error: 'unknown action' }), {
-    status: 400,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return withCors({ ok: false, error: 'unknown action' }, { status: 400 });
 }
 
 // ====== Cron Trigger handler ======

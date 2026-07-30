@@ -119,11 +119,12 @@ export async function handleToolsCall(
   try {
     const text = await executeTool(toolName, env, ctx, toolArgs);
     return buildSuccessResponse(req.id, text);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     return buildErrorResponse(
       req.id,
       MCP_ERROR_CODES.TOOL_EXECUTION_ERROR,
-      e.message || 'Tool execution failed',
+      msg || 'Tool execution failed',
       { tool: toolName }
     );
   }

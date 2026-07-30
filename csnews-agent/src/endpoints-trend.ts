@@ -114,8 +114,9 @@ export async function handleContentAction(
       } else {
         r2Error = 'r2_key_found_but_object_missing';
       }
-    } catch (e: any) {
-      r2Error = `r2_read_failed: ${e?.message || e}`;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      r2Error = `r2_read_failed: ${msg}`;
     }
   } else {
     r2Error = 'no_r2_key';
@@ -590,12 +591,13 @@ export async function runKnowledgeAccumulation(
         };
         allIndex.push(indexEntry);
         written++;
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
         errors++;
         await logEvent(
           env,
           'error',
-          `[knowledge] topic ${t.id} accumulation failed: ${e?.message || e}`,
+          `[knowledge] topic ${t.id} accumulation failed: ${msg}`,
           undefined,
           'trend'
         );
@@ -615,11 +617,12 @@ export async function runKnowledgeAccumulation(
     }
 
     return { written, errors };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[knowledge] accumulation job failed: ${e?.message || e}`,
+      `[knowledge] accumulation job failed: ${msg}`,
       undefined,
       'trend'
     );
@@ -882,12 +885,13 @@ export async function runKnowledgeGeneration(
           'trend'
         );
         written++;
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
         errors++;
         await logEvent(
           env,
           'error',
-          `[knowledge-gen] warning ${w.id} failed: ${e?.message || e}`,
+          `[knowledge-gen] warning ${w.id} failed: ${msg}`,
           undefined,
           'trend'
         );
@@ -895,11 +899,12 @@ export async function runKnowledgeGeneration(
     }
 
     return { written, skipped, errors };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[knowledge-gen] job failed: ${e?.message || e}`,
+      `[knowledge-gen] job failed: ${msg}`,
       undefined,
       'trend'
     );

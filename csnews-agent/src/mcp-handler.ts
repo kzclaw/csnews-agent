@@ -141,11 +141,12 @@ export async function handleMCPAction(
         try {
           const text = await executeTool(req.method, env, ctx, params(req));
           return buildSuccessResponse(req.id, text);
-        } catch (e: any) {
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
           return buildErrorResponse(
             req.id,
             MCP_ERROR_CODES.TOOL_EXECUTION_ERROR,
-            e.message || 'Tool execution failed',
+            msg || 'Tool execution failed',
             { method: req.method }
           );
         }
@@ -182,12 +183,13 @@ export async function handleMCPAction(
     try {
       const text = await executeTool(req.method, env, ctx, params(req));
       return jsonResponse(buildSuccessResponse(req.id, text), cors);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       return jsonResponse(
         buildErrorResponse(
           req.id,
           MCP_ERROR_CODES.TOOL_EXECUTION_ERROR,
-          e.message || 'Tool execution failed',
+          msg || 'Tool execution failed',
           { method: req.method }
         ),
         cors

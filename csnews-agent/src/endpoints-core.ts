@@ -51,9 +51,10 @@ export async function handlePullAction(
     const result = await handlePull(env, url, ctx);
     const cacheControl = CACHE_HEADERS[result.type] || 'no-store';
     return jsonResponse(result, cors, { headers: { 'Cache-Control': cacheControl } });
-  } catch (e: any) {
-    const status = e.status || 500;
-    return jsonResponse({ error: e.message || 'pull failed' }, cors, {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = e instanceof Error && 'status' in e ? (e as any).status : 500;
+    return jsonResponse({ error: msg || 'pull failed' }, cors, {
       status,
       headers: { 'Cache-Control': 'no-store' },
     });
@@ -100,8 +101,9 @@ export async function handleModelTestAction(
       { ok: true, model: 'llama-3.1-8b-instruct-fp8', response: extractText(r).substring(0, 200) },
       cors
     );
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }
 
@@ -370,8 +372,9 @@ export async function handleFissionAction(
       .map((q) => q.trim())
       .filter((q) => q.length > 0 && q.length <= 20);
     return jsonResponse({ seed, queries, count: queries.length }, cors);
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }
 
@@ -399,8 +402,9 @@ export async function handleSaveAction(
       httpMetadata: { contentType: 'application/json' },
     });
     return jsonResponse({ ok: true, key, item }, cors);
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }
 
@@ -500,8 +504,9 @@ export async function handleEmbedAction(
       { text, dim: embedding.length, model: '@cf/baai/bge-m3', sample: embedding.slice(0, 5), key },
       cors
     );
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }
 
@@ -544,8 +549,9 @@ export async function handleZakerHotAction(
     }
 
     return jsonResponse({ count: results.length, items: results }, cors);
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }
 
@@ -608,7 +614,9 @@ export async function handleRescoreAction(
       try {
         const chunkResults = await batchClassifyBySemantic(chunk, env);
         batchResults.push(...chunkResults);
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('Rescore chunk failed:', msg);
         // 单批失败: 用综合兜底, 不阻塞其他批
         for (let j = 0; j < chunk.length; j++) {
           batchResults.push({ category: '综合', confidence: 0 });
@@ -677,10 +685,11 @@ export async function handleRescoreAction(
                     errorSamples.push(`${patchRes.status}: ${errText.slice(0, 150)}`);
                   }
                 }
-              } catch (e: any) {
+              } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : String(e);
                 updateErrors++;
                 if (errorSamples.length < 3) {
-                  errorSamples.push(`exception: ${e?.message || e}`);
+                  errorSamples.push(`exception: ${msg}`);
                 }
               }
             }
@@ -709,7 +718,8 @@ export async function handleRescoreAction(
       },
       cors
     );
-  } catch (e: any) {
-    return jsonResponse({ error: e.message }, cors, { status: 500 });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return jsonResponse({ error: msg }, cors, { status: 500 });
   }
 }

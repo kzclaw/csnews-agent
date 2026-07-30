@@ -4,6 +4,8 @@
 
 import { Env } from './shared';
 
+type CheckEntry = { status: 'ok' | 'unknown'; detail: string };
+
 /**
  * CheckResult — uniform shape for individual health checks.
  * Used by health-checks.ts to aggregate sub-module results.
@@ -23,10 +25,10 @@ export async function checkMcpToolsCount(env: Env): Promise<{
   mcp_tools_count: number;
   mcp_tools_breakdown: Record<string, number>;
   checks: {
-    mcp_tools: { status: 'ok' | 'unknown'; detail: string };
+    mcp_tools: CheckEntry;
   };
 }> {
-  const checks: any = {};
+  const checks: Record<string, CheckEntry> = {};
   const breakdown: Record<string, number> = {};
 
   try {
@@ -78,8 +80,9 @@ export async function checkMcpToolsCount(env: Env): Promise<{
       mcp_tools_breakdown: breakdown,
       checks: { mcp_tools: checks.mcp_tools },
     };
-  } catch (e: any) {
-    checks.mcp_tools = { status: 'unknown', detail: e?.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    checks.mcp_tools = { status: 'unknown', detail: msg };
     return {
       mcp_tools_count: 0,
       mcp_tools_breakdown: {},

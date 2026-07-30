@@ -340,27 +340,42 @@ export function classifyRule(title: string): string {
   for (const [cat, kws] of Object.entries(CATEGORY_KW)) {
     if (kws.some((k) => title.includes(k))) return cat;
   }
-  return '综合';
+  return DEFAULT_CATEGORY;
 }
+
+const DEFAULT_CATEGORY = '综合';
+const CONFIDENCE_THRESHOLD = 0.3;
 
 // Workers AI分类 (主分类, 优先于关键词兜底)
 // v0.36.13: 已替换为 bge-m3 semantic embedding 自分类 (候选 A)
 // Workers AI 响应慢 (15s+ 受 Free 10ms CPU 限制) 仍禁用, 改走 CF Workers AI bge-m3 独立池 (0 Neurons)
 export async function classifyByAI(title: string, env: Env, summary?: string): Promise<string> {
-  const inputText = `${title} ${summary || ''}`.trim();
-  const result = await classifyBySemantic(inputText, env);
-  return result.category;
+  try {
+    const inputText = `${title} ${summary || ''}`.trim();
+    const result = await classifyBySemantic(inputText, env);
+    return result.category;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[classify] classifyByAI error: ${msg}`);
+    return DEFAULT_CATEGORY;
+  }
 }
 
 // 双保险分类: 主路径 bge-m3 semantic 自分类, 关键词兜底, 综合保底
 // v0.36.13 主路径 = bge-m3 (16:28 0 硬编码哲学一致)
 // 加 optional summary, title+summary 混合 → 边界样本准确率提升
 export async function classify(title: string, env: Env, summary?: string): Promise<string> {
-  const inputText = `${title} ${summary || ''}`.trim();
-  const result = await classifyBySemantic(inputText, env);
-  // confidence < 0.3 时 fallback 到 keywords (跟18:43 确定兜底一致)
-  if (result.confidence < 0.3 && result.top_scores.length === 0) {
+  try {
+    const inputText = `${title} ${summary || ''}`.trim();
+    const result = await classifyBySemantic(inputText, env);
+    // confidence < CONFIDENCE_THRESHOLD 时 fallback 到 keywords (跟18:43 确定兜底一致)
+    if (result.confidence < CONFIDENCE_THRESHOLD) {
+      return classifyRule(title);
+    }
+    return result.category;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[classify] classify error: ${msg}`);
     return classifyRule(title);
   }
-  return result.category;
 }

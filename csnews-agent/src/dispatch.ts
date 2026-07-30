@@ -50,7 +50,7 @@ import {
 import { handleFeedbackCheckAction } from './feedback';
 
 /**
- * 20 个支持 action（白名单）
+ * 28 个支持 action（白名单）
  * 加新 action 时: ALLOWED_ACTIONS 加 + 此文件 describe 块补 1 个 it
  */
 const ALLOWED_ACTIONS = [
@@ -71,6 +71,7 @@ const ALLOWED_ACTIONS = [
   'health',
   'ai-usage',
   'logs',
+  'logs-diag',
   'content',
   'trend',
   'knowledge',
@@ -119,7 +120,7 @@ export async function dispatchAction(
     console.error(`[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`);
   });
 
-  // 20 action dispatch
+  // 28 action dispatch (dispatch chain — no try/catch here, each handler handles its own errors)
   if (action === 'pull') return await handlePullAction(request, env, url, cors, ctx);
   if (action === 'ping') return await handlePingAction(request, env, url, cors);
   if (action === 'model-test') return await handleModelTestAction(request, env, url, cors);

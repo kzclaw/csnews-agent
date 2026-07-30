@@ -355,12 +355,22 @@ export async function runTavilyPipeline(
     );
   }
 
-  for (const query of queries) {
-    const articles = await fetchTavilyNews(env, apiKey, query, maxPerQuery);
-    if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
-      fetchErrors.push(`query="${query}" returned 0 results`);
+  // Parallel fetch with concurrency limit (max 5) to avoid subrequest budget exhaustion
+  const CONCURRENCY = 5;
+  for (let i = 0; i < queries.length; i += CONCURRENCY) {
+    const batch = queries.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (query) => {
+        const articles = await fetchTavilyNews(env, apiKey, query, maxPerQuery);
+        if (articles.length === 0 && apiKey && apiKey !== 'YOUR_KEY_HERE') {
+          fetchErrors.push(`query="${query}" returned 0 results`);
+        }
+        return articles;
+      })
+    );
+    for (const articles of results) {
+      allArticles.push(...articles);
     }
-    allArticles.push(...articles);
   }
 
   // Nothing fetched
@@ -474,7 +484,7 @@ export async function runTavilyPipeline(
   }));
 
   const batchIds = await insertNewsBatch(env, batchNewsArray);
-  dualWriteVectors(env, batchNewsArray, batchIds);
+  await dualWriteVectors(env, batchNewsArray, batchIds);
 
   for (let i = 0; i < pendingNews.length; i++) {
     const p = pendingNews[i];

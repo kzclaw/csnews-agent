@@ -116,19 +116,20 @@ export async function scheduledProcess(
           'scheduler'
         ).catch(() => {})
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       const knowledgeElapsed = Date.now() - knowledgeStart;
       await logEvent(
         env,
         'error',
-        `[cron] knowledge accumulation failed elapsed=${knowledgeElapsed}ms err=${e?.message || e}`
+        `[cron] knowledge accumulation failed elapsed=${knowledgeElapsed}ms err=${msg}`
       );
       ctx.waitUntil(
         logEvent(
           env,
           'error',
           '[cron] knowledge accumulation failed',
-          { elapsed_ms: knowledgeElapsed, err: e?.message || String(e) },
+          { elapsed_ms: knowledgeElapsed, err: msg },
           'scheduler'
         ).catch(() => {})
       );
@@ -159,36 +160,38 @@ export async function scheduledProcess(
           'scheduler'
         ).catch(() => {})
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       const insightElapsed = Date.now() - insightStart;
       await logEvent(
         env,
         'error',
-        `[cron] knowledge generation failed elapsed=${insightElapsed}ms err=${e?.message || e}`
+        `[cron] knowledge generation failed elapsed=${insightElapsed}ms err=${msg}`
       );
       ctx.waitUntil(
         logEvent(
           env,
           'error',
           '[cron] knowledge generation failed',
-          { elapsed_ms: insightElapsed, err: e?.message || String(e) },
+          { elapsed_ms: insightElapsed, err: msg },
           'scheduler'
         ).catch(() => {})
       );
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
     await logEvent(
       env,
       'error',
-      `[cron] process failed elapsed=${elapsed}ms err=${e?.message || e}`
+      `[cron] process failed elapsed=${elapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] process failed',
-        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        { elapsed_ms: elapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -261,19 +264,20 @@ export async function scheduledEntity(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const selfLearnElapsed = Date.now() - selfLearnStart;
     await logEvent(
       env,
       'error',
-      `[cron] entity selflearn failed elapsed=${selfLearnElapsed}ms err=${e?.message || e}`
+      `[cron] entity selflearn failed elapsed=${selfLearnElapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] entity selflearn failed',
-        { elapsed_ms: selfLearnElapsed, err: e?.message || String(e) },
+        { elapsed_ms: selfLearnElapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -304,19 +308,20 @@ export async function scheduledEntity(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const processElapsed = Date.now() - processStart;
     await logEvent(
       env,
       'error',
-      `[cron] entity process failed elapsed=${processElapsed}ms err=${e?.message || e}`
+      `[cron] entity process failed elapsed=${processElapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] entity process failed',
-        { elapsed_ms: processElapsed, err: e?.message || String(e) },
+        { elapsed_ms: processElapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -354,19 +359,20 @@ export async function scheduledEntity(
           'scheduler'
         ).catch(() => {})
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       const eventElapsed = Date.now() - eventStart;
       await logEvent(
         env,
         'error',
-        `[cron] event failed elapsed=${eventElapsed}ms err=${e?.message || e}`
+        `[cron] event failed elapsed=${eventElapsed}ms err=${msg}`
       );
       ctx.waitUntil(
         logEvent(
           env,
           'error',
           '[cron] event failed',
-          { elapsed_ms: eventElapsed, err: e?.message || String(e) },
+          { elapsed_ms: eventElapsed, err: msg },
           'scheduler'
         ).catch(() => {})
       );
@@ -434,19 +440,20 @@ export async function scheduledEvent(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
     await logEvent(
       env,
       'error',
-      `[cron] event process failed elapsed=${elapsed}ms err=${e?.message || e}`
+      `[cron] event process failed elapsed=${elapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] event process failed',
-        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        { elapsed_ms: elapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -632,19 +639,20 @@ export async function scheduledArchiveOldEntities(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
     await logEvent(
       env,
       'error',
-      `[cron] archive failed elapsed=${elapsed}ms err=${e?.message || e}`
+      `[cron] archive failed elapsed=${elapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] archive failed',
-        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        { elapsed_ms: elapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -705,19 +713,20 @@ export async function scheduledFeedback(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
     await logEvent(
       env,
       'error',
-      `[cron] feedback failed elapsed=${elapsed}ms err=${e?.message || e}`
+      `[cron] feedback failed elapsed=${elapsed}ms err=${msg}`
     );
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] feedback failed',
-        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        { elapsed_ms: elapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );
@@ -766,15 +775,16 @@ export async function scheduledReset(
         'scheduler'
       ).catch(() => {})
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
-    await logEvent(env, 'error', `[cron] reset failed elapsed=${elapsed}ms err=${e?.message || e}`);
+    await logEvent(env, 'error', `[cron] reset failed elapsed=${elapsed}ms err=${msg}`);
     ctx.waitUntil(
       logEvent(
         env,
         'error',
         '[cron] reset failed',
-        { elapsed_ms: elapsed, err: e?.message || String(e) },
+        { elapsed_ms: elapsed, err: msg },
         'scheduler'
       ).catch(() => {})
     );

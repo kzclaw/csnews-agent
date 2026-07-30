@@ -36,11 +36,12 @@ export async function runEventProcess(env: Env): Promise<{
   let entities: EntityFinalized[] = [];
   try {
     entities = await loadReviewedCandidates(env);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[event-process] loadReviewedCandidates failed: ${e?.message || e}`,
+      `[event-process] loadReviewedCandidates failed: ${msg}`,
       undefined,
       'event'
     );
@@ -103,11 +104,12 @@ export async function runEventProcess(env: Env): Promise<{
       errors: 0,
       stage_transitions: stageTransitions,
     };
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     await logEvent(
       env,
       'error',
-      `[event-process] R2 put failed: ${e?.message || e}`,
+      `[event-process] R2 put failed: ${msg}`,
       undefined,
       'event'
     );
