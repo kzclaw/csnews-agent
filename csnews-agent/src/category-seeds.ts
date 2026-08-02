@@ -15,6 +15,47 @@ import { Env } from './shared';
 export const CATEGORY_SEEDS_R2_KEY = 'category-seeds.json';
 
 /**
+ * v0.37.88: 每类样板词上限 (满了顶最旧)
+ */
+export const CATEGORY_SEED_MAX = 20;
+
+/**
+ * v0.37.88: 摘要提炼去废话词 (0 成本规则 · 不用 LLM)
+ * 按标点切段 → 去停用词 → 留最长核心段 → 截断
+ */
+const STOPWORD_RE = /(的|了|是|在|与|和|及|或|等|表示|报道|称|记者|消息|今日|昨天|近日|今天|昨日|已经|正在|将|会|能|要|被|把|给|对|从|于|中|上|下|为|向|以|这|那|该|此|也|还|都|就|又|而|但|并|其|随着|通过|由于|因为|所以|目前|日前|此前|今日)/g;
+
+/**
+ * v0.37.88: 学正例 — 从标题 + 摘要提炼样板词
+ * 规则: 标题原文 (最多 1 条) + 摘要按标点切段 → 去停用词 → 去重/去标题重复 → 截断 (最多 3 条)
+ * 兜底: 摘要提炼失败只返回标题
+ */
+export function extractSeedKeywords(title: string, summary?: string | null): string[] {
+  const out: string[] = [];
+  const t = (title || '').trim();
+  if (t) out.push(t.slice(0, 60));
+  const s = (summary || '').trim();
+  if (!s) return out;
+  const segments = s
+    .split(/[。！？；，,、\s\n]+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length >= 4);
+  const seen = new Set(out);
+  for (const seg of segments) {
+    const cleaned = seg.replace(STOPWORD_RE, '').trim();
+    if (cleaned.length < 4) continue;
+    const final = cleaned.slice(0, 30);
+    if (seen.has(final)) continue;
+    // 跟标题重叠太多视为废话 (标题已作 seed)
+    if (t.includes(final) || final.includes(t.slice(0, 12))) continue;
+    out.push(final);
+    seen.add(final);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
  * 默认 10 类 × 5 代表词 = 50 seeds fallback
  * (18:43 确定 0 硬编码 = R2 持久化是主路径, 这是 R2 不存在时的 fallback)
  * (5h 配额期外 review R2 增删 seeds 即可生效, 0 维护成本)
@@ -68,6 +109,7 @@ export async function saveCategorySeeds(env: Env, data: CategorySeedsData): Prom
 /**
  * review: 分类错 → 加 seed 到正确类别
  * (18:43 确定 #3 自进化闭环)
+ * v0.37.88: 每类上限 CATEGORY_SEED_MAX (满了顶最旧) + 去重已有
  */
 export async function addSeedToCategory(
   env: Env,
@@ -79,6 +121,10 @@ export async function addSeedToCategory(
     data.categories[category] = [];
   }
   if (!data.categories[category].includes(seed)) {
+    // v0.37.88: 满顶最旧 (FIFO)
+    if (data.categories[category].length >= CATEGORY_SEED_MAX) {
+      data.categories[category].shift();
+    }
     data.categories[category].push(seed);
     data.updated_count++;
   }

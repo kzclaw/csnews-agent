@@ -1335,6 +1335,14 @@ body::before {
 }
 .entity-type-select:focus { border-color: var(--info); }
 
+/* v0.37.88: 新闻卡片改标签下拉 */
+.category-reclassify-select {
+  font-family: var(--font-mono); font-size: 11px; height: 24px; padding: 0 4px;
+  background: var(--bg-1); border: 1px solid var(--hairline-strong); border-radius: 3px;
+  color: var(--text-2); outline: none; cursor: pointer; margin-left: 6px;
+}
+.category-reclassify-select:focus { border-color: var(--info); }
+
 /* noise anchor chip */
 .noise-anchor-chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -3171,6 +3179,25 @@ function isEntityLoading(id) {
   return STATE.entityReviewLoading && STATE.entityReviewLoading.has(id);
 }
 
+// v0.37.88: 新闻改标签 — ?action=classify&type=reclassify&id=X&category=Y
+async function doReclassifyCategory(id, newCategory) {
+  if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
+  try {
+    const result = await apiGet('/', {
+      action: 'classify',
+      type: 'reclassify',
+      id,
+      category: newCategory,
+    });
+    const n = (result.learned_seeds || []).length;
+    toast(\`改标签成功: → \${newCategory} (学到 \${n} 个样板词)\`, 'success');
+    return result;
+  } catch (e) {
+    toast(\`改标签失败: \${e.message}\`, 'error');
+    return null;
+  }
+}
+
 function renderEntityReview() {
   const c = document.getElementById('pane-entity-review');
   if (!c) return;
@@ -3611,6 +3638,8 @@ function renderFeed() {
 }
 
 function renderCardList(items) {
+  // v0.37.88: 改标签下拉选项 (与 category-seeds.ts DEFAULT_CATEGORY_SEEDS 10 类一致)
+  const CATEGORY_OPTIONS = ['科技', '财经', '国际', '社会', '娱乐', '体育', '房产', '汽车', '消费', '法律'];
   return items.map((it, idx) => {
     const level = it.level || 'follow';
     const levelLabel = { explosive: '爆炸', important: '重要', follow: '关注' }[level] || level;
@@ -3622,13 +3651,23 @@ function renderCardList(items) {
     const source = escapeHtml(it.source || '');
     const url = escapeHtml(it.url || '');
     const published = fmtTimeZh(it.published_at || it.created_at);
+    // v0.37.88: 下拉选项 — 当前分类不在标准 10 类(如 综合) 则动态补一项, 保持可回退
+    const options = CATEGORY_OPTIONS.includes(it.category)
+      ? CATEGORY_OPTIONS
+      : [it.category, ...CATEGORY_OPTIONS].filter(Boolean);
+    const reclassifySelect = category
+      ? \`<select class="category-reclassify-select" data-id="\${escapeHtml(it.id)}" title="改标签: 改分类 + 学正例(0 成本)">\` +
+        \`<option value="">改标签</option>\` +
+        options.map(c => \`<option value="\${escapeHtml(c)}">\${escapeHtml(c)}</option>\`).join('') +
+        \`</select>\`
+      : '';
     return \`
       <article class="card \${isExpanded ? 'expanded' : ''}" data-idx="\${idx}" data-id="\${escapeHtml(it.id)}">
         <div class="card-body">
           <div class="card-meta">
             <span class="meta-source">\${source}</span>
             <span class="badge badge-\${level}">\${levelLabel}</span>
-            \${category ? \`<span class="badge badge-category">\${category}</span>\` : ''}
+            \${category ? \`<span class="badge badge-category">\${category}</span>\${reclassifySelect}\` : ''}
             <span class="meta-dot"></span>
             <span class="meta-time">\${published}</span>
           </div>
@@ -3666,6 +3705,22 @@ function bindCardClicks() {
         e.stopPropagation();
         const item = STATE.items.find(x => x.id === id);
         if (item && item.url) openReaderFloat(id, item.url, item.title);
+      });
+    }
+    // v0.37.88: 改标签下拉 — change 触发 reclassify (改分类 + 学正例)
+    const reclassifySel = card.querySelector('.category-reclassify-select');
+    if (reclassifySel) {
+      reclassifySel.addEventListener('click', e => e.stopPropagation());
+      reclassifySel.addEventListener('change', async e => {
+        const newCategory = e.target.value;
+        if (!newCategory) return;
+        e.target.value = ''; // reset to placeholder, 防误重复触发
+        const ok = await doReclassifyCategory(id, newCategory);
+        if (ok) {
+          const item = STATE.items.find(x => x.id === id);
+          if (item) item.category = newCategory;
+          renderFeed();
+        }
       });
     }
   });

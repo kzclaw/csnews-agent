@@ -11,13 +11,18 @@
 //   - 错误处理: catch → JSON { error: e.message }, status 500
 // ============================================================
 
-import { Env, getSupabaseHost, jsonResponse } from './shared';
+import { Env, getSupabaseHost, jsonResponse, supabaseFetch, safeJson } from './shared';
 import { NewsItem } from './types';
 import { supabaseHeaders } from './utils';
 import { handlePull } from './pull';
 import { classify, classifyRule } from './classify';
 import { classifyBySemantic, batchClassifyBySemantic } from './category-classify';
-import { loadCategorySeeds, addSeedToCategory, removeSeedFromCategory } from './category-seeds';
+import {
+  loadCategorySeeds,
+  addSeedToCategory,
+  removeSeedFromCategory,
+  extractSeedKeywords,
+} from './category-seeds';
 import { scoreRule, AI_ROUTE_R_THRESHOLD } from './score';
 import { insertNewsHotspot } from './news-process';
 import { extractText, maybeFissionReport } from './utils';
@@ -263,10 +268,114 @@ export async function handleClassifyAction(
     );
   }
 
+  // v0.37.88: reclassify — 改已入库新闻分类 (当场生效) + 学正例 + 删反例 + 记日志
+  if (type === 'reclassify') {
+    const id = url.searchParams.get('id');
+    const category = url.searchParams.get('category');
+    if (!id || !category) {
+      return jsonResponse({ error: 'missing id or category param' }, cors, { status: 400 });
+    }
+    try {
+      // 1. 读当前行 (拿 title/summary/旧分类)
+      const selRes = await supabaseFetch(
+        env,
+        `/rest/v1/news_hotspots?id=eq.${encodeURIComponent(id)}&select=id,title,summary,category`
+      );
+      if (!selRes.ok) {
+        const errText = await selRes.text();
+        return jsonResponse(
+          { error: 'supabase_select_failed', reason: errText.slice(0, 300) },
+          cors,
+          { status: 502 }
+        );
+      }
+      const rows = (await safeJson(selRes)) as Array<{
+        id: string;
+        title: string | null;
+        summary?: string | null;
+        category: string | null;
+      }> | null;
+      const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+      if (!row) {
+        return jsonResponse({ error: 'news_not_found', reason: `id ${id} 不存在` }, cors, {
+          status: 404,
+        });
+      }
+      const oldCategory = row.category || '';
+
+      // 2. PATCH 改分类 (当场生效)
+      const patchRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ category }),
+      });
+      if (!patchRes.ok) {
+        const errText = await patchRes.text();
+        return jsonResponse(
+          { error: 'supabase_patch_failed', reason: errText.slice(0, 300) },
+          cors,
+          { status: 502 }
+        );
+      }
+
+      // 3. 学正例: 标题原文 + 摘要关键词 (规则提炼 · 0 成本) → 正确类
+      const seeds = extractSeedKeywords(row.title || '', row.summary || '');
+      for (const seed of seeds) {
+        await addSeedToCategory(env, category, seed);
+      }
+      const learned = seeds.length;
+
+      // 4. 删反例: 从旧类精确匹配移除标题 (若在样板库中)
+      let removed = false;
+      if (oldCategory && oldCategory !== category) {
+        const oldData = await removeSeedFromCategory(env, oldCategory, row.title || '');
+        removed = oldData.categories[oldCategory]?.includes(row.title || '') === false;
+      }
+
+      // 5. 记日志 R2 category-review-log.json (追加)
+      const logKey = 'category-review-log.json';
+      let logEntries: unknown[] = [];
+      const logObj = await env.csnews_raw.get(logKey);
+      if (logObj) {
+        const existing = await logObj.json<{ entries?: unknown[] }>().catch(() => null);
+        if (existing && Array.isArray(existing.entries)) logEntries = existing.entries;
+      }
+      logEntries.push({
+        ts: new Date().toISOString(),
+        id,
+        title: row.title || '',
+        from: oldCategory || '',
+        to: category,
+        seeds,
+        removed_counter_example: removed,
+      });
+      // 日志只保留最近 200 条, 防无限膨胀
+      if (logEntries.length > 200) logEntries = logEntries.slice(-200);
+      await env.csnews_raw.put(logKey, JSON.stringify({ entries: logEntries }, null, 2));
+
+      return jsonResponse(
+        {
+          type: 'reclassify',
+          description: '改已入库分类 + 学正例/删反例/记日志 (v0.37.88)',
+          id,
+          from: oldCategory || '',
+          to: category,
+          learned_seeds: seeds,
+          removed_counter_example: removed,
+          updated_at: new Date().toISOString(),
+        },
+        cors
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return jsonResponse({ error: 'reclassify_failed', reason: msg }, cors, { status: 500 });
+    }
+  }
+
   return jsonResponse(
     {
       error: 'invalid_type',
-      reason: `type 必须是 classify|seeds|add-seed|remove-seed|review 五选一, 当前 ${type}`,
+      reason: `type 必须是 classify|seeds|add-seed|remove-seed|review|reclassify 六选一, 当前 ${type}`,
     },
     cors,
     { status: 400 }
