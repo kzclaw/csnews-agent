@@ -18,14 +18,14 @@
 import { Env } from './shared';
 import { supabaseFetch, safeJson } from './shared';
 import { loadNoiseAnchors, filterNoiseCandidates, cosineSimilarity } from './entity-noise-filter';
-import type { NewsHotspotRow, BgeEmbeddingResponse } from './types';
+import type { NewsHotspotRow, BgeEmbeddingResponse, EntityType } from './types';
 import { logEvent } from './log';
 import { recordAiCall, computeNeurons } from './ai-budget';
 
 export interface EntityCandidate {
   uuid: string;
   name: string;
-  type: 'person' | 'org' | 'place';
+  type: EntityType;
   frequency: number;
   sample_context: string;
   confidence: number;
@@ -82,16 +82,24 @@ function mergeNgramFrequency(freqs: Map<string, number>[]): Map<string, number> 
 }
 
 /**
- * 启发式 type 推断 (16:28 确定 0 硬编码 · 启发式 OK)
- * 含常见组织关键词 → org
- * 含常见地名关键词 → place
- * 其他 → person
+ * 启发式 type 推断 (16:28 确定 0 硬编码 · 启发式 OK · v0.37.87 扩展 time/concept)
+ *
+ * 判定顺序（v0.37.87 拍板）:
+ *   1. time: 含数字 + 月/日/年 → 时间片段（"8月" "1日" "6月15日"）
+ *   2. org: 含常见组织关键词 → 机构
+ *   3. place: 含常见地名关键词 → 地名
+ *   4. concept: 兜底（修复 v0.37.87 前"全部归 person"污染 · 人名靠 review reclassify 纠偏）
  */
-function inferEntityType(gram: string): 'person' | 'org' | 'place' {
+function inferEntityType(gram: string): EntityType {
+  // 1. time: 数字 + 时间单位（n-gram 拆出的日期片段 · "8月" "月1" "6月15" "8月1日"）
+  if (/[0-9一二三四五六七八九十]/.test(gram) && /月|日|年/.test(gram)) return 'time';
+  // 2. org
   if (/公司|集团|科技|AI|银行|学院|大学|社|局|部|委|所|院|校|厂|店|行|司|署/.test(gram))
     return 'org';
+  // 3. place
   if (/省|市|国|区|县|州|镇|村|路|街|岛|海|河|山|湖|港|城|都|府/.test(gram)) return 'place';
-  return 'person';
+  // 4. concept (兜底)
+  return 'concept';
 }
 
 /**

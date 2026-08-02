@@ -19,13 +19,14 @@ import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
 import { ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
+import type { EntityType } from './types';
 
 export const ENTITY_FINALIZED_R2_KEY = 'entity-finalized.json';
 
 export interface EntityFinalized {
   uuid: string;
   name: string;
-  type: 'person' | 'org' | 'place';
+  type: EntityType;
   confidence: number;
   source: 'selflearn' | 'review';
   first_seen: string;

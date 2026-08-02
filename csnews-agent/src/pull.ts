@@ -23,7 +23,7 @@ import {
   setNegativeSentinel,
   clearNegativeSentinel,
 } from './cache';
-import type { PullTopicRow } from './types';
+import type { PullTopicRow, EntityType } from './types';
 
 // ====== Type 白名单配置(v0.31) ======
 
@@ -617,7 +617,7 @@ const ENTITY_R2_KEY = 'entity-finalized.json';
 interface EntityR2Item {
   uuid: string;
   name: string;
-  type: 'person' | 'org' | 'place';
+  type: EntityType;
   confidence: number;
   source: 'selflearn' | 'review';
   first_seen: string;

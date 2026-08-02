@@ -1319,6 +1319,22 @@ body::before {
 .entity-card-actions .btn.info-btn { border-color: var(--info); color: var(--info); }
 .entity-card-actions .btn.info-btn:hover { background: var(--info-bg); }
 
+/* v0.37.87: entity type badge 配色 (person 蓝 / org 黄 / place 绿 / time 紫 / concept 灰) */
+.entity-card-badge.badge-type-person { background: var(--info-bg); border-color: var(--info); color: var(--info); }
+.entity-card-badge.badge-type-org { background: var(--gold-bg); border-color: var(--gold); color: var(--gold); }
+.entity-card-badge.badge-type-place { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+.entity-card-badge.badge-type-time { background: rgba(167, 139, 250, 0.10); border-color: #a78bfa; color: #a78bfa; }
+.entity-card-badge.badge-type-concept { background: var(--bg-2); border-color: var(--hairline-strong); color: var(--text-2); }
+.entity-card-badge.badge-type-unknown { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
+
+/* v0.37.87: reclassify 分类下拉 */
+.entity-type-select {
+  font-family: var(--font-mono); font-size: 11px; height: 26px; padding: 2px 6px;
+  background: var(--bg-1); border: 1px solid var(--hairline-strong); border-radius: 3px;
+  color: var(--text-2); outline: none;
+}
+.entity-type-select:focus { border-color: var(--info); }
+
 /* noise anchor chip */
 .noise-anchor-chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -2252,6 +2268,11 @@ const ENDPOINTS = [
     params: [] },
   { name: 'Entity Noise', action: 'entity', type: 'noise', group: 'daily', method: 'GET', desc: '噪音实体列表',
     params: [] },
+  { name: 'Entity Reclassify', action: 'entity', type: 'reclassify', group: 'daily', method: 'GET', desc: '手动改实体分类 (name + newType)',
+    params: [
+      { key: 'name', label: 'name', type: 'text', default: '' },
+      { key: 'newType', label: 'newType', type: 'select', options: ['person', 'org', 'place', 'time', 'concept'], default: 'concept' },
+    ] },
   // event sub-actions
   { name: 'Event Clusters', action: 'event', type: 'clusters', group: 'daily', method: 'GET', desc: 'Adaptive Jaccard cluster 列表',
     params: [{ key: 'limit', label: 'limit', type: 'number', default: '20' }] },
@@ -3115,15 +3136,17 @@ async function fetchEntityReviewNoiseAnchors() {
   return apiGet('/', { action: 'entity', type: 'noise-anchors' });
 }
 
-async function doEntityAction(type, name) {
+async function doEntityAction(type, name, extra = {}) {
   if (!isConfigured()) { toast('请先配置 Worker URL 和 Token', 'error'); return null; }
   STATE.entityReviewLoading = STATE.entityReviewLoading || new Set();
   STATE.entityReviewLoading.add(name);
   renderEntityReview();
   try {
     // worker 端 ?action=entity&type=... 期望 ?name=xxx 参数 (R2 entity-candidates.json 是 name-keyed, 没有 uuid 字段)
-    const result = await apiGet('/', { action: 'entity', type, ...(name ? { name } : {}) });
-    toast(\`\${type} 成功\`, 'success');
+    // v0.37.87: extra 透传 reclassify 的 newType
+    const result = await apiGet('/', { action: 'entity', type, ...(name ? { name } : {}), ...extra });
+    const suffix = extra.newType ? \` → \${extra.newType}\` : '';
+    toast(\`\${type}\${suffix} 成功\`, 'success');
     return result;
   } catch (e) {
     toast(\`\${type} 失败: \${e.message}\`, 'error');
@@ -3209,12 +3232,15 @@ function renderEntityReview() {
       const conf = entity.confidence != null ? \`\${(entity.confidence * 100).toFixed(0)}%\` : '—';
       const freq = entity.frequency != null ? entity.frequency : '—';
       const firstSeen = entity.first_seen ? fmtTime(entity.first_seen) : '—';
+      // v0.37.87: type badge 配色 + 改分类下拉 (reclassify)
+      const typeVal = entity.type || 'unknown';
+      const typeCls = 'badge-type-' + typeVal;
       html += \`
       <div class="entity-card">
         <div class="entity-card-header">
           <div class="entity-card-name">\${escapeHtml(entity.name)}</div>
           \${isNoise ? '<span class="entity-card-badge">噪音</span>' : ''}
-          <span class="entity-card-badge">\${escapeHtml(entity.type || 'unknown')}</span>
+          <span class="entity-card-badge \${typeCls}">\${escapeHtml(typeVal)}</span>
         </div>
         <div class="entity-card-meta">
           <span>conf: \${conf}</span>
@@ -3234,6 +3260,16 @@ function renderEntityReview() {
           </button>
           <button class="btn info-btn" data-action="noise-remove" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="删噪音词：移除噪音标记，恢复为正常候选">
             ➖ 删噪音词
+          </button>
+          <select class="entity-type-select" data-id="\${escapeHtml(entity.name)}" data-current="\${escapeHtml(typeVal)}" title="手动改分类（如 8月 应归 time）">
+            <option value="person">person</option>
+            <option value="org">org</option>
+            <option value="place">place</option>
+            <option value="time">time</option>
+            <option value="concept">concept</option>
+          </select>
+          <button class="btn info-btn" data-action="reclassify" data-id="\${escapeHtml(entity.name)}" \${loading ? 'disabled' : ''} title="改分类：手动纠正实体类型（reclassify）">
+            🏷 改分类
           </button>
         </div>
       </div>\`;
@@ -3269,12 +3305,33 @@ function renderEntityReview() {
   html += \`</div>\`; // end entity-review-wrap
   c.innerHTML = html;
 
+  // v0.37.87: 初始化分类下拉 (选中当前 type · 老数据 type 不在 5 选项内则动态补 option)
+  const selectMap = new Map();
+  c.querySelectorAll('.entity-type-select').forEach(sel => {
+    const cur = sel.dataset.current;
+    if (cur && ![...sel.options].some(o => o.value === cur)) {
+      const opt = document.createElement('option');
+      opt.value = cur;
+      opt.textContent = cur;
+      sel.appendChild(opt);
+    }
+    if (cur) sel.value = cur;
+    selectMap.set(sel.dataset.id, sel);
+  });
+
   // Bind action buttons
   c.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       const name = btn.dataset.id;  // data-id 持有 entity name (worker API 期望 name 参数)
-      await doEntityAction(action, name);
+      if (action === 'reclassify') {
+        const sel = selectMap.get(name);
+        const newType = sel ? sel.value : '';
+        if (!newType) { toast('请选择分类', 'error'); return; }
+        await doEntityAction(action, name, { newType });
+      } else {
+        await doEntityAction(action, name);
+      }
     });
   });
 }

@@ -12,6 +12,7 @@
 // ============================================================
 
 import { Env, jsonResponse } from './shared';
+import type { EntityType } from './types';
 import { runEntitySelfLearn, ENTITY_CANDIDATES_R2_KEY } from './entity-selflearn';
 import { logEvent } from './log';
 import { runEntityProcess, ENTITY_FINALIZED_R2_KEY } from './entity-process';
@@ -33,7 +34,7 @@ const ENTITY_RATE_LIMIT_PER_MIN = 60;
 const EVENT_RATE_LIMIT_PER_MIN = 60;
 
 // ===================== entity (Entity Engine) =====================
-// 10 档 type:
+// 11 档 type:
 //   - candidates: 读 R2 entity-candidates.json
 //   - selflearn: 触发 runEntitySelfLearn (n-gram 频率 + bge-m3 相似度去重 + 启发式 type)
 //   - process: 触发 runEntityProcess (暂存 R2 entity-finalized.json)
@@ -44,6 +45,7 @@ const EVENT_RATE_LIMIT_PER_MIN = 60;
 //   - reject: review 拒绝 entity → 触发 event re-clustering
 //   - noise-add: review 标记为 noise → 触发 event re-clustering
 //   - noise-remove: review 取消 noise 标记 → 触发 event re-clustering
+//   - reclassify: review 手动改实体 type (person/org/place/time/concept) → 触发 event re-clustering
 // ===================== entity review actions (auto re-clustering) =====================
 const triggerEventRecluster = async (env: Env): Promise<void> => {
   try {
@@ -230,12 +232,13 @@ export async function handleEntityAction(
     'reject',
     'noise-add',
     'noise-remove',
+    'reclassify',
   ];
   if (!validTypes.includes(type)) {
     return jsonResponse(
       {
         error: 'invalid_type',
-        reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise|approve|reject|noise-add|noise-remove 十选一, 当前 ${type}`,
+        reason: `type 必须是 candidates|selflearn|process|finalized|noise-anchors|noise|approve|reject|noise-add|noise-remove|reclassify 十一选一, 当前 ${type}`,
       },
       cors,
       { status: 400 }
@@ -501,6 +504,50 @@ export async function handleEntityAction(
       },
       cors
     );
+  }
+
+  // v0.37.87: 手动改实体 type (纠正 inferEntityType 误判, 如 "8月" 误归 person → 改 time)
+  // 复用 applyEntityReviewMutation (findMode either: candidates / noise 都能改)
+  // noise 中的实体改 type 后移回 candidates (用户手动改分类 = 认为该实体有价值, 不该留在噪音区)
+  if (type === 'reclassify') {
+    const newType = url.searchParams.get('newType');
+    const validNewTypes: EntityType[] = ['person', 'org', 'place', 'time', 'concept'];
+    if (!newType || !(validNewTypes as string[]).includes(newType)) {
+      return jsonResponse(
+        {
+          error: 'invalid_type',
+          reason: `newType 必须是 person|org|place|time|concept 五选一, 当前 ${newType || '(空)'}`,
+        },
+        cors,
+        { status: 400 }
+      );
+    }
+    return applyEntityReviewMutation(env, entityName, cors, {
+      findMode: 'either',
+      mutate: (json) => {
+        const inCandidates = json.candidates?.findIndex((e: any) => e.name === entityName) ?? -1;
+        const inNoise = json.noise?.findIndex((e: any) => e.name === entityName) ?? -1;
+        const reclassifyOne = (e: any) => ({
+          ...e,
+          type: newType,
+          last_seen: new Date().toISOString(),
+        });
+        return {
+          candidates:
+            inCandidates >= 0
+              ? json.candidates.map((e: any, i: number) =>
+                  i === inCandidates ? reclassifyOne(e) : e
+                )
+              : inNoise >= 0 && json.noise
+                ? [...(json.candidates || []), reclassifyOne(json.noise[inNoise])]
+                : json.candidates || [],
+          noise: inNoise >= 0 ? json.noise?.filter((_: any, i: number) => i !== inNoise) : json.noise,
+        };
+      },
+      errorIfNotFound: `实体 "${entityName}" 不存在`,
+      successType: 'reclassify',
+      successDescription: `review 手动改实体 type 为 ${newType} → 触发 event re-clustering`,
+    });
   }
 
   return jsonResponse({ error: 'internal_error' }, cors, { status: 500 });

@@ -42,15 +42,8 @@ const NOISE_ANCHORS_DEFAULT: string[] = [
   // 2 数字片段
   '0元',
   '0万',
-  // 1 日期片段 cluster-0-8 拆解
-  '6月',
-  '月1',
-  '5日',
-  '15日',
-  '月15',
-  '月15日',
-  '6月15',
-  '6月1',
+  // v0.37.87: 日期片段 noise anchors 移除（"6月" "月1" "5日"... 现在由 inferEntityType 归 time 类，
+  // 不再需要靠噪音锚库过滤。保留日期锚会误伤 time 实体入池。）
 ];
 
 interface NoiseAnchorsData {
