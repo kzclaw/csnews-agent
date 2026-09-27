@@ -6,6 +6,10 @@ compatibility_date = "2026-05-29"
 # 职责：每 6 小时扫描 explosive+score=9 的 topic，执行裂变流程
 # 架构：monorepo 子目录，与主 Worker 独立部署
 
+# Worker 版本号（?action=health 回传 worker_version · 由 .husky/pre-commit 自动 bump）
+[vars]
+WORKER_VERSION = "v0.37.89"
+
 # Workers AI（用于 LLM 生成搜索词 + 报告生成）
 [ai]
 binding = "AI"

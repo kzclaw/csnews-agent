@@ -55,6 +55,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
       worker: 'csnews-fission',
       action: 'health',
       timestamp: new Date().toISOString(),
+      worker_version: env.WORKER_VERSION || 'unknown',
     });
   }
 

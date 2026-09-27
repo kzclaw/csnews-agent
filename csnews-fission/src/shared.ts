@@ -26,6 +26,10 @@ export interface Env {
    * 异 步 Tavily pipeline · 不 受 主 worker 50 subrequest limit 限 制
    */
   CSNEWS_AGENT?: Fetcher;
+  /**
+   * Worker 版本号（?action=health 回传 worker_version · wrangler.toml [vars] 注入）
+   */
+  WORKER_VERSION?: string;
 }
 
 export function getSupabaseHost(env: Env): string {
