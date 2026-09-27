@@ -9,7 +9,6 @@ export default defineConfig({
     testTimeout: 60000,
     // 限制并发 worker 数压低内存峰值（macOS compressor 压力下 18 文件全并发会假超时）
     maxWorkers: 2,
-    minWorkers: 1,
     include: ['validate/**/*.contract.ts'],
     coverage: {
       provider: 'v8',
