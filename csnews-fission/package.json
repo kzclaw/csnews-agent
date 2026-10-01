@@ -5,7 +5,6 @@
   "description": "CSNEWS Fission Worker — topic explosive fission trigger",
   "main": "src/index.ts",
   "scripts": {
-    "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "validate": "vitest run",
     "typecheck": "tsc --noEmit",
