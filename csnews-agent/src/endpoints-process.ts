@@ -3,9 +3,9 @@
 // ============================================================
 
 import { Env, jsonResponse } from './shared';
-  import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
-  import { scoreTitle, classifyTitle } from './process-ai';
-  import { mapNewsScoreToDelta } from './topic-delta';
+import { fetchZakerHot, embedTitle, findSimilarForEmbedding } from './process-vector';
+import { scoreTitle, classifyTitle } from './process-ai';
+import { mapNewsScoreToDelta } from './topic-delta';
 import {
   createTopicForTitle,
   updateTopicScoreByIdWithDelta,
@@ -162,7 +162,12 @@ export async function handleProcessAction(
     // 触发 条件: topic 的 fission 标志位为 true (RPC update_topic_score 已判定 score=9+explosive)
     // v0.37.79: 移除旧 score>=threshold 自检 (RPC 已重置 score=0, 旧条件永远不满足; 且对首次升 explosive 的 topic 误触发)
     // 失败 fallback: 6h cron 兜底 (决策 2)
-    let fissionTriggerResult: { ok: boolean; status?: number; reason?: string; topic_count?: number } = {
+    let fissionTriggerResult: {
+      ok: boolean;
+      status?: number;
+      reason?: string;
+      topic_count?: number;
+    } = {
       ok: false,
       reason: 'no_triggerable_topic',
     };
@@ -175,20 +180,30 @@ export async function handleProcessAction(
         fissionTriggerResult = {
           ok: r.ok,
           status: r.status,
-          reason: r.ok ? 'triggered' : (r.error || r.reason || 'unknown'),
+          reason: r.ok ? 'triggered' : r.error || r.reason || 'unknown',
           topic_count: triggerableTopics.length,
         };
       } else if (triggerableTopics.length === 0) {
         fissionTriggerResult = { ok: true, reason: 'no_explosive_topics', topic_count: 0 };
       } else {
-        fissionTriggerResult = { ok: false, reason: 'FISSION_binding_missing', topic_count: triggerableTopics.length };
+        fissionTriggerResult = {
+          ok: false,
+          reason: 'FISSION_binding_missing',
+          topic_count: triggerableTopics.length,
+        };
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       // 决策 2: 失败 fallback → 6h cron 兜底 (不 propagate error to user)
       fissionTriggerResult = { ok: false, reason: msg };
       try {
-        await logEvent(env, 'error', `[fission-trigger] post-process failed: ${msg}`, undefined, 'process');
+        await logEvent(
+          env,
+          'error',
+          `[fission-trigger] post-process failed: ${msg}`,
+          undefined,
+          'process'
+        );
       } catch {
         // ignore logging error
       }
@@ -206,7 +221,13 @@ export async function handleProcessAction(
       elapsed_ms: number;
       reason: string;
     } = {
-      ok: false, fetched: 0, inserted: 0, skipped_duplicates: 0, errors: [], elapsed_ms: 0, reason: 'not_called',
+      ok: false,
+      fetched: 0,
+      inserted: 0,
+      skipped_duplicates: 0,
+      errors: [],
+      elapsed_ms: 0,
+      reason: 'not_called',
     };
     // v0.37.51: Tavily inline trigger broken against 50-subrequest budget once
     // pipeline started returning real results (Bearer auth fix unlocked it).
@@ -246,7 +267,13 @@ export async function handleProcessAction(
           reason: `kv_put_failed: ${msg}`,
         };
         try {
-          await logEvent(env, 'error', `[tavily-trigger] KV flag put failed: ${msg}`, undefined, 'process');
+          await logEvent(
+            env,
+            'error',
+            `[tavily-trigger] KV flag put failed: ${msg}`,
+            undefined,
+            'process'
+          );
         } catch {
           // ignore logging error
         }
@@ -326,10 +353,7 @@ export async function handleTavilyAction(
   const directQuery = url.searchParams.get('query');
   if (directQuery) {
     const apiKey = env.TAVILY_API_KEY;
-    const max = Math.max(
-      1,
-      Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10)
-    );
+    const max = Math.max(1, Math.min(parseInt(url.searchParams.get('max') || '5', 10), 10));
     const results = await fetchTavilyNews(env, apiKey, directQuery, max);
     return jsonResponse(
       {

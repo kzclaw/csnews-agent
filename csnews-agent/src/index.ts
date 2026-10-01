@@ -508,7 +508,6 @@ export default {
       });
     }
 
-
     if (action === 'diag') {
       const results = [];
 

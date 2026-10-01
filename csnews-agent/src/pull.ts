@@ -647,13 +647,7 @@ async function queryEntity(
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[pull:entity] R2 read failed: ${msg}`,
-      undefined,
-      'pull'
-    );
+    await logEvent(env, 'error', `[pull:entity] R2 read failed: ${msg}`, undefined, 'pull');
   }
 
   let items = (raw?.entities || []) as EntityR2Item[];

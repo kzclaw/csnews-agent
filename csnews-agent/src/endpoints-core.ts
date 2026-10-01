@@ -304,11 +304,15 @@ export async function handleClassifyAction(
       const oldCategory = row.category || '';
 
       // 2. PATCH 改分类 (当场生效)
-      const patchRes = await supabaseFetch(env, `/rest/v1/news_hotspots?id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ category }),
-      });
+      const patchRes = await supabaseFetch(
+        env,
+        `/rest/v1/news_hotspots?id=eq.${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=representation' },
+          body: JSON.stringify({ category }),
+        }
+      );
       if (!patchRes.ok) {
         const errText = await patchRes.text();
         return jsonResponse(

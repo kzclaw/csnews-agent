@@ -210,13 +210,18 @@ function buildArticleHtml(
  * Removes event handler attributes (on*) and javascript: URLs in links.
  */
 function sanitizeHtml(html: string): string {
-  return html
-    // Remove event handler attributes (onerror, onclick, onload, etc.)
-    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    // Remove javascript: URLs in href/src attributes
-    .replace(/(href|src)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, '$1=""')
-    // Remove <base> tags (can redirect relative URLs)
-    .replace(/<base\b[^>]*>/gi, '');
+  return (
+    html
+      // Remove event handler attributes (onerror, onclick, onload, etc.)
+      .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      // Remove javascript: URLs in href/src attributes
+      .replace(
+        /(href|src)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi,
+        '$1=""'
+      )
+      // Remove <base> tags (can redirect relative URLs)
+      .replace(/<base\b[^>]*>/gi, '')
+  );
 }
 
 function escapeHtmlAttr(s: string): string {

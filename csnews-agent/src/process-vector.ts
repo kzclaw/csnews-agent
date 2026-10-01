@@ -41,9 +41,7 @@ export async function fetchZakerHot(): Promise<ZakerArticle[]> {
  * Returns empty array on failure — callers must handle gracefully.
  */
 export async function embedTitle(env: Env, title: string, summary?: string): Promise<number[]> {
-  const combined = summary && summary.trim().length > 0
-    ? `${title} ${summary.trim()}`
-    : title;
+  const combined = summary && summary.trim().length > 0 ? `${title} ${summary.trim()}` : title;
   try {
     const embResp = (await env.AI.run('@cf/baai/bge-m3', {
       text: [combined],

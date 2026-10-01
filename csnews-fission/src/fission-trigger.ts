@@ -414,11 +414,9 @@ async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
     if (members.length === 0) return [];
 
     // Step 2: fetch news titles by IDs
-    const newsIds = members.map(m => m.news_id).join(',');
+    const newsIds = members.map((m) => m.news_id).join(',');
     const r2 = await fetch(
-      `${supabaseUrl}/rest/v1/news_hotspots` +
-        `?id=in.(${newsIds})` +
-        `&select=title&limit=3`,
+      `${supabaseUrl}/rest/v1/news_hotspots` + `?id=in.(${newsIds})` + `&select=title&limit=3`,
       {
         headers: {
           ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
@@ -429,7 +427,7 @@ async function fetchRelatedNews(env: Env, topicId: string): Promise<string[]> {
 
     if (!r2.ok) return [];
     const news = (await r2.json()) as { title: string }[];
-    return (news || []).map(n => n.title).filter(Boolean);
+    return (news || []).map((n) => n.title).filter(Boolean);
   } catch {
     return [];
   }

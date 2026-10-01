@@ -87,13 +87,7 @@ export async function runEntityProcess(
     );
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[entity-process] R2 put failed: ${msg}`,
-      undefined,
-      'entity'
-    );
+    await logEvent(env, 'error', `[entity-process] R2 put failed: ${msg}`, undefined, 'entity');
     return { written: 0, errors: 1, finalized: 0 };
   }
 

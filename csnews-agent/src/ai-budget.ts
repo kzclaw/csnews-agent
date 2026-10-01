@@ -104,9 +104,10 @@ export function computeNeurons(
     const inputTokens = options.usage.prompt_tokens ?? 0;
     const outputTokens = options.usage.completion_tokens ?? 0;
     const inputNeurons = (inputTokens * rate.inputPerMTokens) / 1_000_000;
-    const outputNeurons = outputTokens > 0 && rate.outputPerMTokens
-      ? (outputTokens * rate.outputPerMTokens) / 1_000_000
-      : 0;
+    const outputNeurons =
+      outputTokens > 0 && rate.outputPerMTokens
+        ? (outputTokens * rate.outputPerMTokens) / 1_000_000
+        : 0;
     // Math.ceil + 下限 1（0 neurons 的记录无意义）
     return Math.ceil(Math.max(inputNeurons + outputNeurons, 1));
   }

@@ -46,7 +46,8 @@ export async function triggerFission(
 
   const seed = seedTopics.join(' | ');
   // v0.37.79 fix: 传 topic_ids 参数 (csnews-fission fission-manual 用其直接查 topic, 不再依赖 score=eq.9)
-  const topicIdsParam = topicIds && topicIds.length > 0 ? `&topic_ids=${encodeURIComponent(topicIds.join(','))}` : '';
+  const topicIdsParam =
+    topicIds && topicIds.length > 0 ? `&topic_ids=${encodeURIComponent(topicIds.join(','))}` : '';
   const url = `https://fission.local/?action=fission-manual&seed=${encodeURIComponent(seed)}&reason=${encodeURIComponent(reason)}${topicIdsParam}`;
   const request = new Request(url, {
     method: 'GET',
@@ -61,7 +62,13 @@ export async function triggerFission(
   try {
     // v0.37.80 fix: Service Binding fetch 需显式加 auth header
     if (!('FISSION' in env) || !(env as any).FISSION) {
-      await logEvent(env, 'warn', '[fission-trigger] FISSION binding not available, skipping', undefined, 'trigger');
+      await logEvent(
+        env,
+        'warn',
+        '[fission-trigger] FISSION binding not available, skipping',
+        undefined,
+        'trigger'
+      );
       return { ok: false, skipped: true, reason: 'FISSION binding not configured' };
     }
     const start = Date.now();
@@ -113,8 +120,6 @@ export async function triggerFissionFromTopics(
   const seeds = topics
     .map((t) => t.name || t.title || t.topic_key || '')
     .filter((s) => s.length > 0);
-  const topicIds = topics
-    .map((t) => t.topic_id || '')
-    .filter((id) => id.length > 0);
+  const topicIds = topics.map((t) => t.topic_id || '').filter((id) => id.length > 0);
   return triggerFission(env, seeds, reason, topicIds);
 }

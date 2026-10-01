@@ -619,13 +619,7 @@ export async function runKnowledgeAccumulation(
     return { written, errors };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[knowledge] accumulation job failed: ${msg}`,
-      undefined,
-      'trend'
-    );
+    await logEvent(env, 'error', `[knowledge] accumulation job failed: ${msg}`, undefined, 'trend');
     return { written, errors: errors + 1 };
   }
 }
@@ -901,13 +895,7 @@ export async function runKnowledgeGeneration(
     return { written, skipped, errors };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[knowledge-gen] job failed: ${msg}`,
-      undefined,
-      'trend'
-    );
+    await logEvent(env, 'error', `[knowledge-gen] job failed: ${msg}`, undefined, 'trend');
     return { written, skipped: 0, errors: errors + 1 };
   }
 }

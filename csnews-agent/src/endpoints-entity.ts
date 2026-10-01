@@ -541,7 +541,8 @@ export async function handleEntityAction(
               : inNoise >= 0 && json.noise
                 ? [...(json.candidates || []), reclassifyOne(json.noise[inNoise])]
                 : json.candidates || [],
-          noise: inNoise >= 0 ? json.noise?.filter((_: any, i: number) => i !== inNoise) : json.noise,
+          noise:
+            inNoise >= 0 ? json.noise?.filter((_: any, i: number) => i !== inNoise) : json.noise,
         };
       },
       errorIfNotFound: `实体 "${entityName}" 不存在`,

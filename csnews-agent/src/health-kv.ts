@@ -152,7 +152,10 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'PROCESS_STATE KV binding missing',
       };
-      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
+      return {
+        last_process_stored_reason: null,
+        checks: { last_process_stored_reason: checks.last_process_stored_reason },
+      };
     }
     const raw = await env.PROCESS_STATE.get('last_process_stored_reason');
     if (!raw) {
@@ -160,7 +163,10 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'no stored_reason snapshot yet (process not run since v0.37.16)',
       };
-      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
+      return {
+        last_process_stored_reason: null,
+        checks: { last_process_stored_reason: checks.last_process_stored_reason },
+      };
     }
     const parsed = JSON.parse(raw);
     const inner = parsed?.data?.last_process_stored_reason as LastProcessStoredReason | undefined;
@@ -169,7 +175,10 @@ export async function checkLastProcessStoredReason(env: Env): Promise<{
         status: 'unknown',
         detail: 'stored_reason snapshot unparseable',
       };
-      return { last_process_stored_reason: null, checks: { last_process_stored_reason: checks.last_process_stored_reason } };
+      return {
+        last_process_stored_reason: null,
+        checks: { last_process_stored_reason: checks.last_process_stored_reason },
+      };
     }
     lastProcessStoredReason = inner;
     // Status:

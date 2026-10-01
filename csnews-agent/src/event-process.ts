@@ -106,13 +106,7 @@ export async function runEventProcess(env: Env): Promise<{
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[event-process] R2 put failed: ${msg}`,
-      undefined,
-      'event'
-    );
+    await logEvent(env, 'error', `[event-process] R2 put failed: ${msg}`, undefined, 'event');
     return {
       clusters: result.clusters.length,
       threshold: result.threshold,

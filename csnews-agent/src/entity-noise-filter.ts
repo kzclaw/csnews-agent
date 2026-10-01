@@ -122,7 +122,9 @@ export function cosineSimilarity(a: number[], b: number[]): number {
  */
 export async function bgeM3BatchEmbedding(env: Env, texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as { data: number[][] } | null;
+  const result = (await env.AI.run('@cf/baai/bge-m3', { text: texts })) as {
+    data: number[][];
+  } | null;
   const neurons = computeNeurons('@cf/baai/bge-m3', { inputTexts: texts });
   await recordAiCall('@cf/baai/bge-m3', neurons, env);
   return result?.data || [];

@@ -106,7 +106,8 @@ export async function recordScoreAdjustment(
     old_value: history.current,
     new_value: newValue,
     review_type: review,
-    reason: reason || (review === 'threshold_too_low' ? 'explosive too rare' : 'explosive too common'),
+    reason:
+      reason || (review === 'threshold_too_low' ? 'explosive too rare' : 'explosive too common'),
   };
 
   const updated: ScoreThresholdHistory = {
@@ -134,7 +135,11 @@ export async function getCurrentScoreThreshold(env: Env): Promise<number> {
  * Supabase RPC 业务 阈值 (SQL 内部) 仍 是 9 · worker 端 加 一层 self-check 用于 触发 fission Service Binding
  * 保持 双 层 防御
  */
-export async function shouldTriggerFission(env: Env, level: string, score: number): Promise<boolean> {
+export async function shouldTriggerFission(
+  env: Env,
+  level: string,
+  score: number
+): Promise<boolean> {
   if (level !== 'explosive') return false;
   const threshold = await getCurrentScoreThreshold(env);
   return score >= threshold;

@@ -20,11 +20,7 @@
 import { Env, getSupabaseHost } from './shared';
 import { supabaseHeaders } from './utils';
 import { logEvent } from './log';
-import {
-  handleProcessAction,
-  runKnowledgeAccumulation,
-  runKnowledgeGeneration,
-} from './endpoints';
+import { handleProcessAction, runKnowledgeAccumulation, runKnowledgeGeneration } from './endpoints';
 import { runEntitySelfLearn } from './entity-selflearn';
 import { runEntityProcess } from './entity-process';
 import { runEventProcess } from './event-process';
@@ -90,7 +86,7 @@ export async function scheduledProcess(
     // v0.37.51: Tavily 已改为异步触发 (handleProcessAction 写 tavily_pending KV flag,
     // csnews-fission 6H cron 读 flag 后通过 Service Binding 调 ?action=tavily&max=1).
     // 此处不再 inline 调用, 避免消耗 cron invocation 的 50 subrequest 预算.
-    // 
+    //
     // v0.36.7: process 跑完 inline 调 runKnowledgeAccumulation 累积 job
     // "快赢"哲学: 0 Supabase DDL · 全 R2 持久化 · 0 5h 配额期打扰
     // 跟 process 走同 ctx.waitUntil, 累积失败不阻塞 process 200 (早晨日报金句是 nice-to-have, 失败可次日累积)
@@ -181,11 +177,7 @@ export async function scheduledProcess(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
-    await logEvent(
-      env,
-      'error',
-      `[cron] process failed elapsed=${elapsed}ms err=${msg}`
-    );
+    await logEvent(env, 'error', `[cron] process failed elapsed=${elapsed}ms err=${msg}`);
     ctx.waitUntil(
       logEvent(
         env,
@@ -362,11 +354,7 @@ export async function scheduledEntity(
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       const eventElapsed = Date.now() - eventStart;
-      await logEvent(
-        env,
-        'error',
-        `[cron] event failed elapsed=${eventElapsed}ms err=${msg}`
-      );
+      await logEvent(env, 'error', `[cron] event failed elapsed=${eventElapsed}ms err=${msg}`);
       ctx.waitUntil(
         logEvent(
           env,
@@ -443,11 +431,7 @@ export async function scheduledEvent(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
-    await logEvent(
-      env,
-      'error',
-      `[cron] event process failed elapsed=${elapsed}ms err=${msg}`
-    );
+    await logEvent(env, 'error', `[cron] event process failed elapsed=${elapsed}ms err=${msg}`);
     ctx.waitUntil(
       logEvent(
         env,
@@ -642,11 +626,7 @@ export async function scheduledArchiveOldEntities(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
-    await logEvent(
-      env,
-      'error',
-      `[cron] archive failed elapsed=${elapsed}ms err=${msg}`
-    );
+    await logEvent(env, 'error', `[cron] archive failed elapsed=${elapsed}ms err=${msg}`);
     ctx.waitUntil(
       logEvent(
         env,
@@ -716,11 +696,7 @@ export async function scheduledFeedback(
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     const elapsed = Date.now() - start;
-    await logEvent(
-      env,
-      'error',
-      `[cron] feedback failed elapsed=${elapsed}ms err=${msg}`
-    );
+    await logEvent(env, 'error', `[cron] feedback failed elapsed=${elapsed}ms err=${msg}`);
     ctx.waitUntil(
       logEvent(
         env,

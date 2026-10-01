@@ -126,8 +126,7 @@ export async function cacheSet(
       return;
     }
     await env.PROCESS_STATE.put(key, serialized, { expirationTtl: ttlSeconds });
-  } catch {
-  }
+  } catch {}
 }
 
 /** 删缓存 (静默) */

@@ -54,7 +54,7 @@ export async function handleLogsAction(
   let entries: any[] = [];
   try {
     const prefix = `logs/${date}/`;
-        // cap list at 50 to stay under CF Free Plan 50 subrequest/request budget
+    // cap list at 50 to stay under CF Free Plan 50 subrequest/request budget
     // (each obj below also calls .get(), so 50 list items = up to 51 subrequests per request)
     // dashboard ?action=logs&date=today 真 是 在 738 log objects 上 hang
     // (list 1000 + per-obj get > 50 subrequest limit → 'Too many subrequests' → server timeout / hang)

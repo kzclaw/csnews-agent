@@ -358,13 +358,7 @@ export async function runEntitySelfLearn(env: Env): Promise<{
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    await logEvent(
-      env,
-      'error',
-      `[entity-selflearn] failed: ${msg}`,
-      undefined,
-      'entity'
-    );
+    await logEvent(env, 'error', `[entity-selflearn] failed: ${msg}`, undefined, 'entity');
     return { candidates: [], total: 0, embedded: 0, noise_filtered: 0, noise_anchors_count: 0 };
   }
 }

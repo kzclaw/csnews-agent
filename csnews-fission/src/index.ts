@@ -74,13 +74,24 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
     try {
       const r1 = await fetch(
         `${supabaseUrl}/rest/v1/topics?score=eq.9&level=eq.explosive&order=created_at.desc&limit=1&select=id,topic_key,level,score`,
-        { headers: { ...supabaseHeaders(env.SUPABASE_SERVICE_KEY), 'Content-Type': 'application/json' } }
+        {
+          headers: {
+            ...supabaseHeaders(env.SUPABASE_SERVICE_KEY),
+            'Content-Type': 'application/json',
+          },
+        }
       );
-      const topics = await r1.json() as any[];
+      const topics = (await r1.json()) as any[];
       steps['topics'] = JSON.stringify(topics);
-    } catch (e) { steps['topics_error'] = String(e); }
+    } catch (e) {
+      steps['topics_error'] = String(e);
+    }
 
-    return withCors({ ok: true, env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY }, steps });
+    return withCors({
+      ok: true,
+      env_ok: { ai: !!env.AI, r2: !!env.csnews_raw, supabase: !!env.SUPABASE_SERVICE_KEY },
+      steps,
+    });
   }
 
   // DEBUG: test R2 write directly
@@ -116,7 +127,12 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
             processed++;
           }
         }
-        return withCors({ ok: true, action: 'fission-manual', result: 'seed_triggered', topics: processed });
+        return withCors({
+          ok: true,
+          action: 'fission-manual',
+          result: 'seed_triggered',
+          topics: processed,
+        });
       }
       await runFissionTrigger(env);
       return withCors({ ok: true, action: 'fission-manual', result: 'triggered' });
@@ -171,9 +187,7 @@ async function runPendingTavilyTrigger(env: Env): Promise<void> {
   let body = '';
   let status = 0;
   try {
-    const resp = await env.CSNEWS_AGENT.fetch(
-      'https://internal/?action=tavily&max=1'
-    );
+    const resp = await env.CSNEWS_AGENT.fetch('https://internal/?action=tavily&max=1');
     status = resp.status;
     body = await resp.text();
     console.log(`[cron] tavily-async: status=${status} body=${body.slice(0, 200)}`);

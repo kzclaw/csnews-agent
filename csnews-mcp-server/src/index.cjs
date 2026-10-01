@@ -263,9 +263,7 @@ process.stdin.on('data', async (chunk) => {
 
       // ping — MCP 协议: 回复 pong
       if (request.method === 'ping') {
-        process.stdout.write(
-          JSON.stringify({ jsonrpc: '2.0', id: request.id, result: {} }) + '\n'
-        );
+        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: {} }) + '\n');
         continue;
       }
 

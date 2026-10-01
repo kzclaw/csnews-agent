@@ -97,7 +97,10 @@ export async function runEventClustering(
 
     /** Split name into tokens for word-level Jaccard comparison */
     function nameTokens(name: string): string[] {
-      return name.toLowerCase().split(/[\s_/-]+/).filter(Boolean);
+      return name
+        .toLowerCase()
+        .split(/[\s_/-]+/)
+        .filter(Boolean);
     }
 
     let jaccardPairs = 0;

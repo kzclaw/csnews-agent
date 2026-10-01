@@ -103,7 +103,7 @@ export async function logEvent(
     const delays = [0, 200, 500];
     let lastErr: unknown;
     for (let i = 0; i < delays.length; i++) {
-      if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
       try {
         // v0.37.61: ctx.waitUntil 终 止 抢 在 R2 put 返 回 之 前 的 真 因: CF worker 返 应 客 户 端 时,
         // 还 没 完 成 的 ctx.waitUntil task (含 R2 put) 拿 不 到 await, 会 被 CF 自 动 cancel 整 个 调 用.
@@ -124,7 +124,7 @@ export async function logEvent(
       } catch (e: unknown) {
         lastErr = e;
         const msg = e instanceof Error ? e.message : String(e);
-        console.error(`[log] put attempt ${i+1} failed: ${msg}`);
+        console.error(`[log] put attempt ${i + 1} failed: ${msg}`);
       }
     }
     throw lastErr;
@@ -149,7 +149,6 @@ export async function logEvent(
     throw e;
   }
 }
-
 
 /**
  * v0.37.60: ?action=logs-diag endpoint handler

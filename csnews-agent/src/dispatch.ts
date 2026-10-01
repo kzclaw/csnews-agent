@@ -117,7 +117,9 @@ export async function dispatchAction(
     { endpoint: action, method: request.method },
     'dispatcher'
   ).catch((err) => {
-    console.error(`[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`);
+    console.error(
+      `[dispatcher] logEvent R2 write FAIL: action=${action} method=${request.method} err=${err?.message || err}`
+    );
   });
 
   // 28 action dispatch (dispatch chain — no try/catch here, each handler handles its own errors)
