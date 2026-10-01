@@ -47,7 +47,10 @@ scripts/
 verifier/
 
 # Privacy tooling (local, by-design contain forbidden terms)
-# 本地开发者 npm install 后 prepare hook 自动 cp .privacy-patterns.txt.example → .privacy-patterns.txt
+# ⚠️ 无自动生成链路：package.json 的 prepare 只跑 husky，不 cp 任何文件。
+#    新 clone / 新机器这两个文件都不存在（.example 也被 ignore），
+#    隐私闸门默认「未启用」。需从既有机器手动拷 .privacy-patterns.txt。
+#    缺失时 commit-msg 红色告警但 exit 0 —— 别把「没报错」当「已扫描」。
 .privacy-patterns.txt
 .privacy-patterns.txt.example
 csnews-agent/scripts/check-privacy.sh
