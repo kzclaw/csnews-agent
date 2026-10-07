@@ -24,6 +24,33 @@ import {
 } from './health-checks';
 import { DATA_STORE_ARCHITECTURE } from './health-db';
 
+export type CheckStatus = 'ok' | 'info' | 'degraded' | 'down' | 'unknown';
+
+/** shape of the checks map handed to the aggregator; entries may be null/unknown-shaped */
+export type HealthChecks = Record<string, { status: CheckStatus; detail: any } | null | undefined>;
+
+/**
+ * 聚合优先级: down > degraded > unknown > ok/info
+ *
+ * 'unknown' 表示该 check 没能读到数据 (查询抛错 / binding 缺失 / 快照尚未写入),
+ * 它不是"健康"的证据。此前 'unknown' 被并入 ok 分支, 于是任何一项因异常降级为
+ * unknown 时顶层仍报 ok —— 假绿灯。现在 unknown 至少报 degraded:
+ * 拿不到数据等于没验证过, 不等于验证通过。
+ *
+ * 空 statuses (没有任何 check 报告状态) → ok: 没有 check 报出故障, 就没有降级信号。
+ */
+export function aggregateOverallStatus(result: { status: string }, checks: HealthChecks): void {
+  const statuses = Object.values(checks)
+    .filter((c): c is { status: CheckStatus; detail: any } => c != null && 'status' in c)
+    .map((c) => c.status);
+
+  if (statuses.includes('down')) result.status = 'down';
+  else if (statuses.includes('degraded')) result.status = 'degraded';
+  else if (statuses.includes('unknown')) result.status = 'degraded';
+  else if (statuses.every((s) => s === 'ok' || s === 'info')) result.status = 'ok';
+  else result.status = 'degraded';
+}
+
 export async function handleHealthAction(
   request: Request,
   env: Env,
@@ -153,18 +180,7 @@ export async function handleHealthAction(
   result.mcp_tools_count = MCP_TOOLS_COUNT;
 
   // ---- aggregate overall status ----
-  const statuses = Object.values(checks)
-    .filter(
-      (c): c is { status: 'ok' | 'info' | 'degraded' | 'down' | 'unknown'; detail: any } =>
-        c != null && 'status' in c
-    )
-    .map((c) => c.status as string);
-
-  if (statuses.includes('down')) result.status = 'down';
-  else if (statuses.includes('degraded')) result.status = 'degraded';
-  else if (statuses.every((s) => s === 'ok' || s === 'info' || s === 'unknown'))
-    result.status = 'ok';
-  else result.status = 'degraded';
+  aggregateOverallStatus(result, checks);
 
   result.checks = checks;
 
