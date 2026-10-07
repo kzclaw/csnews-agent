@@ -35,7 +35,8 @@ export function extractText(resp: any): string {
 
 //Workers AI裂变报告生成
 // only call AI when R >= AI_ROUTE_R_THRESHOLD
-// NOTE: scoreRule max=7.6, threshold must be <=7.6 to be reachable
+// NOTE: scoreRule max=9.1 (5.5 base + 2.0 superHot + 0.5 num + 0.3 len + 0.3 ! + 0.5 hotCount>=3)
+//       threshold must be <= 9.1 to be reachable
 export async function maybeFissionReport(title: string, env: Env, rScore: number): Promise<string> {
   if (rScore < AI_ROUTE_R_THRESHOLD) return `(AI跳过-R<${AI_ROUTE_R_THRESHOLD})`;
   // Phase 2: 预算检查 L2（AI 评分）
