@@ -13,15 +13,19 @@ Claude Desktop / Cursor 里直接问"最新爆炸新闻是什么"，AI 会帮你
 
 ---
 
-## 第一步：填入你的 Token
+## 第一步：填入你的 Token 和 Worker 地址
 
-打开 `claude_desktop_config.json`，找到这一行：
+打开 `claude_desktop_config.json`，找到这两行：
 
 ```json
+"CSNEWS_URL": "https://YOUR-WORKER.workers.dev/api/v1",
 "CSNEWS_TOKEN": "把你的 Token 粘贴在这里"
 ```
 
-把 Token 粘贴进去，例如：
+`CSNEWS_URL` **没有默认值，必须填**：填 Worker 的 `/api/v1` 地址，域名用你自己的 Worker。
+留空启动会直接报错退出（exit 1），不会静默连到任何地址。
+
+`CSNEWS_TOKEN` 填 Token，例如：
 
 ```json
 "CSNEWS_TOKEN": "a1b2c3d4e5f6..."
@@ -63,16 +67,19 @@ Claude 应该会调用 CSNEWS MCP 工具，返回新闻列表。
 
 ---
 
-## 6 个可用工具
+## 9 个可用工具
 
-| 工具 | 用途 |
-|------|------|
-| `get_latest_news` | 最新新闻列表（支持 limit / max_hours） |
-| `get_explosive_topics` | 爆炸级话题排行 |
-| `get_warnings` | 活跃系统警告 |
-| `get_trending_velocity` | 趋势速度排名 |
-| `get_topic_acceleration` | 指定话题加速度历史 |
-| `get_daily_report` | 每日摘要报告 |
+| 工具 | 用途 | 参数 |
+|------|------|------|
+| `get_latest_news` | 最新新闻列表，按创建时间倒序 | `limit` / `max_hours` |
+| `get_explosive_topics` | 爆炸级话题排行，按分数倒序 | `limit` |
+| `get_warnings` | 活跃系统警告 | `severity` / `status` / `limit` |
+| `get_trending_velocity` | 趋势速度排名（hot + mature） | `limit` |
+| `get_topic_acceleration` | 指定话题加速度历史 | `topic_id`（必填）/ `limit` |
+| `get_daily_report` | 每日摘要报告 | 无 |
+| `get_explosive_fission_reports` | 裂变子系统生成的衍生报告，按触发时间倒序 | `limit` / `max_hours` / `topic_id` |
+| `get_entity_profile` | 实体档案库（人物/机构/地点/时间/概念） | `limit` / `entity_type` / `order_by` |
+| `get_knowledge_articles` | 知识引擎累积的洞察条目 | `limit` / `topic_id` / `order_by` |
 
 ---
 
