@@ -9,6 +9,7 @@
 
 import { Env } from './shared';
 import { handlePull } from './pull';
+import { checkSupabaseCounts } from './health-db';
 import type { MCPTool } from './mcp-types';
 
 // ============================================================
@@ -360,14 +361,31 @@ export async function toolGetTopicAcceleration(
   return formatTopicAccelerationAsMarkdown(result.items, topicId);
 }
 
+/**
+ * 每日摘要：实查 Supabase 6 张表的行数（复用 health-db 的 checkSupabaseCounts）。
+ * 单表失败时如实渲染 `表名: 查询失败: <原因>`，不静默吞错。
+ */
 export async function toolGetDailyReport(
-  _env: Env,
+  env: Env,
   _ctx: ExecutionContext,
   _params: Record<string, unknown>
 ): Promise<string> {
-  const report = {
-    summary: 'CSNEWS 每日摘要 — 数据来源: CSNEWS Agent',
-    note: '详细 stats 类型数据请关注后续版本更新',
-  };
-  return formatDailyReportAsMarkdown(report);
+  const { supabase_counts, checks } = await checkSupabaseCounts(env);
+  const entries = Object.entries(supabase_counts);
+  const okEntries = entries.filter(([, v]) => typeof v === 'number');
+  const totalRows = okEntries.reduce((sum, [, v]) => sum + (v as number), 0);
+  const failedTables = entries.filter(([, v]) => typeof v !== 'number').map(([k]) => k);
+
+  const summary =
+    okEntries.length === 0
+      ? `CSNEWS 每日摘要 — Supabase ${entries.length} 张表全部查询失败（${checks.supabase_reachable.detail}）`
+      : `CSNEWS 每日摘要 — Supabase ${okEntries.length}/${entries.length} 张表可读，累计 ${totalRows} 条记录` +
+        (failedTables.length > 0 ? `；失败表: ${failedTables.join(', ')}` : '');
+
+  const counts: Record<string, string> = {};
+  for (const [table, value] of entries) {
+    counts[table] = typeof value === 'number' ? String(value) : `查询失败: ${value.error}`;
+  }
+
+  return formatDailyReportAsMarkdown({ summary, counts });
 }
