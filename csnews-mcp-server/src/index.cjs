@@ -16,7 +16,12 @@ const CSNEWS_URL = (process.env.CSNEWS_URL || '').replace(/\/$/, '');
 if (!CSNEWS_URL) {
   process.stderr.write('错误：必须设置环境变量 CSNEWS_URL（Worker 的 /api/v1 地址）\n');
   process.stderr.write('示例：CSNEWS_URL=https://YOUR-WORKER.workers.dev/api/v1 npm start\n');
-  process.exit(1);
+  // MCP stdio 场景下 stderr 是管道，Node 对管道写入是异步的；
+  // process.exit() 会丢弃尚未刷出的缓冲区，用户将看不到上面两行怎么配的提示。
+  process.exitCode = 1;
+  // 必须 return：下面 process.stdin.on('data') 会 ref 住 stdin 让事件循环不退，
+  // 只设 exitCode 不 return 的话进程会永久挂住，退出码永远到不了 1。
+  return;
 }
 const CSNEWS_TOKEN = process.env.CSNEWS_TOKEN || '';
 
