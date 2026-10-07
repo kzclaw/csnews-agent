@@ -112,13 +112,14 @@ open tools/pull-viewer.html
 
 **新开发者 onboarding**:
 
-1. Clone 仓库 + `cd csnews-agent && npm install` (prepare hook 自动配置 husky + 创建本地 patterns 文件)
-2. 隐私 grep hook 默认开启 (commit 时自动检测, 命中 = block)
+1. Clone 仓库 + 仓库根 `pnpm install` (prepare hook 配置 husky)
+2. ⚠️ **隐私词库不会自动生成** — `.privacy-patterns.txt` 与 `.privacy-patterns.txt.example` 都不入库, `prepare` 只跑 husky 不做任何 cp ⇒ **新克隆的隐私闸门默认「未启用」**, 必须从既有机器手动拷入仓库根
+3. 隐私 grep hook 默认开启 (commit 时自动检测, 命中 = block)
 
 **手动恢复隐私 tooling** (脚本 gitignored · 新克隆可能缺失):
 
 ```bash
-git checkout HEAD~1 -- csnews-agent/scripts/check-privacy.sh csnews-agent/validate/privacy-grep.contract.ts
+git checkout HEAD~1 -- tools/privacy-scan.sh
 ```
 
 **自定义本地 patterns**: 编辑 `.privacy-patterns.txt` (gitignored, 每个开发者独立)

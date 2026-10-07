@@ -80,7 +80,7 @@ mkdir -p ~/Library/Application\ Support/Claude
 
 ```bash
 cd csnews-mcp-server
-npm install
+pnpm install
 ```
 
 ---
