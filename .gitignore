@@ -55,8 +55,13 @@ verifier/
 .privacy-patterns.txt.example
 # ⚠️ 兜底：任何 *.bak.* 变体都排除。备份文件本体就含敏感内容，
 #    而上面的规则只挡本体不挡变体 ⇒ git add -A 会把备份一起提交。
-#    判据：git ls-files | grep '\.bak\.' 应为空。
+#    判据：git ls-files | grep '\.bak' 应为空。
+#    ⚠️ 两条都要：`*.bak.*` 挡带时间戳的（foo.bak.1234），
+#       但 `cp x x.bak` 产出的 `foo.bak`（无尾段）只写 *.bak.* 挡不住 ——
+#       实测过，`*.bak.*` 对 `.privacy-patterns.txt.bak` 返回「未排除」。
 *.bak.*
+*.bak
+*~
 # 隐私闸门扫描器与词库同为本地资产：词库本身就是禁词表，入库等于公开它；
 # 消费者（.husky/ 钩子与 csnews-agent/validate/ 契约测试）也全部不入库。
 tools/privacy-scan.sh
