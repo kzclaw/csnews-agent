@@ -53,6 +53,13 @@ verifier/
 #    缺失时 commit-msg 红色告警但 exit 0 —— 别把「没报错」当「已扫描」。
 .privacy-patterns.txt
 .privacy-patterns.txt.example
+# ⚠️ 兜底：任何 *.bak.* 变体都排除。备份文件本体就含敏感内容，
+#    而上面的规则只挡本体不挡变体 ⇒ git add -A 会把备份一起提交。
+#    判据：git ls-files | grep '\.bak\.' 应为空。
+*.bak.*
+# 隐私闸门扫描器与词库同为本地资产：词库本身就是禁词表，入库等于公开它；
+# 消费者（.husky/ 钩子与 csnews-agent/validate/ 契约测试）也全部不入库。
+tools/privacy-scan.sh
 csnews-agent/scripts/check-privacy.sh
 csnews-agent/validate/privacy-grep.contract.ts
 # 测试文件（本地运行，不入仓库。pre-commit hook 跑本地磁盘文件）
