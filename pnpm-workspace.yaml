@@ -1,0 +1,16 @@
+# pnpm workspace 配置
+# ⚠️ 键名必须 camelCase：pnpm 11 不读 .npmrc，写 pnpm-workspace.yaml 里才生效（实测）
+# packageImportMethod: hardlink 是本机硬性要求 —— 默认 auto 会退化成复制，等于没共享
+packages:
+  - 'csnews-agent'
+  - 'csnews-fission'
+  - 'csnews-mcp-server'
+
+# 需要跑 install 脚本的包。不显式批准会以 ERR_PNPM_IGNORED_BUILDS 退出码 1 结束，
+# 且 pnpm 会在每次命令前自动跑 install 触发它 —— 表现为 pnpm exec / pnpm run 全部报错。
+# ⚠️ 值必须是 true/false。写成占位文字会让 workerd 一直未批准（曾因此 tsc/lint 全挂）。
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+packageImportMethod: hardlink

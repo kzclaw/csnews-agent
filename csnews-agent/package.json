@@ -1,4 +1,6 @@
 {
+  "name": "csnews-agent",
+  "private": true,
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260609.1",
     "@mozilla/readability": "^0.6.0",
