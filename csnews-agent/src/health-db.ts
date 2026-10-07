@@ -114,8 +114,7 @@ export async function checkR2LatestSupabaseWrite(
   ts: number
 ): Promise<{
   r2_latest_supabase_write:
-    | { last_write: string; source: string; role: 'primary_store' }
-    | { error: string };
+    { last_write: string; source: string; role: 'primary_store' } | { error: string };
   supabase_latest_write: any; // alias
   checks: {
     r2_latest_supabase_write: CheckEntry;
@@ -123,8 +122,9 @@ export async function checkR2LatestSupabaseWrite(
   };
 }> {
   let r2LatestSupabaseWrite:
-    | { last_write: string; source: string; role: 'primary_store' }
-    | { error: string } = { error: 'not_checked' };
+    { last_write: string; source: string; role: 'primary_store' } | { error: string } = {
+    error: 'not_checked',
+  };
   const checks: Record<string, CheckEntry> = {};
 
   try {

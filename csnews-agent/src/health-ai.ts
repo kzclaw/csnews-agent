@@ -19,15 +19,13 @@ type CheckEntry = { status: 'ok' | 'degraded' | 'down' | 'unknown'; detail: stri
 // ============================================================
 export async function checkAiBudget(env: Env): Promise<{
   ai_budget_today:
-    | { used: number; tier: string; remaining: number; daily_limit: number }
-    | { error: string };
+    { used: number; tier: string; remaining: number; daily_limit: number } | { error: string };
   checks: {
     ai_budget_today: CheckEntry;
   };
 }> {
   let aiBudgetToday:
-    | { used: number; tier: string; remaining: number; daily_limit: number }
-    | { error: string } = {
+    { used: number; tier: string; remaining: number; daily_limit: number } | { error: string } = {
     used: 0,
     tier: 'ok',
     remaining: 0,

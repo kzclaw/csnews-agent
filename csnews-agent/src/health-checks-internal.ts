@@ -43,8 +43,7 @@ export async function checkCronHistory(
   };
 }> {
   let cronHistory:
-    | { this_hour: { hour: string; scheduler_log_count: number } }
-    | { error: string } = {
+    { this_hour: { hour: string; scheduler_log_count: number } } | { error: string } = {
     this_hour: { hour: '', scheduler_log_count: 0 },
   };
   const checks: Record<string, { status: 'ok' | 'degraded' | 'unknown'; detail: string }> = {};
