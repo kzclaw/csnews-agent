@@ -74,6 +74,7 @@ csnews-agent/coverage/
 .agents/
 .specify/
 AGENTS.md
+AGENTS.md.bak.*
 csnews-agent/AGENTS.md
 !csnews-agent/package.json
 !csnews-agent/package-lock.json
