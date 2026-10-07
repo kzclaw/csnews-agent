@@ -16,6 +16,9 @@ import {
   toolGetTrendingVelocity,
   toolGetTopicAcceleration,
   toolGetDailyReport,
+  toolGetFissionReports,
+  toolGetEntityProfile,
+  toolGetKnowledgeArticles,
 } from './mcp-tools';
 
 // ============================================================
@@ -32,6 +35,9 @@ export const TOOL_HANDLERS: Record<
   get_trending_velocity: toolGetTrendingVelocity,
   get_topic_acceleration: toolGetTopicAcceleration,
   get_daily_report: toolGetDailyReport,
+  get_explosive_fission_reports: toolGetFissionReports,
+  get_entity_profile: toolGetEntityProfile,
+  get_knowledge_articles: toolGetKnowledgeArticles,
 };
 
 // ============================================================

@@ -126,6 +126,81 @@ const TOOLS = [
     description: '获取每日摘要报告，包含关键指标的日统计数据。',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_explosive_fission_reports',
+    description:
+      '获取裂变子系统生成的衍生报告，按触发时间倒序。只有达到裂变阈值的话题才会产生报告，不含普通新闻。每条含关联话题标题、裂变类型、状态（completed / failed / pending）、R2 键与正文节选（500 字）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
+        max_hours: {
+          type: 'number',
+          description: '只返回最近 N 小时内触发的裂变报告',
+          minimum: 1,
+          maximum: 720,
+        },
+        topic_id: { type: 'string', description: '只看指定话题的裂变报告（UUID 格式）' },
+      },
+    },
+  },
+  {
+    name: 'get_entity_profile',
+    description:
+      '获取实体档案库（人物 / 机构 / 地点 / 时间 / 概念），含跨新闻出现次数、置信度与首末出现时间。用于跨新闻聚合视角的问题。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
+        entity_type: {
+          type: 'string',
+          description: '实体类型过滤：person / org / place / time / concept',
+          enum: ['person', 'org', 'place', 'time', 'concept'],
+        },
+        order_by: {
+          type: 'string',
+          description:
+            '排序字段：last_seen 最近出现（默认）/ mention_count 出现次数 / confidence 置信度 / first_seen 首次出现',
+          enum: ['last_seen', 'mention_count', 'confidence', 'first_seen'],
+        },
+      },
+    },
+  },
+  {
+    name: 'get_knowledge_articles',
+    description:
+      '获取知识引擎累积的洞察条目（由已核验警告经 AI 归纳），含置信度、关联话题与全文 R2 键。用于检索历史同类信号的规律。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+          default: 20,
+        },
+        topic_id: { type: 'string', description: '只看指定话题的洞察（UUID 格式）' },
+        order_by: {
+          type: 'string',
+          description: '排序字段：created_at 最新优先（默认）/ confidence 置信度优先',
+          enum: ['created_at', 'confidence'],
+        },
+      },
+    },
+  },
 ];
 
 // ============================================================
@@ -201,6 +276,9 @@ const TOOL_HANDLERS = {
   get_trending_velocity: (params) => handleTool('get_trending_velocity', params),
   get_topic_acceleration: (params) => handleTool('get_topic_acceleration', params),
   get_daily_report: (params) => handleTool('get_daily_report', params),
+  get_explosive_fission_reports: (params) => handleTool('get_explosive_fission_reports', params),
+  get_entity_profile: (params) => handleTool('get_entity_profile', params),
+  get_knowledge_articles: (params) => handleTool('get_knowledge_articles', params),
 };
 
 // ============================================================

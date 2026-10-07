@@ -128,6 +128,85 @@ export const MCP_TOOLS: MCPTool[] = [
       properties: {},
     },
   },
+  // ====== v0.37.97: 补齐 pull 的 fission-reports / entity / knowledge 三类覆盖 ======
+  {
+    name: 'get_explosive_fission_reports',
+    description:
+      '获取裂变子系统生成的衍生报告，按触发时间倒序。只有达到裂变阈值（explosive 级别且分数达标）的话题才会产生报告，因此本工具只覆盖「已触发裂变」的那批话题，不含普通新闻。每条返回关联话题标题、裂变类型、状态（completed / failed / pending）、R2 存储键与正文节选（截断至 500 字）。追问某话题被扩写成什么时用它；要看当日原始信号用 get_latest_news 或 get_warnings。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+        },
+        max_hours: {
+          type: 'number',
+          description: '只返回最近 N 小时内触发的裂变报告',
+          minimum: 1,
+          maximum: 720,
+        },
+        topic_id: {
+          type: 'string',
+          description: '只看指定话题的裂变报告（UUID 格式）',
+        },
+      },
+    },
+  },
+  {
+    name: 'get_entity_profile',
+    description:
+      '获取实体档案库，覆盖人物 / 机构 / 地点 / 时间 / 概念五类实体，数据来自每日 selflearn 抽取后写入 R2 的实体清单。返回每个实体的跨新闻出现次数、置信度与首次 / 最近出现时间。用于跨新闻聚合视角的问题（哪些机构被反复提及、某人物关联了哪些话题）；看单条新闻内容用 get_latest_news。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+        },
+        entity_type: {
+          type: 'string',
+          description: '实体类型过滤：person / org / place / time / concept',
+          enum: ['person', 'org', 'place', 'time', 'concept'],
+        },
+        order_by: {
+          type: 'string',
+          description:
+            '排序字段：last_seen 最近出现（默认）/ mention_count 出现次数 / confidence 置信度 / first_seen 首次出现',
+          enum: ['last_seen', 'mention_count', 'confidence', 'first_seen'],
+        },
+      },
+    },
+  },
+  {
+    name: 'get_knowledge_articles',
+    description:
+      '获取知识引擎累积的洞察条目。每条由一次已核验的警告经 AI 归纳而成，含置信度、关联话题与警告 ID，洞察全文另存于返回的 R2 键。用于检索「历史上同类信号被总结出的规律」；要看未归纳的原始告警用 get_warnings。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: '返回条数上限，默认 20，最大 200',
+          minimum: 1,
+          maximum: 200,
+        },
+        topic_id: {
+          type: 'string',
+          description: '只看指定话题的洞察（UUID 格式）',
+        },
+        order_by: {
+          type: 'string',
+          description: '排序字段：created_at 最新优先（默认）/ confidence 置信度优先',
+          enum: ['created_at', 'confidence'],
+        },
+      },
+    },
+  },
 ];
 
 export const MCP_TOOLS_COUNT = MCP_TOOLS.length;
@@ -238,6 +317,75 @@ export function formatDailyReportAsMarkdown(data: any): string {
   }
 
   return sections.join('\n');
+}
+
+/**
+ * 长文本截断(报告正文 / 洞察全文可能上千字,MCP 单条响应塞不下)
+ * 与 pull.projectFormat 的 summary 截断同风格
+ */
+function truncateText(text: string, max: number): string {
+  const trimmed = text.trim();
+  return trimmed.length > max ? trimmed.slice(0, max) + '…' : trimmed;
+}
+
+function formatLocalTime(value: unknown): string {
+  if (typeof value !== 'string' || !value) return '-';
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? new Date(ms).toLocaleString('zh-CN') : '-';
+}
+
+export function formatFissionReportsAsMarkdown(items: any[]): string {
+  if (!items || items.length === 0) {
+    return '暂无裂变报告（fission_reports 表无记录，或过滤条件未命中）';
+  }
+  const lines = items.map((item, i) => {
+    const title = item.title || '(无标题)';
+    const excerpt =
+      typeof item.report_content === 'string' && item.report_content.trim()
+        ? truncateText(item.report_content, 500)
+        : '(无正文)';
+    return (
+      `${i + 1}. **${title}**\n` +
+      `   - 类型: ${item.fission_type || '-'} | 状态: ${item.status || '-'} | topic_id: ${item.topic_id || '-'}\n` +
+      `   - 触发: ${formatLocalTime(item.triggered_at)} | 完成: ${formatLocalTime(item.completed_at)} | R2: ${item.r2_key || '-'}\n` +
+      `   - 报告节选: ${excerpt}`
+    );
+  });
+  return `## 裂变报告（共 ${items.length} 条）\n\n${lines.join('\n')}`;
+}
+
+export function formatEntitiesAsMarkdown(items: any[]): string {
+  if (!items || items.length === 0) {
+    return '暂无实体档案（R2 entity-finalized.json 为空，或过滤条件未命中）';
+  }
+  const lines = items.map((item, i) => {
+    const name = item.name || '(未命名)';
+    return (
+      `${i + 1}. **${name}** (${item.type || '-'})\n` +
+      `   - 出现次数: ${item.news_count ?? '-'} | 置信度: ${item.confidence ?? '-'}\n` +
+      `   - 首次出现: ${formatLocalTime(item.first_seen)} | 最近出现: ${formatLocalTime(item.last_seen)}`
+    );
+  });
+  return `## 实体档案（共 ${items.length} 条）\n\n${lines.join('\n')}`;
+}
+
+export function formatKnowledgeAsMarkdown(items: any[]): string {
+  if (!items || items.length === 0) {
+    return '暂无知识条目（knowledge 表无记录，或过滤条件未命中）';
+  }
+  const lines = items.map((item, i) => {
+    const insight =
+      typeof item.insight === 'string' && item.insight.trim()
+        ? truncateText(item.insight, 500)
+        : '(无洞察正文)';
+    return (
+      `${i + 1}. ${formatLocalTime(item.created_at)} | 置信度: ${item.confidence ?? '-'}\n` +
+      `   - topic_id: ${item.topic_id || '-'} | warning_id: ${item.warning_id || '-'}\n` +
+      `   - 洞察: ${insight}\n` +
+      `   - 全文 R2: ${item.r2_key || '-'}`
+    );
+  });
+  return `## 知识引擎洞察（共 ${items.length} 条）\n\n${lines.join('\n')}`;
 }
 
 // ============================================================
@@ -388,4 +536,95 @@ export async function toolGetDailyReport(
   }
 
   return formatDailyReportAsMarkdown({ summary, counts });
+}
+
+/**
+ * 裂变报告: pull type=fission-reports
+ *
+ * 不暴露 status 过滤: fission_reports.status 的 CHECK 约束只有
+ * ('completed','failed','pending'),而 parseFilters 用的是 warnings 的 VALID_STATUS
+ * (open/acknowledged/validated/dismissed/closed)—— 两个取值集合不相交,
+ * 任何一边传过去都会 400 或恒空。真实状态值写进 tool description,让 agent 从输出里读。
+ *
+ * 不暴露 fission_type 过滤: 它在 TYPE_CONFIG.allowedFilters 里但 parseFilters 从不解析
+ * 该参数,传了是静默 no-op(假参数),不如不暴露。
+ */
+export async function toolGetFissionReports(
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, unknown>
+): Promise<string> {
+  const url = new URL('https://placeholder/?action=pull');
+  url.searchParams.set('type', 'fission-reports');
+  url.searchParams.set('order_by', 'triggered_at');
+  url.searchParams.set('order', 'desc');
+  const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 200);
+  url.searchParams.set('limit', String(limit));
+
+  if (params.max_hours) {
+    const hours = Math.min(Math.max(Number(params.max_hours), 1), 720);
+    url.searchParams.set('since', `${hours}h`);
+  }
+  if (params.topic_id) {
+    url.searchParams.set('topic_id', String(params.topic_id));
+  }
+
+  const result = await handlePull(env, url, ctx);
+  return formatFissionReportsAsMarkdown(result.items);
+}
+
+/**
+ * 实体档案: pull type=entity(R2 entity-finalized.json,非 Supabase)
+ *
+ * 类型过滤走 category 参数: TYPE_CONFIG.entity.allowedFilters 列的是 'type',
+ * 但 parseFilters 只对白名单里的 level / category 做解析,queryEntity 也只读
+ * filters.category —— 所以 MCP 侧命名 entity_type,实际写进 category。
+ */
+export async function toolGetEntityProfile(
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, unknown>
+): Promise<string> {
+  const url = new URL('https://placeholder/?action=pull');
+  url.searchParams.set('type', 'entity');
+  url.searchParams.set(
+    'order_by',
+    typeof params.order_by === 'string' ? params.order_by : 'last_seen'
+  );
+  url.searchParams.set('order', 'desc');
+  const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 200);
+  url.searchParams.set('limit', String(limit));
+
+  if (params.entity_type) {
+    url.searchParams.set('category', String(params.entity_type));
+  }
+
+  const result = await handlePull(env, url, ctx);
+  return formatEntitiesAsMarkdown(result.items);
+}
+
+/**
+ * 知识引擎洞察: pull type=knowledge(Supabase knowledge 表)
+ */
+export async function toolGetKnowledgeArticles(
+  env: Env,
+  ctx: ExecutionContext,
+  params: Record<string, unknown>
+): Promise<string> {
+  const url = new URL('https://placeholder/?action=pull');
+  url.searchParams.set('type', 'knowledge');
+  url.searchParams.set(
+    'order_by',
+    typeof params.order_by === 'string' ? params.order_by : 'created_at'
+  );
+  url.searchParams.set('order', 'desc');
+  const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 200);
+  url.searchParams.set('limit', String(limit));
+
+  if (params.topic_id) {
+    url.searchParams.set('topic_id', String(params.topic_id));
+  }
+
+  const result = await handlePull(env, url, ctx);
+  return formatKnowledgeAsMarkdown(result.items);
 }
