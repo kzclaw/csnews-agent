@@ -41,7 +41,7 @@ async function handleFetch(request: Request, env: Env): Promise<Response> {
   const action = url.searchParams.get('action') || 'ping';
   const NO_AUTH_ACTIONS = ['ping', 'debug-token', 'debug-fission', 'debug-r2'];
   if (!NO_AUTH_ACTIONS.includes(action)) {
-    const deny = authRequest(request, env);
+    const deny = await authRequest(request, env);
     if (deny) return deny;
   }
 
