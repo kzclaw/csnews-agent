@@ -108,15 +108,15 @@ open tools/pull-viewer.html
 
 ## 🔒 Local Privacy Enforcement
 
-隐私 grep 工具 (本地工具链, 5 类硬禁词检测) 通过 husky pre-commit hook 自动跑.
+隐私 grep 工具是**纯本地工具链** (`tools/privacy-scan.sh` + `.husky/` 钩子 + `.privacy-patterns.txt` 词库三者均不入库), 通过 husky pre-commit hook 自动跑. **新克隆不包含任何隐私 tooling** — 这是有意的: 闸门与词库都是本机资产, 词库本身就是禁词表, 入库等于公开它.
 
 **新开发者 onboarding**:
 
 1. Clone 仓库 + 仓库根 `pnpm install` (prepare hook 配置 husky)
-2. ⚠️ **隐私词库不会自动生成** — `.privacy-patterns.txt` 与 `.privacy-patterns.txt.example` 都不入库, `prepare` 只跑 husky 不做任何 cp ⇒ **新克隆的隐私闸门默认「未启用」**, 必须从既有机器手动拷入仓库根
+2. ⚠️ **隐私词库不会自动生成** — `prepare` 只跑 husky 不做任何 cp ⇒ **新克隆的隐私闸门默认「未启用」**, 须从既有机器手动拷入 `tools/privacy-scan.sh` + `.privacy-patterns.txt` + `.husky/`
 3. 隐私 grep hook 默认开启 (commit 时自动检测, 命中 = block)
 
-**手动恢复隐私 tooling** (脚本 gitignored · 新克隆可能缺失):
+**手动恢复隐私 tooling** (三者均不入库 · 新克隆必然缺失):
 
 ```bash
 git checkout HEAD~1 -- tools/privacy-scan.sh
