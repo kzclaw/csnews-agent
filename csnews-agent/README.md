@@ -41,7 +41,7 @@
 
 ### 通用 pull 端点
 
-单端点 + 13 个参数任意组合：
+单端点 + 16 个参数任意组合：
 
 ```bash
 # 替换 YOUR-WORKER.workers.dev 为你自己的 Worker URL
@@ -67,23 +67,49 @@ curl -H "Authorization: Bearer $TOKEN" \
   "https://YOUR-WORKER.workers.dev/?action=pull&type=news&since=24h"
 ```
 
-**13 个支持参数**：
+**16 个支持参数**：
 
 | 参数 | 说明 |
 |------|------|
-| `type` | `news` / `topics` / `warnings` / `fission-pending` |
+| `type` | 必填。数据源，见下方「type 一览」|
 | `format` | `summary` (默认) / `full` / `ids` |
-| `limit` | 1-100 |
+| `limit` | 1-200（默认 20）|
+| `offset` | 分页偏移量，默认 0 |
 | `order` | `asc` / `desc` (默认 desc) |
-| `order_by` | `created_at` / `score` / `severity` / `hot_score` / `last_active_at` |
+| `order_by` | 排序字段，**可选值随 type 而异**，见下方「type 一览」|
 | `level` | `follow` / `important` / `explosive` |
 | `category` | 分类字符串 |
 | `since` | ISO 8601 或相对时间 (`24h` / `7d` / `30m`) |
 | `until` | 同 since |
-| `topic_id` | 按话题过滤 |
-| `status` | warnings 用 |
-| `title_like` | 模糊匹配 |
-| `select` | 自定义返回字段 |
+| `topic_id` | 按话题过滤（须为 UUID）|
+| `status` | `open` / `acknowledged` / `validated` / `dismissed` / `closed` |
+| `event_stage` | `detected` / `confirmed` / `growing` / `hot` / `archived`（仅 `topics`）|
+| `stage` | `emerging` / `growing` / `hot` / `mature` / `declining`（仅 `trends`）|
+| `title_like` | 模糊匹配，最长 100 字符（仅 `news`）|
+| `select` | 自定义返回字段，须为该 type 默认字段的子集 |
+
+> 过滤参数按 type 白名单校验：当前 type 不支持的过滤参数会被**静默忽略**（只有 `type` / `order_by` 不合法会报错）。
+> `fission_triggered` 代码里有解析入口，但没有任何 type 在白名单里开启它，实际不生效。
+
+### type 一览
+
+`type` 必填，当前支持 **9 种**。`order_by` 与过滤参数的白名单**逐 type 不同**：
+
+| type | 数据来源 | `order_by` 可选值（**加粗** = 默认值）| 过滤参数 |
+|------|---------|---------------------------|---------|
+| `news` | `news_hotspots` 表 | **`created_at`** / `published_at` / `hot_score` / `score` / `updated_at` | `level` `category` `topic_id` `title_like` |
+| `topics` | `topics` 表 | **`score`** / `last_active_at` / `created_at` / `updated_at` / `event_stage` | `level` `event_stage` |
+| `warnings` | `warnings` 表 | **`severity`** / `created_at` / `updated_at` | `status` `topic_id` `level` |
+| `fission-pending` | `topics` 衍生视图（`level='explosive'` 且 `score>=6`） | **`score`** / `last_active_at` / `event_stage` | 无 |
+| `fission-reports` | `fission_reports` 表 + `topics` 标题回填 | **`triggered_at`** / `completed_at` / `fission_type` / `status` | `status` `topic_id` |
+| `trends` | `trend_snapshots` 表 | **`velocity`** / `acceleration` / **`topic_score`** / `created_at` | `topic_id` `stage` |
+| `knowledge` | `knowledge` 表 | **`created_at`** / `confidence` / `topic_id` | `topic_id` |
+| `stats` | `news_hotspots` 表 | **`created_at`** | 无 |
+| `entity` | R2 `entity-finalized.json`（非 Supabase） | **`last_seen`** / `confidence` / `mention_count` / `first_seen` | `category` |
+
+- ⚠️ **`trends` 的 `order_by` 要写 `topic_score`，不是 `score`** —— `trend_snapshots` 表的分数列实名就是 `topic_score`，写 `score` 会被白名单拒掉。返回 JSON 里的字段名仍是 `score`（对外别名，内部映射到 `topic_score`）。
+- `fission-reports` 的 `fission_type` 可以用作 `order_by`，但作为**过滤**参数当前未实现解析，传了不生效。
+- `entity` 的 `category` 与 `level` 最终都映射到实体的 `type` 字段；`order_by` 用的是实体专属字段（`last_seen` / `confidence` / `mention_count` / `first_seen`）。
 
 ### 其他端点
 
@@ -262,5 +288,5 @@ MIT
 
 ---
 
-<sub>Last updated 2026-06-28</sub>
+<sub>Last updated 2026-10-07</sub>
 </div>
