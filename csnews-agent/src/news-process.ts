@@ -446,16 +446,24 @@ export async function recordTrendWithMember(
     });
     if (!res.ok) {
       const errText = await res.text();
-      // v0.37.64: known_schema_mismatch 14d+ bug (kr34-migration-20260617 SQL 函数 vs trend_snapshots 表 schema 不 一 致)
-      // 函数 用 topic_score/signal_score · 实 际 表 用 score · PostgreSQL 22P02 invalid input syntax for type uuid: "1"
-      // 降 级 为 info + 加 tag 标 记 · 不 降 error (其 他 真 错 误 仍 报 error) · 不 throw (已 知 沉 默 bug)
+      // v0.37.64 的原注释把根因写反了，以下是逐行核对 migrations 后的事实：
+      //   - trend_snapshots 从建表起就只有 topic_score 这一列，从未有过 score
+      //   - record_trend_with_member 写入 trend_snapshots 用的就是 topic_score/signal_score
+      //   - 函数里的 v_topic.score 读的是 topics 表，该表确实有 score 列
+      // ⇒ 不存在「列名不一致」这个 bug，原注释的依据不成立。
+      // 22P02 的真实根因仍未定位，待取真实报错原文再判，不要臆测。
+      //
+      // 处置：这类错误不再降级为 info（原注释自承「已知静默 bug 14d+」），
+      // 与其他真实错误一样报 error，让它可见；仍然不 throw，主入库流程不受影响。
+      // 之所以不加 KV 计数器：失败按新闻条数发生，逐条写 KV 会放大写配额压力，
+      // 而 error 级日志已经带上了同样的出现频率信息。
       const isKnownSchemaMismatch =
         errText.includes('22P02') || errText.includes('invalid input syntax for type uuid');
       if (isKnownSchemaMismatch) {
         await logEvent(
           env,
-          'info',
-          `[known_schema_mismatch_v0.37.64] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
+          'error',
+          `[rpc_failure_22P02_root_cause_unknown] record_trend_with_member HTTP ${res.status} for ${newsId}/${topicId}: ${errText.slice(0, 200)}`,
           undefined,
           'process'
         );
