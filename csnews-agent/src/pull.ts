@@ -95,11 +95,12 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     timeField: 'triggered_at',
   },
   // trends: 趋势快照查询 trend_snapshots 表,用于 get_trending_velocity 和 get_topic_acceleration
+  // 分数列实名是 topic_score(见 FIELD_ALIAS),对外字段名仍叫 score
   trends: {
     table: 'trend_snapshots',
     defaultOrderBy: 'velocity',
-    allowedOrderBy: ['velocity', 'acceleration', 'score', 'created_at'],
-    defaultSelect: 'id, topic_id, score, velocity, acceleration, stage, created_at',
+    allowedOrderBy: ['velocity', 'acceleration', 'topic_score', 'created_at'],
+    defaultSelect: 'id, topic_id, topic_score, velocity, acceleration, stage, created_at',
     allowedFilters: ['topic_id'],
     timeField: 'created_at',
   },
@@ -133,6 +134,50 @@ export const TYPE_CONFIG: Record<string, TypeConfig> = {
     timeField: 'last_seen',
   },
 };
+
+// ====== 字段别名(DB 列名 ↔ 对外字段名) ======
+
+/**
+ * type → { 对外字段名: DB 列名 }
+ *
+ * trend_snapshots 的分数列实名是 topic_score,但 pull 对外的字段名一直是 score
+ * (MCP 的 formatTrendsAsMarkdown / formatTopicAccelerationAsMarkdown 读 item.score)。
+ * 别名只在三处生效: select 白名单校验 / 查询构造 / 输出改名。改 DB 列名不用碰下游。
+ */
+const FIELD_ALIAS: Record<string, Record<string, string>> = {
+  trends: { score: 'topic_score' },
+};
+
+/** 对外字段名 → DB 列名(无别名则原样返回) */
+function dbFieldName(type: string, field: string): string {
+  return FIELD_ALIAS[type]?.[field] ?? field;
+}
+
+/** select 参数 → PostgREST select(逐列过别名,无别名时是恒等映射) */
+function resolveSelect(type: string, select: string | undefined, defaultSelect: string): string {
+  return (select || defaultSelect)
+    .split(',')
+    .map((f) => dbFieldName(type, f.trim()))
+    .join(',');
+}
+
+/** 输出层改名: DB 列名 → 对外字段名(下游读的是对外名) */
+function applyFieldAlias(type: string, items: any[]): any[] {
+  const alias = FIELD_ALIAS[type];
+  if (!alias) return items;
+  const entries = Object.entries(alias); // [对外字段名, DB 列名]
+  return items.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const next: any = { ...item };
+    for (const [external, dbName] of entries) {
+      if (dbName in next) {
+        next[external] = next[dbName];
+        delete next[dbName];
+      }
+    }
+    return next;
+  });
+}
 
 // ====== format 三档投影 ======
 
@@ -392,6 +437,8 @@ export function parseFilters(
       .filter(Boolean);
     // 简单白名单: 必须是 config.defaultSelect 列表的子集(防泄漏未知字段)
     const allowedFields = new Set(config.defaultSelect.split(',').map((s) => s.trim()));
+    // 对外字段名也接受(trends 的 score 是 topic_score 的别名,不是独立列)
+    for (const external of Object.keys(FIELD_ALIAS[type] || {})) allowedFields.add(external);
     for (const f of fields) {
       if (!allowedFields.has(f)) {
         return {
@@ -420,7 +467,7 @@ export function buildPostgRestQuery(filters: ParsedFilters): string {
   const params: string[] = [];
 
   // select
-  const select = filters.select || config.defaultSelect;
+  const select = resolveSelect(filters.type, filters.select, config.defaultSelect);
   params.push(`select=${encodeURIComponent(select)}`);
 
   // order
@@ -487,7 +534,7 @@ async function queryFissionPending(
 
   // 用 PostgREST 查询 topics,加 level=eq.explosive 过滤
   const params: string[] = [];
-  const select = filters.select || config.defaultSelect;
+  const select = resolveSelect(filters.type, filters.select, config.defaultSelect);
   params.push(`select=${encodeURIComponent(select)}`);
   params.push(`order=${encodeURIComponent(filters.orderBy + '.' + filters.order)}`);
   params.push(`limit=${filters.limit}`);
@@ -534,7 +581,7 @@ async function queryFissionReports(
   const config = TYPE_CONFIG['fission-reports'];
 
   const params: string[] = [];
-  const select = filters.select || config.defaultSelect;
+  const select = resolveSelect(filters.type, filters.select, config.defaultSelect);
   params.push(`select=${encodeURIComponent(select)}`);
   params.push(`order=${encodeURIComponent(filters.orderBy + '.' + filters.order)}`);
   params.push(`limit=${filters.limit}`);
@@ -841,7 +888,7 @@ export async function handlePull(env: Env, url: URL, ctx: ExecutionContext): Pro
     throw e;
   }
 
-  const projected = projectFormat(items, filters.format);
+  const projected = projectFormat(applyFieldAlias(filters.type, items), filters.format);
 
   const response: PullResponse = {
     type: filters.type,
