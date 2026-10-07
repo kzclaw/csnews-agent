@@ -73,7 +73,11 @@ fi
 # 注释行必须先剔掉再拼正则: 注释常在解释正则元字符(如未成对的括号)，
 # 并进 alternation 会让整条正则编译失败；失败又曾被 `|| true` 吞成「零命中」，
 # 等于一行注释就能让整个闸门静默失效。
-PATTERNS="$(grep -vE '^[[:space:]]*(#|$)' "$PATTERNS_FILE" | paste -sd'|' -)"
+# 空行与注释行拆成两条独立规则，不用 `^[[:space:]]*(#|$)` 那种 alternation：
+# 该写法依赖 `$` 锚点在 alternation 内的语义，在 GNU grep / BusyBox 上行为有差异，
+# 极端情况下空行没被滤掉会拼出空分支（如 `A||B`），进而让整条正则匹配空串 → 全量误挡。
+# 两条规则各自用 `^[[:space:]]*` 锚定，语义等价且无锚点歧义。
+PATTERNS="$(grep -v -e '^[[:space:]]*$' -e '^[[:space:]]*#' "$PATTERNS_FILE" | paste -sd'|' -)"
 if [ -z "$PATTERNS" ]; then
   echo "[privacy-scan] ❌ 隐私闸门未启用: patterns 文件为空 ($PATTERNS_FILE)"
   echo "[privacy-scan]    未执行任何隐私判定 · 本次提交不会被隐私词拦截"
