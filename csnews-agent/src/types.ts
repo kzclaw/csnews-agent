@@ -91,7 +91,7 @@ export interface NewsTopicMemberRow {
 export interface TrendSnapshotRow {
   id: string;
   topic_id: string;
-  score: number | null;
+  topic_score: number | null;
   velocity: number | null;
   acceleration: number | null;
   created_at: string;

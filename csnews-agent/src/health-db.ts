@@ -244,6 +244,22 @@ export async function checkEntityAndEventFreshness(env: Env): Promise<{
 // ============================================================
 // 4. zscore_signals_today — 7d z-score anomaly count
 // ============================================================
+/**
+ * z-score 分析字段 → trend_snapshots 表里的真实列名。
+ *
+ * 两者不是一回事，别混：
+ *   - `column` 是数据库真实列，进 select、进 countAnomalySignals 的取值 key
+ *   - `output` 是 health 响应 by_field_7d 的对外 key，viewer 面板按 score 读
+ *
+ * 评分列的数据库名是 topic_score，对外仍叫 score。改列名时只动 column，
+ * 外部契约不动 —— 否则 viewer 面板会静默显示 0。
+ */
+export const ZSCORE_FIELDS = [
+  { output: 'score', column: 'topic_score' },
+  { output: 'velocity', column: 'velocity' },
+  { output: 'acceleration', column: 'acceleration' },
+] as const;
+
 export async function checkZscoreSignals(
   env: Env,
   ts: number
@@ -280,9 +296,21 @@ export async function checkZscoreSignals(
     const sevenDaysAgo = new Date(ts - 7 * 24 * 3600 * 1000).toISOString();
     const snapshotsRes = await supabaseFetch(
       env,
-      `/rest/v1/trend_snapshots?select=id,topic_id,score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`
+      `/rest/v1/trend_snapshots?select=id,topic_id,topic_score,velocity,acceleration,created_at&created_at=gte.${sevenDaysAgo}&order=created_at.desc&limit=500`
     );
-    const snapshots = ((await safeJson(snapshotsRes)) as TrendSnapshotRow[]) || [];
+    // supabaseFetch 不对 !res.ok 抛错，PostgREST 的错误体又是一个合法 JSON 对象。
+    // 直接喂给下游的话 snapshots.length 是 undefined，全部分支被跳过，
+    // 最后报 "0 anomalies" + status "ok" —— 假绿灯。失败必须走 catch 报 unknown。
+    if (!snapshotsRes.ok) {
+      throw new Error(
+        `trend_snapshots query HTTP ${snapshotsRes.status}: ${(await snapshotsRes.text()).slice(0, 200)}`
+      );
+    }
+    const parsedSnapshots = (await safeJson(snapshotsRes)) as unknown;
+    if (!Array.isArray(parsedSnapshots)) {
+      throw new Error('trend_snapshots query returned a non-array body');
+    }
+    const snapshots = parsedSnapshots as TrendSnapshotRow[];
 
     let totalAnomalies = 0;
     const anomaliesByField: Record<string, number> = { score: 0, velocity: 0, acceleration: 0 };
@@ -295,9 +323,9 @@ export async function checkZscoreSignals(
       }
       for (const topicSnapshots of Object.values(byTopic)) {
         if (topicSnapshots.length < 2) continue;
-        for (const field of ['score', 'velocity', 'acceleration'] as const) {
-          const count = countAnomalySignals(topicSnapshots, field);
-          anomaliesByField[field] += count;
+        for (const { output, column } of ZSCORE_FIELDS) {
+          const count = countAnomalySignals(topicSnapshots, column);
+          anomaliesByField[output] += count;
           totalAnomalies += count;
         }
       }

@@ -750,11 +750,11 @@ export async function runKnowledgeGeneration(
         // 4.3 查 trend_snapshots (最近 24h)
         const snapshotsRes = await supabaseFetch(
           env,
-          `/rest/v1/trend_snapshots?topic_id=eq.${w.topic_id}&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,score,velocity,acceleration,stage,created_at&order=created_at.desc&limit=10`
+          `/rest/v1/trend_snapshots?topic_id=eq.${w.topic_id}&created_at=gte.${encodeURIComponent(sinceIso)}&select=id,topic_score,velocity,acceleration,stage,created_at&order=created_at.desc&limit=10`
         );
         const snapshots: Array<{
           id: string;
-          score: number | null;
+          topic_score: number | null;
           velocity: number | null;
           acceleration: number | null;
           stage: string | null;
@@ -807,7 +807,7 @@ export async function runKnowledgeGeneration(
               snapshots
                 .map(
                   (s) =>
-                    `| ${new Date(s.created_at).toLocaleString('zh-CN')} | ${s.score ?? '?'} | ${s.velocity?.toFixed(2) ?? '?'} | ${s.acceleration?.toFixed(2) ?? '?'} | ${s.stage ?? '?'} |`
+                    `| ${new Date(s.created_at).toLocaleString('zh-CN')} | ${s.topic_score ?? '?'} | ${s.velocity?.toFixed(2) ?? '?'} | ${s.acceleration?.toFixed(2) ?? '?'} | ${s.stage ?? '?'} |`
                 )
                 .join('\n')
             : '_暂无趋势快照_';
