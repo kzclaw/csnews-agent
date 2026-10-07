@@ -5,17 +5,19 @@
  * 此服务再将请求转发到 CSNEWS Worker 的 HTTP JSON-RPC 端点。
  *
  * 环境变量:
- *   CSNEWS_URL    — Worker URL，如 https://csnews.kwokzit.info/api/v1
+ *   CSNEWS_URL    — Worker URL，如 https://YOUR-WORKER.workers.dev/api/v1
  *   CSNEWS_TOKEN  — Bearer Token
  *
  * 运行:
  *   node src/index.cjs
  */
 
-const CSNEWS_URL = (process.env.CSNEWS_URL || 'https://csnews.kwokzit.info/api/v1').replace(
-  /\/$/,
-  ''
-);
+const CSNEWS_URL = (process.env.CSNEWS_URL || '').replace(/\/$/, '');
+if (!CSNEWS_URL) {
+  process.stderr.write('错误：必须设置环境变量 CSNEWS_URL（Worker 的 /api/v1 地址）\n');
+  process.stderr.write('示例：CSNEWS_URL=https://YOUR-WORKER.workers.dev/api/v1 npm start\n');
+  process.exit(1);
+}
 const CSNEWS_TOKEN = process.env.CSNEWS_TOKEN || '';
 
 // ============================================================
