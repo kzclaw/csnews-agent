@@ -39,7 +39,7 @@ export default {
     // 健康检查/模型测试/health 端点（9 维度）默认放行，无需鉴权
     const PUBLIC_ACTIONS = new Set(['ping', 'health', 'model-test']);
     if (!PUBLIC_ACTIONS.has(action)) {
-      const authError = authRequest(request, env);
+      const authError = await authRequest(request, env);
       if (authError) return authError;
     }
 
